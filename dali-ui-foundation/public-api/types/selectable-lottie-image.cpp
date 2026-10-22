@@ -18,47 +18,102 @@
 // CLASS HEADER
 #include <dali-ui-foundation/public-api/types/selectable-lottie-image.h>
 
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+
 namespace DALI_NAMESPACE
 {
 namespace Ui
 {
 
-DALI_UI_API SelectableLottieImage::FrameRange::FrameRange(int32_t start, int32_t end)
-: startFrame(start),
-  endFrame(end)
+#define DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(impl) \
+  DALI_ASSERT_ALWAYS((impl) && "Cannot use a moved-from SelectableLottieImage object")
+
+struct SelectableLottieImage::Impl
+{
+  Impl(const Dali::String& url,
+       const Int32Pair&    selectionPlaybackRange,
+       const Int32Pair&    deselectionPlaybackRange,
+       const Dali::String& innerFillKeyPath)
+  : mUrl(url),
+    mSelectionPlaybackRange(selectionPlaybackRange),
+    mDeselectionPlaybackRange(deselectionPlaybackRange),
+    mInnerFillKeyPath(innerFillKeyPath)
+  {
+  }
+
+  Dali::String mUrl;
+  Int32Pair    mSelectionPlaybackRange;
+  Int32Pair    mDeselectionPlaybackRange;
+  Dali::String mInnerFillKeyPath;
+};
+
+SelectableLottieImage::SelectableLottieImage(const Dali::String& url,
+                                             const Int32Pair&    selectionPlaybackRange,
+                                             const Int32Pair&    deselectionPlaybackRange,
+                                             const Dali::String& innerFillKeyPath)
+: mImpl(Dali::MakeUnique<Impl>(url, selectionPlaybackRange, deselectionPlaybackRange, innerFillKeyPath))
 {
 }
 
-SelectableLottieImage::SelectableLottieImage(const Dali::String& url,
-                                             const FrameRange&   selectRange,
-                                             const FrameRange&   deselectRange,
-                                             const Dali::String& innerFillKeyPath)
-: mUrl(url),
-  mSelectRange(selectRange),
-  mDeselectRange(deselectRange),
-  mInnerFillKeyPath(innerFillKeyPath)
+SelectableLottieImage::SelectableLottieImage(const SelectableLottieImage& rhs)
+: mImpl(nullptr)
 {
+  DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(rhs.mImpl);
+  mImpl = Dali::MakeUnique<Impl>(*rhs.mImpl);
 }
+
+SelectableLottieImage::SelectableLottieImage(SelectableLottieImage&& rhs) noexcept = default;
+
+SelectableLottieImage& SelectableLottieImage::operator=(const SelectableLottieImage& rhs)
+{
+  DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(rhs.mImpl);
+  if(this != &rhs)
+  {
+    mImpl = Dali::MakeUnique<Impl>(*rhs.mImpl);
+  }
+  return *this;
+}
+
+SelectableLottieImage& SelectableLottieImage::operator=(SelectableLottieImage&& rhs) noexcept = default;
+
+SelectableLottieImage::~SelectableLottieImage() = default;
 
 const Dali::String& SelectableLottieImage::GetUrl() const
 {
-  return mUrl;
+  DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(mImpl);
+  return mImpl->mUrl;
 }
 
-const SelectableLottieImage::FrameRange& SelectableLottieImage::GetSelectRange() const
+Int32Pair SelectableLottieImage::GetSelectRange() const
 {
-  return mSelectRange;
+  return GetSelectionPlaybackRange();
 }
 
-const SelectableLottieImage::FrameRange& SelectableLottieImage::GetDeselectRange() const
+Int32Pair SelectableLottieImage::GetSelectionPlaybackRange() const
 {
-  return mDeselectRange;
+  DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(mImpl);
+  return mImpl->mSelectionPlaybackRange;
+}
+
+Int32Pair SelectableLottieImage::GetDeselectRange() const
+{
+  return GetDeselectionPlaybackRange();
+}
+
+Int32Pair SelectableLottieImage::GetDeselectionPlaybackRange() const
+{
+  DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(mImpl);
+  return mImpl->mDeselectionPlaybackRange;
 }
 
 const Dali::String& SelectableLottieImage::GetInnerFillKeyPath() const
 {
-  return mInnerFillKeyPath;
+  DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE(mImpl);
+  return mImpl->mInnerFillKeyPath;
 }
+
+#undef DALI_ASSERT_VALID_SELECTABLE_LOTTIE_IMAGE
 
 } // namespace Ui
 } //namespace DALI_NAMESPACE
