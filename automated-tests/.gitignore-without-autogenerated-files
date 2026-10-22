@@ -1,0 +1,4 @@
+*.xml
+build
+build.log
+results_xml.*

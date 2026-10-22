@@ -1,0 +1,304 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-ui-foundation/dali-ui-foundation.h>
+#include <dali-ui-test-suite-utils.h>
+
+#define private public
+#define protected public
+#include <dali-ui-foundation/integration-api/visual-factory/visual-factory.h>
+#include <dali-ui-foundation/internal/visuals/mesh/mesh-visual.h>
+#include <dali-ui-foundation/internal/visuals/visual-base-data-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-cache.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-impl.h>
+#undef protected
+#undef private
+
+#include <filesystem>
+#include <fstream>
+#include <random>
+
+using namespace Dali;
+using namespace Dali::Ui;
+using namespace Dali::Ui::Internal;
+
+void utc_dali_mesh_visual_internal_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_mesh_visual_internal_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+namespace
+{
+class ScopedTestFile
+{
+public:
+  explicit ScopedTestFile(const char* name)
+  {
+    std::random_device random;
+    for(unsigned int attempt = 0; attempt < 32u; ++attempt)
+    {
+      auto directory = std::filesystem::temp_directory_path() / ("dali-ui-mesh-visual-utc-" + std::to_string(random()));
+      // Atomically reserve a directory so parallel test processes cannot share fixtures.
+      if(std::filesystem::create_directory(directory))
+      {
+        mDirectory = directory;
+        break;
+      }
+    }
+    DALI_TEST_CHECK(!mDirectory.empty());
+    mPath = (mDirectory / name).string();
+  }
+
+  ~ScopedTestFile()
+  {
+    std::error_code error;
+    std::filesystem::remove_all(mDirectory, error);
+  }
+
+  ScopedTestFile(const ScopedTestFile&) = delete;
+  ScopedTestFile& operator=(const ScopedTestFile&) = delete;
+
+  const std::string& GetPath() const
+  {
+    return mPath;
+  }
+
+private:
+  std::filesystem::path mDirectory;
+  std::string mPath;
+};
+
+VisualFactoryCache& GetMeshFactoryCache()
+{
+  auto visualFactory = Ui::Integration::VisualFactory::Get();
+  return GetImplementation(visualFactory).GetFactoryCache();
+}
+
+MeshVisualPtr CreateMeshVisual()
+{
+  return MeshVisualPtr(new MeshVisual(GetMeshFactoryCache()));
+}
+
+void WriteFile(const std::string& path, const char* contents)
+{
+  std::ofstream stream(path);
+  DALI_TEST_CHECK(stream.is_open());
+  stream << contents;
+  stream.close();
+  DALI_TEST_CHECK(!stream.fail());
+}
+} // namespace
+
+int UtcDaliMeshVisualPropertiesP(void)
+{
+  UiTestApplication application;
+  auto visual = CreateMeshVisual();
+  Property::Map properties;
+
+  properties.Insert(Ui::Integration::MeshVisual::Property::OBJECT_URL, Dali::String("model.obj"));
+  properties.Insert(Ui::Integration::MeshVisual::Property::MATERIAL_URL, Dali::String("model.mtl"));
+  properties.Insert(Ui::Integration::MeshVisual::Property::TEXTURES_PATH, Dali::String("textures/"));
+  properties.Insert(Ui::Integration::MeshVisual::Property::SHADING_MODE, "TEXTURED_WITH_SPECULAR_LIGHTING");
+  properties.Insert(Ui::Integration::MeshVisual::Property::USE_MIPMAPPING, false);
+  properties.Insert(Ui::Integration::MeshVisual::Property::USE_SOFT_NORMALS, false);
+  properties.Insert(Ui::Integration::MeshVisual::Property::LIGHT_POSITION, Vector3(1.0f, 2.0f, 3.0f));
+  visual->DoSetProperties(properties);
+
+  DALI_TEST_EQUALS(visual->mObjectUrl, std::string("model.obj"), TEST_LOCATION);
+  DALI_TEST_EQUALS(visual->mMaterialUrl, std::string("model.mtl"), TEST_LOCATION);
+  DALI_TEST_CHECK(!visual->mUseMipmapping);
+  DALI_TEST_CHECK(!visual->mUseSoftNormals);
+  DALI_TEST_EQUALS(visual->mLightPosition, Vector3(1.0f, 2.0f, 3.0f), TEST_LOCATION);
+
+  Property::Map result;
+  visual->DoCreatePropertyMap(result);
+  DALI_TEST_EQUALS(result.Count(), 8u, TEST_LOCATION);
+  Property::Map instance;
+  instance.Insert(1, 2);
+  visual->DoCreateInstancePropertyMap(instance);
+  DALI_TEST_EQUALS(instance.Count(), 1u, TEST_LOCATION);
+
+  Property::Map named;
+  named.Insert("objectUrl", Dali::String("named.obj"));
+  named.Insert("materialUrl", Dali::String(""));
+  named.Insert("texturesPath", Dali::String("named/"));
+  named.Insert("shadingMode", 0);
+  named.Insert("useMipmapping", true);
+  named.Insert("useSoftNormals", true);
+  named.Insert("lightPosition", Vector3::ZERO);
+  visual->DoSetProperties(named);
+  DALI_TEST_EQUALS(visual->mObjectUrl, std::string("named.obj"), TEST_LOCATION);
+  DALI_TEST_CHECK(!visual->mUseTexture);
+  END_TEST;
+}
+
+int UtcDaliMeshVisualInvalidPropertiesAndGeometryFailureP(void)
+{
+  UiTestApplication application;
+  auto visual = CreateMeshVisual();
+  Property::Map invalid;
+  invalid.Insert(Ui::Integration::MeshVisual::Property::OBJECT_URL, 1);
+  invalid.Insert(Ui::Integration::MeshVisual::Property::MATERIAL_URL, 2);
+  invalid.Insert(Ui::Integration::MeshVisual::Property::TEXTURES_PATH, 3);
+  invalid.Insert(Ui::Integration::MeshVisual::Property::USE_MIPMAPPING, "bad");
+  invalid.Insert(Ui::Integration::MeshVisual::Property::USE_SOFT_NORMALS, "bad");
+  invalid.Insert(Ui::Integration::MeshVisual::Property::LIGHT_POSITION, "bad");
+  visual->DoSetProperties(invalid);
+  DALI_TEST_EQUALS(visual->mLightPosition, Vector3::ZERO, TEST_LOCATION);
+
+  visual->mObjectUrl = "/tmp/does-not-exist-dali-ui.obj";
+  visual->OnInitialize();
+  DALI_TEST_CHECK(visual->mGeometry);
+  DALI_TEST_CHECK(visual->mShader);
+  DALI_TEST_CHECK(!visual->LoadGeometry());
+  DALI_TEST_CHECK(!visual->LoadMaterial());
+  END_TEST;
+}
+
+int UtcDaliMeshVisualLoadsTexturelessObjectP(void)
+{
+  UiTestApplication application;
+  ScopedTestFile objectFile("model.obj");
+  WriteFile(objectFile.GetPath(),
+            "v 0 0 0\n"
+            "v 1 0 0\n"
+            "v 0 1 0\n"
+            "vn 0 0 1\n"
+            "f 1//1 2//1 3//1\n");
+
+  auto fileVisual = CreateMeshVisual();
+  fileVisual->mObjectUrl = objectFile.GetPath();
+  DALI_TEST_CHECK(fileVisual->LoadGeometry());
+
+  auto visual = CreateMeshVisual();
+  std::string object =
+    "\n"
+    "v 0 0 0\n"
+    "v 1 0 0\n"
+    "v 0 1 0\n"
+    "f 1 2 3\n";
+  DALI_TEST_CHECK(visual->mObjLoader.LoadObject(object.data(), static_cast<std::streampos>(object.size())));
+  visual->mUseTexture = false;
+  visual->mUseSoftNormals = false;
+  DALI_TEST_CHECK(visual->CreateGeometry());
+  visual->CreateShader();
+  DALI_TEST_CHECK(visual->LoadTextures());
+
+  DALI_TEST_CHECK(visual->mGeometry);
+  DALI_TEST_CHECK(visual->mShader);
+  DALI_TEST_CHECK(visual->mTextureSet);
+  DALI_TEST_EQUALS(visual->mShadingMode,
+                   Ui::Integration::MeshVisual::ShadingMode::TEXTURELESS_WITH_DIFFUSE_LIGHTING,
+                   TEST_LOCATION);
+
+  visual->SupplyEmptyGeometry();
+  Actor actor = Actor::New();
+  visual->DoSetOnScene(actor);
+  visual->OnSetTransform();
+  DALI_TEST_EQUALS(actor.GetRendererCount(), 1u, TEST_LOCATION);
+  visual->UpdateShaderUniforms(Vector2(480.0f, 800.0f));
+  DALI_TEST_CHECK(visual->mLightPosition != Vector3::ZERO);
+
+  END_TEST;
+}
+
+int UtcDaliMeshVisualMaterialAndTextureFailuresP(void)
+{
+  UiTestApplication application;
+  ScopedTestFile materialFile("model.mtl");
+  WriteFile(materialFile.GetPath(),
+            "newmtl material\n"
+            "map_Kd missing-diffuse.png\n"
+            "bump missing-normal.png\n"
+            "map_Ks missing-gloss.png\n");
+
+  auto visual = CreateMeshVisual();
+  visual->mMaterialUrl = materialFile.GetPath();
+  DALI_TEST_CHECK(visual->LoadMaterial());
+  DALI_TEST_EQUALS(visual->mDiffuseTextureUrl, std::string("missing-diffuse.png"), TEST_LOCATION);
+
+  visual->mShadingMode = Ui::Integration::MeshVisual::ShadingMode::TEXTURED_WITH_DETAILED_SPECULAR_LIGHTING;
+  visual->mTexturesPath = "/tmp/";
+  visual->mUseMipmapping = true;
+  DALI_TEST_CHECK(!visual->LoadTextures());
+
+  visual->mDiffuseTextureUrl.clear();
+  visual->mNormalTextureUrl.clear();
+  visual->mGlossTextureUrl.clear();
+  DALI_TEST_CHECK(visual->LoadTextures());
+
+  visual->CreateShader();
+  visual->mShadingMode = Ui::Integration::MeshVisual::ShadingMode::TEXTURED_WITH_SPECULAR_LIGHTING;
+  visual->CreateShader();
+  visual->mShadingMode = Ui::Integration::MeshVisual::ShadingMode::TEXTURELESS_WITH_DIFFUSE_LIGHTING;
+  visual->CreateShader();
+  visual->mShadingMode = Ui::Integration::MeshVisual::ShadingMode::TEXTURED_WITH_DETAILED_SPECULAR_LIGHTING;
+  visual->mTexturesPath = std::string(DALI_UI_FOUNDATION_INTERNAL_TEST_RESOURCE_DIR) + "/../../../../samples/window-frame/res/";
+  visual->mDiffuseTextureUrl = "theme.png";
+  visual->mNormalTextureUrl = "theme.png";
+  visual->mGlossTextureUrl = "theme.png";
+  DALI_TEST_CHECK(visual->LoadTextures());
+  DALI_TEST_CHECK(visual->mTextureSet.GetTexture(0u));
+  DALI_TEST_CHECK(visual->mTextureSet.GetTexture(1u));
+  DALI_TEST_CHECK(visual->mTextureSet.GetTexture(2u));
+  END_TEST;
+}
+
+int UtcDaliMeshVisualInitializeAndShaderFallbacksP(void)
+{
+  UiTestApplication application;
+  ScopedTestFile objectFile("model.obj");
+  WriteFile(objectFile.GetPath(),
+            "\n"
+            "v 0 0 0\n"
+            "v 1 0 0\n"
+            "v 0 1 0\n"
+            "f 1 2 3\n");
+
+  auto visual = CreateMeshVisual();
+  visual->mObjectUrl = objectFile.GetPath();
+  visual->mUseTexture = false;
+  visual->mUseSoftNormals = false;
+  visual->OnInitialize();
+  DALI_TEST_CHECK(visual->mImpl->mRenderer);
+  DALI_TEST_CHECK(visual->mTextureSet);
+  DALI_TEST_EQUALS(visual->mShadingMode,
+                   Ui::Integration::MeshVisual::ShadingMode::TEXTURELESS_WITH_DIFFUSE_LIGHTING,
+                   TEST_LOCATION);
+
+  Actor actor = Actor::New();
+  application.GetScene().Add(actor);
+  visual->DoSetOnScene(actor);
+  DALI_TEST_EQUALS(actor.GetRendererCount(), 1u, TEST_LOCATION);
+  visual->OnSetTransform();
+  visual->UpdateShaderUniforms(Vector2(100.0f, 100.0f));
+
+  auto missingMaterial = CreateMeshVisual();
+  missingMaterial->mObjectUrl = objectFile.GetPath();
+  missingMaterial->mMaterialUrl = "/tmp/dali-ui-missing-material.mtl";
+  missingMaterial->mUseTexture = true;
+  missingMaterial->mUseSoftNormals = false;
+  missingMaterial->OnInitialize();
+  DALI_TEST_CHECK(missingMaterial->mImpl->mRenderer);
+
+  END_TEST;
+}

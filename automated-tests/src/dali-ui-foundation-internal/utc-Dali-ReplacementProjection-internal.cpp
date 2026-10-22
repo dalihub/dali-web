@@ -1,0 +1,6486 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/rendering/renderer-devel.h>
+#include <dali/public-api/rendering/texture.h>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <memory>
+#include <utility>
+#include <vector>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/integration-api/input-editor-impl.h>
+#include <dali-ui-foundation/integration-api/input-field-impl.h>
+#include <dali-ui-foundation/integration-api/view-depth-index-ranges.h>
+#include <dali-ui-foundation/integration-api/visuals/image-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-base-impl.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/internal/text/async-text/async-text-loader-impl.h>
+#include <dali-ui-foundation/internal/text/character-set-conversion.h>
+#include <dali-ui-foundation/internal/text/controller/text-controller-impl.h>
+#include <dali-ui-foundation/internal/text/controller/text-controller.h>
+#include <dali-ui-foundation/internal/text/ellipsis/ellipsis-planner.h>
+#include <dali-ui-foundation/internal/text/final-glyph-geometry.h>
+#include <dali-ui-foundation/internal/text/line-helper-functions.h>
+#include <dali-ui-foundation/internal/text/rendering/view-model.h>
+#include <dali-ui-foundation/internal/text/replacement/editable-inline-replacement-data.h>
+#include <dali-ui-foundation/internal/text/replacement/inline-replacement-manager.h>
+#include <dali-ui-foundation/internal/text/replacement/replacement-processing-source.h>
+#include <dali-ui-foundation/internal/text/replacement/replacement-projection.h>
+#include <dali-ui-foundation/internal/text/styled-text/styled-text-applier.h>
+#include <dali-ui-foundation/internal/text/text-gradient-helper.h>
+#include <dali-ui-foundation/internal/views/view/view-data-impl.h>
+#include <dali-ui-foundation/public-api/gradient/linear-gradient.h>
+#include <dali-ui-foundation/public-api/image-loader/image-url.h>
+#include <dali-ui-foundation/public-api/image/image-enumerations.h>
+#include <dali-ui-foundation/public-api/text/styled-text/foreground-color-span.h>
+#include <dali-ui-foundation/public-api/text/styled-text/gradient-span.h>
+#include <dali-ui-foundation/public-api/text/styled-text/image-span.h>
+#include <dali-ui-foundation/public-api/text/styled-text/styled-text-builder.h>
+#include <dali-ui-foundation/public-api/views/text-controls/input-editor.h>
+#include <dali-ui-foundation/public-api/views/text-controls/input-field.h>
+#include <dali-ui-test-suite-utils.h>
+#include "inline-replacement-manager-test-accessor.h"
+#include "replacement-layout-test-adapter.h"
+
+using namespace Dali;
+using namespace Dali::Ui;
+
+namespace
+{
+Text::ReplacementRunSnapshot Candidate(Text::CharacterIndex start, Text::Length length, float width = 20.0f,
+                                       float height = 18.0f, uint32_t id = 0u)
+{
+  Text::ReplacementRunSnapshot candidate;
+  candidate.logicalCharacterRange = Text::CharacterRun{start, length};
+  candidate.metrics.width         = width;
+  candidate.metrics.height        = height;
+  candidate.occurrenceIdentity    = id;
+  return candidate;
+}
+
+Text::ReplacementRunSnapshot ImageCandidate(Text::CharacterIndex start, Text::Length length, uint32_t id)
+{
+  Text::ReplacementRunSnapshot candidate = Candidate(start, length, 20.0f, 18.0f, id);
+  candidate.type                         = Text::ReplacementType::IMAGE;
+  candidate.image.source                 = "replacement.png";
+  return candidate;
+}
+
+Text::Internal::GradientSpanPaint CreateGradientSpanPaint(Dali::Ui::Gradient::Type         type,
+                                                          Text::GradientSpan::BoundsMode   boundsMode,
+                                                          Dali::Ui::Gradient::Units        units,
+                                                          Dali::Ui::Gradient::SpreadMethod spreadMethod,
+                                                          float                            seed)
+{
+  Text::Internal::GradientSpanPaint paint;
+  paint.boundsMode                    = boundsMode;
+  paint.style.enabled                 = true;
+  paint.style.type                    = type;
+  paint.style.units                   = units;
+  paint.style.spreadMethod            = spreadMethod;
+  paint.style.startOffset             = seed;
+  paint.style.linearStart             = Vector2(seed, seed + 1.0f);
+  paint.style.linearEnd               = Vector2(seed + 2.0f, seed + 3.0f);
+  paint.style.radialCenter            = Vector2(seed + 4.0f, seed + 5.0f);
+  paint.style.radialRadius            = seed + 6.0f;
+  paint.style.conicCenter             = Vector2(seed + 7.0f, seed + 8.0f);
+  paint.style.conicStartAngle         = Radian(seed + 9.0f);
+  Text::Internal::Gradient::Stop stop = {0.0f, Vector4(seed, 0.1f, 0.2f, 1.0f)};
+  paint.style.stops.PushBack(stop);
+  stop = {0.45f, Vector4(0.3f, seed, 0.4f, 0.8f)};
+  paint.style.stops.PushBack(stop);
+  stop = {1.0f, Vector4(0.5f, 0.6f, seed, 0.7f)};
+  paint.style.stops.PushBack(stop);
+  return paint;
+}
+
+void AddGradientSpanRun(Text::Internal::GradientSpanModelData& data,
+                        Text::CharacterIndex                   start,
+                        Text::Length                           length,
+                        Text::Internal::GradientSpanPaintIndex paintIndex)
+{
+  Text::Internal::GradientSpanCharacterRun run;
+  run.characterRun = Text::CharacterRun{start, length};
+  run.paintIndex   = paintIndex;
+  data.characterRuns.PushBack(run);
+}
+
+void CheckGradientSpanRun(const Text::Internal::GradientSpanCharacterRun& run,
+                          Text::CharacterIndex                            start,
+                          Text::Length                                    length,
+                          Text::Internal::GradientSpanPaintIndex          paintIndex)
+{
+  DALI_TEST_EQUALS(run.characterRun.characterIndex, start, TEST_LOCATION);
+  DALI_TEST_EQUALS(run.characterRun.numberOfCharacters, length, TEST_LOCATION);
+  DALI_TEST_EQUALS(run.paintIndex, paintIndex, TEST_LOCATION);
+}
+
+void CheckGradientSpanPaint(const Text::Internal::GradientSpanPaint& actual,
+                            const Text::Internal::GradientSpanPaint& expected)
+{
+  DALI_TEST_EQUALS(static_cast<uint32_t>(actual.boundsMode),
+                   static_cast<uint32_t>(expected.boundsMode), TEST_LOCATION);
+  DALI_TEST_CHECK(Text::Internal::Gradient::EqualStyle(actual.style, expected.style));
+}
+
+Vector<Text::Character> Utf32(const std::string& utf8)
+{
+  const auto*             bytes = reinterpret_cast<const uint8_t*>(utf8.data());
+  Vector<Text::Character> characters;
+  characters.Resize(Text::GetNumberOfUtf8Characters(bytes, static_cast<uint32_t>(utf8.size())));
+  const uint32_t converted = Text::Utf8ToUtf32(bytes, static_cast<uint32_t>(utf8.size()), characters.Begin());
+  characters.Resize(converted);
+  return characters;
+}
+
+Text::ReplacementLayoutTestServices MakeLayoutServices()
+{
+  return {TextAbstraction::Segmentation::Get(),
+          TextAbstraction::BidirectionalSupport::Get(),
+          TextAbstraction::Shaping::Get(),
+          TextAbstraction::FontClient::Get(),
+          Text::MultilanguageSupport::Get()};
+}
+
+uint32_t CountSyntheticGlyphs(const Text::ReplacementRenderState& state)
+{
+  if(!state.processingModel)
+  {
+    return 0u;
+  }
+
+  uint32_t count = 0u;
+  for(const TextAbstraction::GlyphInfo& glyph : state.processingModel->mVisualModel->mGlyphs)
+  {
+    count += Text::IsSyntheticReplacementGlyph(glyph) ? 1u : 0u;
+  }
+  return count;
+}
+
+uint32_t CountVisibleOriginalGlyphs(const Text::FinalElisionResult& result)
+{
+  uint32_t count = 0u;
+  for(Text::GlyphIndex finalIndex : result.sourceToFinalGlyphIndices)
+  {
+    count += finalIndex != Text::FinalElisionResult::INVALID_GLYPH_INDEX ? 1u : 0u;
+  }
+  return count;
+}
+
+Text::GlyphIndex FindSourceGlyphIndex(const Text::FinalElisionResult& result, Text::GlyphIndex finalGlyphIndex)
+{
+  for(Text::GlyphIndex sourceGlyphIndex = 0u;
+      sourceGlyphIndex < result.sourceToFinalGlyphIndices.Count();
+      ++sourceGlyphIndex)
+  {
+    if(result.sourceToFinalGlyphIndices[sourceGlyphIndex] == finalGlyphIndex)
+    {
+      return sourceGlyphIndex;
+    }
+  }
+  return Text::FinalElisionResult::INVALID_GLYPH_INDEX;
+}
+
+uint32_t CountGeneratedFinalGlyphs(const Text::FinalElisionResult& result)
+{
+  return static_cast<uint32_t>(result.glyphs.Count() - CountVisibleOriginalGlyphs(result));
+}
+
+bool IsGeneratedEllipsisDrawable(const Text::ReplacementRenderState& state)
+{
+  const Text::FinalElisionResult& result = state.finalElision;
+  if(result.ellipsisFinalGlyphIndex >= result.glyphs.Count())
+  {
+    return false;
+  }
+
+  const Text::GlyphInfo& glyph    = result.glyphs[result.ellipsisFinalGlyphIndex];
+  const Vector2&         position = result.viewGlyphPositions[result.ellipsisFinalGlyphIndex];
+  const Size&            control  = state.processingModel->mVisualModel->mControlSize;
+  return position.x + glyph.width > 0.0f && position.x < control.width &&
+         position.y + glyph.height > 0.0f && position.y < control.height;
+}
+
+Text::LineIndex FindEllipsisLine(const Text::VisualModel& visual)
+{
+  for(Text::LineIndex lineIndex = 0u; lineIndex < visual.mLines.Count(); ++lineIndex)
+  {
+    if(visual.mLines[lineIndex].ellipsis)
+    {
+      return lineIndex;
+    }
+  }
+  return Text::FinalElisionResult::INVALID_LINE_INDEX;
+}
+
+void CheckFinalElisionContract(const Text::ReplacementRenderState& state)
+{
+  DALI_TEST_CHECK(state.processingModel);
+  const Text::FinalElisionResult& finalElision = state.finalElision;
+  DALI_TEST_CHECK(finalElision.resolved);
+  const uint32_t               finalGlyphCount = static_cast<uint32_t>(finalElision.HasAuthoritativeLayout()
+                                                                         ? finalElision.glyphs.Count()
+                                                                         : state.processingModel->mVisualModel->mGlyphs.Count());
+  const Vector<Text::LineRun>& finalLines = finalElision.HasAuthoritativeLayout()
+                                                   ? finalElision.lines
+                                                   : state.processingModel->mVisualModel->mLines;
+  for(const Text::LineRun& line : finalLines)
+  {
+    DALI_TEST_CHECK(line.glyphRun.glyphIndex <= finalGlyphCount &&
+                    line.glyphRun.numberOfGlyphs <= finalGlyphCount - line.glyphRun.glyphIndex);
+  }
+  uint32_t ellipsisLineCount = 0u;
+  for(const Text::LineRun& line : state.processingModel->mVisualModel->mLines)
+  {
+    ellipsisLineCount += line.ellipsis ? 1u : 0u;
+  }
+  DALI_TEST_CHECK(ellipsisLineCount <= 1u);
+  DALI_TEST_EQUALS(finalElision.textElided, ellipsisLineCount == 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(finalElision.glyphs.Count(), finalElision.viewGlyphPositions.Count(), TEST_LOCATION);
+  DALI_TEST_EQUALS(finalElision.glyphs.Count(), finalElision.lineLocalGlyphPositions.Count(), TEST_LOCATION);
+  const uint32_t generatedEllipsisCount = CountGeneratedFinalGlyphs(finalElision);
+  DALI_TEST_CHECK(generatedEllipsisCount <= 1u);
+  for(Text::GlyphIndex sourceIndex = 0u; sourceIndex < finalElision.sourceToFinalGlyphIndices.Count();
+      ++sourceIndex)
+  {
+    const Text::GlyphIndex finalIndex = finalElision.sourceToFinalGlyphIndices[sourceIndex];
+    if(finalIndex != Text::FinalElisionResult::INVALID_GLYPH_INDEX)
+    {
+      DALI_TEST_CHECK(finalIndex < finalElision.glyphs.Count());
+      DALI_TEST_CHECK(finalElision.IsOriginalGlyphVisible(sourceIndex));
+    }
+  }
+  if(finalElision.textElided)
+  {
+    DALI_TEST_CHECK(finalElision.applied);
+    DALI_TEST_EQUALS(finalElision.ellipsisUnitCount, 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(finalElision.ellipsisOmissionReason,
+                     Text::FinalElisionResult::EllipsisOmissionReason::NONE,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(generatedEllipsisCount, 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(finalElision.ellipsisLineIndex,
+                     FindEllipsisLine(*state.processingModel->mVisualModel),
+                     TEST_LOCATION);
+    DALI_TEST_CHECK(finalElision.ellipsisFinalGlyphIndex < finalElision.glyphs.Count());
+    DALI_TEST_CHECK(IsGeneratedEllipsisDrawable(state));
+  }
+  else
+  {
+    DALI_TEST_CHECK(!finalElision.applied);
+    DALI_TEST_EQUALS(finalElision.ellipsisUnitCount, 0u, TEST_LOCATION);
+    DALI_TEST_EQUALS(finalElision.ellipsisOmissionReason,
+                     Text::FinalElisionResult::EllipsisOmissionReason::NONE,
+                     TEST_LOCATION);
+  }
+
+  for(const Text::ReplacementPlacement& placement : state.placements)
+  {
+    DALI_TEST_EQUALS(placement.visible,
+                     finalElision.IsOriginalGlyphVisible(placement.syntheticGlyphIndex),
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(placement.elided, finalElision.textElided && !placement.visible, TEST_LOCATION);
+    Text::FinalGlyphGeometry geometry;
+    DALI_TEST_EQUALS(Text::GetFinalSourceGlyphGeometry(*state.processingModel,
+                                                       finalElision,
+                                                       placement.syntheticGlyphIndex,
+                                                       geometry),
+                     placement.visible,
+                     TEST_LOCATION);
+    if(placement.visible)
+    {
+      DALI_TEST_EQUALS(geometry.lineIndex, placement.lineIndex, TEST_LOCATION);
+      DALI_TEST_EQUALS(geometry.contentLocalPenPosition.x,
+                       placement.position.x,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      const Text::LineRun& line = state.processingModel->mVisualModel->mLines[geometry.lineIndex];
+      DALI_TEST_CHECK(placement.position.y <=
+                      geometry.baseline - line.descender + Math::MACHINE_EPSILON_1000);
+      Text::GlyphIndex finalGlyphIndex = placement.syntheticGlyphIndex;
+      if(finalElision.textElided)
+      {
+        DALI_TEST_CHECK(finalElision.FindFinalGlyphIndex(placement.syntheticGlyphIndex, finalGlyphIndex));
+      }
+      const Text::GlyphInfo& finalGlyph = finalElision.textElided
+                                            ? finalElision.glyphs[finalGlyphIndex]
+                                            : state.processingModel->mVisualModel->mGlyphs[placement.syntheticGlyphIndex];
+      DALI_TEST_CHECK(Text::IsSyntheticReplacementGlyph(finalGlyph));
+      DALI_TEST_EQUALS(finalGlyph.advance,
+                       placement.size.x,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      if(finalElision.textElided)
+      {
+        DALI_TEST_EQUALS(finalElision.viewGlyphPositions[finalGlyphIndex].x,
+                         geometry.contentLocalPenPosition.x,
+                         Math::MACHINE_EPSILON_1000,
+                         TEST_LOCATION);
+      }
+    }
+  }
+}
+
+bool IsExactLogicalBoundary(const Text::ReplacementProjection& projection, Text::CharacterIndex boundary)
+{
+  return projection.NormalizeLogicalBoundary(boundary, Text::ReplacementProjection::BoundaryAffinity::LEADING) ==
+           boundary &&
+         projection.NormalizeLogicalBoundary(boundary, Text::ReplacementProjection::BoundaryAffinity::TRAILING) ==
+           boundary;
+}
+
+void CheckLaidOutBoundariesAreAtomic(const Text::ReplacementProjection&  projection,
+                                     const Text::ReplacementRenderState& result)
+{
+  const Vector<Text::LineRun>& lines = result.processingModel->mVisualModel->mLines;
+  for(const Text::LineRun& line : lines)
+  {
+    const Text::CharacterIndex firstStart =
+      projection.ProjectedBoundaryToLogical(line.characterRun.characterIndex);
+    const Text::CharacterIndex firstEnd = projection.ProjectedBoundaryToLogical(
+      line.characterRun.characterIndex + line.characterRun.numberOfCharacters);
+    DALI_TEST_CHECK(IsExactLogicalBoundary(projection, firstStart));
+    DALI_TEST_CHECK(IsExactLogicalBoundary(projection, firstEnd));
+  }
+}
+
+} // unnamed namespace
+
+void utc_dali_replacement_projection_internal_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_replacement_projection_internal_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+int UtcDaliReplacementProjectionPathsAndMappingP(void)
+{
+  Vector<Text::Character> text = Utf32("AiconB");
+
+  Vector<Text::ReplacementRunSnapshot> noCandidates;
+  Text::ReplacementProjection          none = Text::ReplacementProjection::Build(text, noCandidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(none.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::NONE), TEST_LOCATION);
+  DALI_TEST_CHECK(!none.HasReplacements());
+  DALI_TEST_CHECK(none.GetProcessingText().Begin() == text.Begin());
+
+  Vector<Text::Character>              identityText = Utf32("A\uFFFCB");
+  Vector<Text::ReplacementRunSnapshot> identityCandidates;
+  identityCandidates.PushBack(Candidate(1u, 1u, 16.0f, 14.0f, 10u));
+  Text::ReplacementProjection identity =
+    Text::ReplacementProjection::Build(identityText, identityCandidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(identity.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::IDENTITY), TEST_LOCATION);
+  DALI_TEST_CHECK(identity.UsesOriginalTextBuffer());
+  DALI_TEST_CHECK(identity.GetProcessingText().Begin() == identityText.Begin());
+  DALI_TEST_EQUALS(identity.GetLogicalCharacterCount(), identity.GetProcessingCharacterCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(identity.GetReplacementRuns()[0u].projectedCharacterIndex, 1u, TEST_LOCATION);
+
+  Text::ReplacementProjection scaledIdentity =
+    Text::ReplacementProjection::Build(identityText, identityCandidates, 1.5f);
+  DALI_TEST_EQUALS(scaledIdentity.GetReplacementRuns()[0u].metrics.width, 24.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaledIdentity.GetReplacementRuns()[0u].metrics.height, 21.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(identityCandidates[0u].metrics.width, 16.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(identityCandidates[0u].metrics.height, 14.0f, TEST_LOCATION);
+
+  // Multiple and adjacent canonical objects retain the same source buffer and
+  // identity indices. Their source descriptor, size, alignment and offset do
+  // not require a processing-text or character-map allocation.
+  Vector<Text::Character>              multipleIdentityText = Utf32("A\uFFFC\uFFFCx\uFFFCD");
+  Vector<Text::ReplacementRunSnapshot> multipleIdentityCandidates;
+  multipleIdentityCandidates.PushBack(Candidate(1u, 1u, 8.0f, 8.0f, 12u));
+  multipleIdentityCandidates.PushBack(Candidate(2u, 1u, 24.0f, 24.0f, 13u));
+  multipleIdentityCandidates.PushBack(Candidate(4u, 1u, 80.0f, 48.0f, 14u));
+  multipleIdentityCandidates[0u].image.source              = "same.png";
+  multipleIdentityCandidates[1u].image.source              = "same.png";
+  multipleIdentityCandidates[2u].image.source              = "different.png";
+  multipleIdentityCandidates[1u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_CENTER;
+  multipleIdentityCandidates[2u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_BASELINE;
+  multipleIdentityCandidates[2u].metrics.verticalOffset    = -4.0f;
+  Text::ReplacementProjection multipleIdentity =
+    Text::ReplacementProjection::Build(multipleIdentityText, multipleIdentityCandidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(multipleIdentity.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::IDENTITY), TEST_LOCATION);
+  DALI_TEST_CHECK(multipleIdentity.UsesOriginalTextBuffer());
+  DALI_TEST_CHECK(multipleIdentity.GetProcessingText().Begin() == multipleIdentityText.Begin());
+  DALI_TEST_EQUALS(multipleIdentity.GetProcessingCharacterCount(), multipleIdentityText.Count(), TEST_LOCATION);
+  DALI_TEST_EQUALS(multipleIdentity.GetReplacementRuns().Count(), 3u, TEST_LOCATION);
+  DALI_TEST_EQUALS(multipleIdentity.GetReplacementRuns()[0u].projectedCharacterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(multipleIdentity.GetReplacementRuns()[1u].projectedCharacterIndex, 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(multipleIdentity.GetReplacementRuns()[2u].projectedCharacterIndex, 4u, TEST_LOCATION);
+
+  // A programmatic one-character replacement still has identity indices, but its underlying bidi/script class must
+  // be neutralized for processing. Only canonical U+FFFC can reuse the exact source buffer.
+  Vector<Text::Character>              identityOrdinaryText = Utf32("AxB");
+  Vector<Text::ReplacementRunSnapshot> identityOrdinaryCandidates;
+  identityOrdinaryCandidates.PushBack(Candidate(1u, 1u, 16.0f, 14.0f, 11u));
+  Text::ReplacementProjection identityOrdinary = Text::ReplacementProjection::Build(
+    identityOrdinaryText, identityOrdinaryCandidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(identityOrdinary.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::IDENTITY), TEST_LOCATION);
+  DALI_TEST_CHECK(!identityOrdinary.UsesOriginalTextBuffer());
+  DALI_TEST_EQUALS(identityOrdinary.GetLogicalCharacterCount(), identityOrdinary.GetProcessingCharacterCount(),
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(identityOrdinary.GetProcessingText()[1u],
+                   Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER, TEST_LOCATION);
+  DALI_TEST_EQUALS(identityOrdinary.GetLogicalText()[1u], static_cast<Text::Character>('x'), TEST_LOCATION);
+
+  Vector<Text::ReplacementRunSnapshot> multiCandidates;
+  multiCandidates.PushBack(Candidate(1u, 4u, 24.0f, 18.0f, 20u));
+  Text::ReplacementProjection compact =
+    Text::ReplacementProjection::Build(text, multiCandidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(compact.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::COMPACT), TEST_LOCATION);
+  DALI_TEST_CHECK(!compact.UsesOriginalTextBuffer());
+  DALI_TEST_EQUALS(compact.GetLogicalCharacterCount(), 6u, TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.GetProcessingCharacterCount(), 3u, TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.GetProcessingText()[0u], static_cast<Text::Character>('A'), TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.GetProcessingText()[1u], Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.GetProcessingText()[2u], static_cast<Text::Character>('B'), TEST_LOCATION);
+  for(Text::CharacterIndex logicalIndex = 1u; logicalIndex < 5u; ++logicalIndex)
+  {
+    DALI_TEST_EQUALS(compact.LogicalCharacterToProjected(logicalIndex), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(compact.FindByLogicalCharacter(logicalIndex) != nullptr);
+  }
+  DALI_TEST_EQUALS(compact.ProjectedCharacterToLogical(1u), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.ProjectedBoundaryToLogical(2u), 5u, TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.LogicalBoundaryToProjected(
+                     1u, Text::ReplacementProjection::BoundaryAffinity::LEADING),
+                   1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(compact.LogicalBoundaryToProjected(
+                     5u, Text::ReplacementProjection::BoundaryAffinity::TRAILING),
+                   2u, TEST_LOCATION);
+
+  // Building the compact view must not modify the source buffer.
+  const Vector<Text::Character> expectedText = Utf32("AiconB");
+  DALI_TEST_EQUALS(text.Count(), expectedText.Count(), TEST_LOCATION);
+  for(uint32_t index = 0u; index < text.Count(); ++index)
+  {
+    DALI_TEST_EQUALS(text[index], expectedText[index], TEST_LOCATION);
+  }
+
+  // Adjacent replacements remain distinct processing units.
+  Vector<Text::Character>              adjacentText = Utf32("AabcdE");
+  Vector<Text::ReplacementRunSnapshot> adjacentCandidates;
+  adjacentCandidates.PushBack(Candidate(1u, 2u, 12.0f, 12.0f, 31u));
+  adjacentCandidates.PushBack(Candidate(3u, 2u, 13.0f, 12.0f, 32u));
+  Text::ReplacementProjection adjacent =
+    Text::ReplacementProjection::Build(adjacentText, adjacentCandidates);
+  DALI_TEST_EQUALS(adjacent.GetReplacementRuns().Count(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(adjacent.GetReplacementRuns()[0u].projectedCharacterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(adjacent.GetReplacementRuns()[1u].projectedCharacterIndex, 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(adjacent.GetProcessingCharacterCount(), 4u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProcessingSourceGradientSpanProjectionP(void)
+{
+  Text::ModelPtr model          = Text::Model::New();
+  model->mLogicalModel->mText   = Utf32("AAAxxxxBBBByyCCCC");
+  auto& gradientData            = model->mLogicalModel->mGradientSpanData;
+  gradientData                  = std::make_unique<Text::Internal::GradientSpanModelData>();
+  const auto linearPaint        = CreateGradientSpanPaint(Dali::Ui::Gradient::Type::LINEAR,
+                                                          Text::GradientSpan::BoundsMode::SPAN_BOUND,
+                                                          Dali::Ui::Gradient::Units::USER_SPACE,
+                                                          Dali::Ui::Gradient::SpreadMethod::REPEAT,
+                                                          0.1f);
+  const auto radialPaint        = CreateGradientSpanPaint(Dali::Ui::Gradient::Type::RADIAL,
+                                                          Text::GradientSpan::BoundsMode::CONTENT_BOUND,
+                                                          Dali::Ui::Gradient::Units::OBJECT_BOUNDING_BOX,
+                                                          Dali::Ui::Gradient::SpreadMethod::REFLECT,
+                                                          0.2f);
+  const auto conicPaint         = CreateGradientSpanPaint(Dali::Ui::Gradient::Type::CONIC,
+                                                          Text::GradientSpan::BoundsMode::VIEW_BOUND,
+                                                          Dali::Ui::Gradient::Units::USER_SPACE,
+                                                          Dali::Ui::Gradient::SpreadMethod::PAD,
+                                                          0.3f);
+  const auto fullyReplacedPaint = CreateGradientSpanPaint(Dali::Ui::Gradient::Type::LINEAR,
+                                                          Text::GradientSpan::BoundsMode::SPAN_BOUND,
+                                                          Dali::Ui::Gradient::Units::OBJECT_BOUNDING_BOX,
+                                                          Dali::Ui::Gradient::SpreadMethod::PAD,
+                                                          0.4f);
+  gradientData->paints.PushBack(linearPaint);
+  gradientData->paints.PushBack(radialPaint);
+  gradientData->paints.PushBack(conicPaint);
+  gradientData->paints.PushBack(fullyReplacedPaint);
+  AddGradientSpanRun(*gradientData, 0u, 3u, 1u);
+  AddGradientSpanRun(*gradientData, 3u, 4u, 4u);
+  AddGradientSpanRun(*gradientData, 7u, 4u, 2u);
+  AddGradientSpanRun(*gradientData, 13u, 4u, 3u);
+  gradientData->glyphPaintIndices.PushBack(1u); // Derived source data must not be copied before shaping.
+
+  Vector<Text::ReplacementRunSnapshot> candidates;
+  candidates.PushBack(ImageCandidate(3u, 4u, 101u));
+  candidates.PushBack(ImageCandidate(11u, 2u, 102u));
+  Text::ReplacementProjection projection =
+    Text::ReplacementProjection::Build(model->mLogicalModel->mText, candidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(projection.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::COMPACT), TEST_LOCATION);
+
+  Text::ProjectedTextProcessingSource projectedSource;
+  DALI_TEST_CHECK(Text::PrepareProjectedTextProcessingSource(*model, projection, projectedSource));
+  DALI_TEST_CHECK(projectedSource.gradientSpanData);
+  DALI_TEST_CHECK(projectedSource.source.gradientSpanData == projectedSource.gradientSpanData.get());
+  const auto& projectedGradientData = *projectedSource.gradientSpanData;
+  DALI_TEST_EQUALS(projectedGradientData.paints.Count(), 4u, TEST_LOCATION);
+  CheckGradientSpanPaint(projectedGradientData.paints[0u], linearPaint);
+  CheckGradientSpanPaint(projectedGradientData.paints[1u], radialPaint);
+  CheckGradientSpanPaint(projectedGradientData.paints[2u], conicPaint);
+  CheckGradientSpanPaint(projectedGradientData.paints[3u], fullyReplacedPaint);
+  DALI_TEST_EQUALS(projectedGradientData.characterRuns.Count(), 3u, TEST_LOCATION);
+  CheckGradientSpanRun(projectedGradientData.characterRuns[0u], 0u, 3u, 1u);
+  CheckGradientSpanRun(projectedGradientData.characterRuns[1u], 4u, 4u, 2u);
+  CheckGradientSpanRun(projectedGradientData.characterRuns[2u], 9u, 4u, 3u);
+  DALI_TEST_CHECK(projectedGradientData.glyphPaintIndices.Empty());
+  DALI_TEST_EQUALS(projectedSource.source.text->Count(), 13u, TEST_LOCATION);
+  DALI_TEST_EQUALS((*projectedSource.source.text)[3u],
+                   Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER, TEST_LOCATION);
+  DALI_TEST_EQUALS((*projectedSource.source.text)[8u],
+                   Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER, TEST_LOCATION);
+
+  // Applying a processing source owns a deep snapshot and leaves glyph paint IDs for the shaping pass.
+  Text::ModelPtr appliedModel = Text::Model::New();
+  Text::ApplyTextProcessingSource(projectedSource.source, *appliedModel->mLogicalModel);
+  DALI_TEST_CHECK(appliedModel->mLogicalModel->mGradientSpanData);
+  DALI_TEST_CHECK(appliedModel->mLogicalModel->mGradientSpanData.get() != projectedSource.gradientSpanData.get());
+  DALI_TEST_CHECK(appliedModel->mLogicalModel->mGradientSpanData->paints[0u].style.stops.Begin() !=
+                  projectedSource.gradientSpanData->paints[0u].style.stops.Begin());
+  DALI_TEST_EQUALS(appliedModel->mLogicalModel->mGradientSpanData->characterRuns.Count(), 3u, TEST_LOCATION);
+  DALI_TEST_CHECK(appliedModel->mLogicalModel->mGradientSpanData->glyphPaintIndices.Empty());
+
+  // Canonical one-character ImageSpan projection keeps indices but still excludes the image unit from paint runs.
+  Text::ModelPtr identityModel        = Text::Model::New();
+  identityModel->mLogicalModel->mText = Utf32("AAAA\uFFFCBBBB");
+  identityModel->mLogicalModel->mGradientSpanData =
+    std::make_unique<Text::Internal::GradientSpanModelData>();
+  identityModel->mLogicalModel->mGradientSpanData->paints.PushBack(linearPaint);
+  identityModel->mLogicalModel->mGradientSpanData->paints.PushBack(radialPaint);
+  AddGradientSpanRun(*identityModel->mLogicalModel->mGradientSpanData, 0u, 4u, 1u);
+  AddGradientSpanRun(*identityModel->mLogicalModel->mGradientSpanData, 5u, 4u, 2u);
+  Vector<Text::ReplacementRunSnapshot> identityCandidates;
+  identityCandidates.PushBack(ImageCandidate(4u, 1u, 103u));
+  Text::ReplacementProjection identityProjection =
+    Text::ReplacementProjection::Build(identityModel->mLogicalModel->mText, identityCandidates);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(identityProjection.GetMode()),
+                   static_cast<uint32_t>(Text::ReplacementProjection::Mode::IDENTITY), TEST_LOCATION);
+  Text::ProjectedTextProcessingSource identitySource;
+  DALI_TEST_CHECK(Text::PrepareProjectedTextProcessingSource(*identityModel, identityProjection, identitySource));
+  DALI_TEST_CHECK(identitySource.gradientSpanData);
+  DALI_TEST_EQUALS(identitySource.gradientSpanData->characterRuns.Count(), 2u, TEST_LOCATION);
+  CheckGradientSpanRun(identitySource.gradientSpanData->characterRuns[0u], 0u, 4u, 1u);
+  CheckGradientSpanRun(identitySource.gradientSpanData->characterRuns[1u], 5u, 4u, 2u);
+
+  // A run crossing a replacement is split around the native replacement unit, matching other glyph styles.
+  Text::ModelPtr crossingModel        = Text::Model::New();
+  crossingModel->mLogicalModel->mText = Utf32("AAxxxxBBBB");
+  crossingModel->mLogicalModel->mGradientSpanData =
+    std::make_unique<Text::Internal::GradientSpanModelData>();
+  crossingModel->mLogicalModel->mGradientSpanData->paints.PushBack(conicPaint);
+  AddGradientSpanRun(*crossingModel->mLogicalModel->mGradientSpanData, 1u, 7u, 1u);
+  Vector<Text::ReplacementRunSnapshot> crossingCandidates;
+  crossingCandidates.PushBack(ImageCandidate(2u, 4u, 104u));
+  Text::ReplacementProjection crossingProjection =
+    Text::ReplacementProjection::Build(crossingModel->mLogicalModel->mText, crossingCandidates);
+  Text::ProjectedTextProcessingSource crossingSource;
+  DALI_TEST_CHECK(Text::PrepareProjectedTextProcessingSource(*crossingModel, crossingProjection, crossingSource));
+  DALI_TEST_CHECK(crossingSource.gradientSpanData);
+  DALI_TEST_EQUALS(crossingSource.gradientSpanData->characterRuns.Count(), 2u, TEST_LOCATION);
+  CheckGradientSpanRun(crossingSource.gradientSpanData->characterRuns[0u], 1u, 1u, 1u);
+  CheckGradientSpanRun(crossingSource.gradientSpanData->characterRuns[1u], 3u, 2u, 1u);
+
+  // A sidecar with no text left after projection is dropped rather than retaining a zero-length run.
+  Text::ModelPtr coveredModel        = Text::Model::New();
+  coveredModel->mLogicalModel->mText = Utf32("AAxxxxBB");
+  coveredModel->mLogicalModel->mGradientSpanData =
+    std::make_unique<Text::Internal::GradientSpanModelData>();
+  coveredModel->mLogicalModel->mGradientSpanData->paints.PushBack(linearPaint);
+  AddGradientSpanRun(*coveredModel->mLogicalModel->mGradientSpanData, 2u, 4u, 1u);
+  Vector<Text::ReplacementRunSnapshot> coveredCandidates;
+  coveredCandidates.PushBack(ImageCandidate(2u, 4u, 105u));
+  Text::ReplacementProjection coveredProjection =
+    Text::ReplacementProjection::Build(coveredModel->mLogicalModel->mText, coveredCandidates);
+  // Reusing storage must clear both the owned sidecar and its non-owning source pointer.
+  DALI_TEST_CHECK(Text::PrepareProjectedTextProcessingSource(*coveredModel, coveredProjection, crossingSource));
+  DALI_TEST_CHECK(!crossingSource.gradientSpanData);
+  DALI_TEST_CHECK(crossingSource.source.gradientSpanData == nullptr);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProcessingSourceGradientSpanFastPathsP(void)
+{
+  Text::ModelPtr gradientModel        = Text::Model::New();
+  gradientModel->mLogicalModel->mText = Utf32("Gradient");
+  gradientModel->mLogicalModel->mGradientSpanData =
+    std::make_unique<Text::Internal::GradientSpanModelData>();
+  gradientModel->mLogicalModel->mGradientSpanData->paints.PushBack(
+    CreateGradientSpanPaint(Dali::Ui::Gradient::Type::LINEAR,
+                            Text::GradientSpan::BoundsMode::SPAN_BOUND,
+                            Dali::Ui::Gradient::Units::USER_SPACE,
+                            Dali::Ui::Gradient::SpreadMethod::PAD,
+                            0.25f));
+  AddGradientSpanRun(*gradientModel->mLogicalModel->mGradientSpanData, 0u, 8u, 1u);
+
+  const Text::TextProcessingSource ordinarySource = Text::MakeTextProcessingSource(*gradientModel);
+  DALI_TEST_CHECK(ordinarySource.gradientSpanData == gradientModel->mLogicalModel->mGradientSpanData.get());
+  Vector<Text::ReplacementRunSnapshot> noCandidates;
+  Text::ReplacementProjection          noProjection =
+    Text::ReplacementProjection::Build(gradientModel->mLogicalModel->mText, noCandidates);
+  Text::ProjectedTextProcessingSource noProjectionStorage;
+  DALI_TEST_CHECK(!Text::PrepareProjectedTextProcessingSource(*gradientModel,
+                                                              noProjection,
+                                                              noProjectionStorage));
+  DALI_TEST_CHECK(!noProjectionStorage.gradientSpanData);
+
+  Text::ModelPtr plainModel        = Text::Model::New();
+  plainModel->mLogicalModel->mText = Utf32("AAxxxxBB");
+  Vector<Text::ReplacementRunSnapshot> candidates;
+  candidates.PushBack(ImageCandidate(2u, 4u, 106u));
+  Text::ReplacementProjection projection =
+    Text::ReplacementProjection::Build(plainModel->mLogicalModel->mText, candidates);
+  Text::ProjectedTextProcessingSource projectedSource;
+  DALI_TEST_CHECK(Text::PrepareProjectedTextProcessingSource(*plainModel, projection, projectedSource));
+  DALI_TEST_CHECK(!projectedSource.gradientSpanData);
+  DALI_TEST_CHECK(projectedSource.source.gradientSpanData == nullptr);
+
+  // Applying plain replacement content must also clear old projected gradient state.
+  Text::ModelPtr targetModel = Text::Model::New();
+  targetModel->mLogicalModel->mGradientSpanData =
+    std::make_unique<Text::Internal::GradientSpanModelData>();
+  Text::ApplyTextProcessingSource(projectedSource.source, *targetModel->mLogicalModel);
+  DALI_TEST_CHECK(!targetModel->mLogicalModel->mGradientSpanData);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionInvalidRangesFallbackP(void)
+{
+  Vector<Text::Character> text = Utf32(
+    "a\xCC\x81"
+    "bc\ndefgh"); // a + COMBINING ACUTE + bc + LF + defgh
+
+  Vector<Text::ReplacementRunSnapshot> candidates;
+  candidates.PushBack(Candidate(1u, 1u, 10.0f, 10.0f, 1u));  // combining mark only: accepted
+  candidates.PushBack(Candidate(2u, 0u, 10.0f, 10.0f, 2u));  // empty
+  candidates.PushBack(Candidate(99u, 1u, 10.0f, 10.0f, 3u)); // out of range
+  candidates.PushBack(Candidate(3u, 2u, 10.0f, 10.0f, 4u));  // includes LF
+  candidates.PushBack(Candidate(5u, 2u, 10.0f, 10.0f, 5u));  // accepted
+  candidates.PushBack(Candidate(5u, 2u, 10.0f, 10.0f, 6u));  // duplicate
+  candidates.PushBack(Candidate(6u, 1u, 10.0f, 10.0f, 7u));  // nested
+  candidates.PushBack(Candidate(8u, 1u, -1.0f, 10.0f, 8u));  // invalid metric
+  Text::ReplacementRunSnapshot invalidPayloadCandidate = Candidate(9u, 1u, 10.0f, 10.0f, 9u);
+  invalidPayloadCandidate.type                         = Text::ReplacementType::IMAGE;
+  candidates.PushBack(invalidPayloadCandidate);
+
+  Text::ReplacementProjection projection =
+    Text::ReplacementProjection::Build(text, candidates);
+  DALI_TEST_EQUALS(projection.GetReplacementRuns().Count(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.GetReplacementRuns()[0u].logicalCharacterRange.characterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.GetReplacementRuns()[1u].logicalCharacterRange.characterIndex, 5u, TEST_LOCATION);
+  Vector<Text::Character> paragraphText = Utf32(
+    "ab\xE2\x80\xA9"
+    "cd");
+  Vector<Text::ReplacementRunSnapshot> paragraphCandidates;
+  paragraphCandidates.PushBack(Candidate(1u, 3u, 10.0f, 10.0f, 10u));
+  Text::ReplacementProjection paragraphProjection =
+    Text::ReplacementProjection::Build(paragraphText, paragraphCandidates);
+  DALI_TEST_EQUALS(paragraphProjection.GetReplacementRuns().Count(), 0u, TEST_LOCATION);
+  // Winner selection follows authored attachment order, not the lowest logical start. Runs are sorted only after
+  // validation so later layout/mapping can still use binary lookup and linear sweeps.
+  Vector<Text::Character>              winnerText = Utf32("abcdef");
+  Vector<Text::ReplacementRunSnapshot> winnerCandidates;
+  winnerCandidates.PushBack(Candidate(2u, 3u, 10.0f, 10.0f, 90u));
+  winnerCandidates.PushBack(Candidate(1u, 2u, 10.0f, 10.0f, 91u));
+  Text::ReplacementProjection insertionWinner =
+    Text::ReplacementProjection::Build(winnerText, winnerCandidates);
+  DALI_TEST_EQUALS(insertionWinner.GetReplacementRuns().Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(insertionWinner.GetReplacementRuns()[0u].logicalCharacterRange.characterIndex, 2u, TEST_LOCATION);
+
+  Vector<Text::ReplacementRunSnapshot> unsortedCandidates;
+  unsortedCandidates.PushBack(Candidate(4u, 1u, 10.0f, 10.0f, 92u));
+  unsortedCandidates.PushBack(Candidate(1u, 1u, 10.0f, 10.0f, 93u));
+  Text::ReplacementProjection unsorted =
+    Text::ReplacementProjection::Build(winnerText, unsortedCandidates);
+  DALI_TEST_EQUALS(unsorted.GetReplacementRuns().Count(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(unsorted.GetReplacementRuns()[0u].logicalCharacterRange.characterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(unsorted.GetReplacementRuns()[1u].logicalCharacterRange.characterIndex, 4u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionExactUtf32InteriorRangesP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+
+  struct ExactRangeCase
+  {
+    const char*          name;
+    const char*          utf8;
+    Text::CharacterIndex start;
+    Text::Length         length;
+  };
+
+  const ExactRangeCase cases[] = {
+    {"combining-base",
+     "Xa\xCC\x81"
+     "Y",
+     1u, 1u},
+    {"combining-mark",
+     "Xa\xCC\x81"
+     "Y",
+     2u, 1u},
+    {"combining-whole",
+     "Xa\xCC\x81"
+     "Y",
+     1u, 2u},
+    {"variation-base",
+     "X\xE2\x9D\xA4\xEF\xB8\x8F"
+     "Y",
+     1u, 1u},
+    {"variation-selector",
+     "X\xE2\x9D\xA4\xEF\xB8\x8F"
+     "Y",
+     2u, 1u},
+    {"variation-whole",
+     "X\xE2\x9D\xA4\xEF\xB8\x8F"
+     "Y",
+     1u, 2u},
+    {"modifier-base",
+     "X\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+     "Y",
+     1u, 1u},
+    {"modifier-only",
+     "X\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+     "Y",
+     2u, 1u},
+    {"modifier-whole",
+     "X\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+     "Y",
+     1u, 2u},
+    {"zwj-first",
+     "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+     "Y",
+     1u, 1u},
+    {"zwj-only",
+     "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+     "Y",
+     2u, 1u},
+    {"zwj-last",
+     "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+     "Y",
+     3u, 1u},
+    {"zwj-partial",
+     "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+     "Y",
+     1u, 2u},
+    {"zwj-whole",
+     "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+     "Y",
+     1u, 3u},
+    {"regional-first",
+     "X\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7"
+     "Y",
+     1u, 1u},
+    {"regional-second",
+     "X\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7"
+     "Y",
+     2u, 1u},
+    {"regional-whole",
+     "X\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7"
+     "Y",
+     1u, 2u},
+    {"latin-fi-first", "XfiY", 1u, 1u},
+    {"latin-fi-second", "XfiY", 2u, 1u},
+    {"latin-ffi-middle", "XffiY", 2u, 1u},
+    {"arabic-lam",
+     "X\xD9\x84\xD8\xA7"
+     "Y",
+     1u, 1u},
+    {"arabic-alef",
+     "X\xD9\x84\xD8\xA7"
+     "Y",
+     2u, 1u},
+  };
+
+  for(uint32_t caseIndex = 0u; caseIndex < sizeof(cases) / sizeof(cases[0u]); ++caseIndex)
+  {
+    const ExactRangeCase&                testCase     = cases[caseIndex];
+    Vector<Text::Character>              text         = Utf32(testCase.utf8);
+    const Vector<Text::Character>        originalText = text;
+    Vector<Text::ReplacementRunSnapshot> candidates;
+    candidates.PushBack(Candidate(testCase.start, testCase.length, 24.0f, 18.0f, caseIndex + 1u));
+
+    Text::ReplacementProjection projection = Text::ReplacementProjection::Build(text, candidates);
+    DALI_TEST_EQUALS(projection.GetReplacementRuns().Count(), 1u, TEST_LOCATION);
+    const Text::ProjectedReplacementRun& replacement = projection.GetReplacementRuns()[0u];
+    DALI_TEST_EQUALS(replacement.logicalCharacterRange.characterIndex, testCase.start, TEST_LOCATION);
+    DALI_TEST_EQUALS(replacement.logicalCharacterRange.numberOfCharacters, testCase.length, TEST_LOCATION);
+    DALI_TEST_EQUALS(projection.GetProcessingCharacterCount(),
+                     text.Count() - testCase.length + 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(projection.GetProcessingText()[replacement.projectedCharacterIndex],
+                     Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER, TEST_LOCATION);
+    for(Text::CharacterIndex logicalIndex = testCase.start;
+        logicalIndex < testCase.start + testCase.length;
+        ++logicalIndex)
+    {
+      DALI_TEST_EQUALS(projection.LogicalCharacterToProjected(logicalIndex),
+                       replacement.projectedCharacterIndex, TEST_LOCATION);
+    }
+
+    DALI_TEST_EQUALS(text.Count(), originalText.Count(), TEST_LOCATION);
+    for(uint32_t index = 0u; index < text.Count(); ++index)
+    {
+      DALI_TEST_EQUALS(text[index], originalText[index], TEST_LOCATION);
+    }
+
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize = Size(240.0f, 80.0f);
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_EQUALS(CountSyntheticGlyphs(result), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(result.placements.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(result.placements[0u].logicalCharacterRange.characterIndex, testCase.start, TEST_LOCATION);
+    DALI_TEST_EQUALS(result.placements[0u].logicalCharacterRange.numberOfCharacters,
+                     testCase.length, TEST_LOCATION);
+    result.Clear(services.bidirectionalSupport);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionStyleCursorHitDeleteP(void)
+{
+  Vector<Text::Character>              text = Utf32("AiconBC");
+  Vector<Text::ReplacementRunSnapshot> candidates;
+  candidates.PushBack(Candidate(1u, 4u, 30.0f, 18.0f, 42u));
+  Text::ReplacementProjection projection =
+    Text::ReplacementProjection::Build(text, candidates);
+
+  Vector<Text::CharacterRun> glyphStyleRuns;
+  glyphStyleRuns.PushBack(Text::CharacterRun{0u, static_cast<Text::Length>(text.Count())});
+  Vector<Text::ProjectedStyleSegment> projectedStyleSegments;
+  DALI_TEST_CHECK(projection.ProjectGlyphStyleRuns(glyphStyleRuns, projectedStyleSegments));
+  DALI_TEST_EQUALS(projectedStyleSegments.Count(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projectedStyleSegments[0u].projectedCharacterRange.characterIndex, 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projectedStyleSegments[0u].projectedCharacterRange.numberOfCharacters, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projectedStyleSegments[1u].projectedCharacterRange.characterIndex, 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projectedStyleSegments[1u].projectedCharacterRange.numberOfCharacters, 2u, TEST_LOCATION);
+
+  DALI_TEST_EQUALS(projection.NormalizeLogicalBoundary(
+                     3u, Text::ReplacementProjection::BoundaryAffinity::LEADING),
+                   1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.NormalizeLogicalBoundary(
+                     3u, Text::ReplacementProjection::BoundaryAffinity::TRAILING),
+                   5u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.LogicalBoundaryToProjected(
+                     1u, Text::ReplacementProjection::BoundaryAffinity::LEADING) +
+                     1u,
+                   projection.LogicalBoundaryToProjected(
+                     5u, Text::ReplacementProjection::BoundaryAffinity::TRAILING),
+                   TEST_LOCATION);
+
+  DALI_TEST_EQUALS(projection.HitTestLogicalBoundary(1u, 2.0f, 30.0f, false), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.HitTestLogicalBoundary(1u, 28.0f, 30.0f, false), 5u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.HitTestLogicalBoundary(1u, 2.0f, 30.0f, true), 5u, TEST_LOCATION);
+  DALI_TEST_EQUALS(projection.HitTestLogicalBoundary(1u, 28.0f, 30.0f, true), 1u, TEST_LOCATION);
+
+  const Text::CharacterRun backspace = projection.GetDeletionRange(5u, true);
+  const Text::CharacterRun deleteRun = projection.GetDeletionRange(1u, false);
+  DALI_TEST_EQUALS(backspace.characterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(backspace.numberOfCharacters, 4u, TEST_LOCATION);
+  DALI_TEST_EQUALS(deleteRun.characterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(deleteRun.numberOfCharacters, 4u, TEST_LOCATION);
+
+  const Text::CharacterRun backspaceAtStart = projection.GetDeletionRange(1u, true);
+  const Text::CharacterRun deleteAtEnd      = projection.GetDeletionRange(5u, false);
+  DALI_TEST_EQUALS(backspaceAtStart.characterIndex, 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(backspaceAtStart.numberOfCharacters, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(deleteAtEnd.characterIndex, 5u, TEST_LOCATION);
+  DALI_TEST_EQUALS(deleteAtEnd.numberOfCharacters, 1u, TEST_LOCATION);
+
+  Vector<Text::Character>              adjacentText = Utf32("abcdef");
+  Vector<Text::ReplacementRunSnapshot> adjacentCandidates;
+  adjacentCandidates.PushBack(Candidate(1u, 2u, 10.0f, 10.0f, 51u));
+  adjacentCandidates.PushBack(Candidate(3u, 2u, 10.0f, 10.0f, 52u));
+  Text::ReplacementProjection adjacent =
+    Text::ReplacementProjection::Build(adjacentText, adjacentCandidates);
+  const Text::CharacterRun adjacentBackspace = adjacent.GetDeletionRange(3u, true);
+  const Text::CharacterRun adjacentDelete    = adjacent.GetDeletionRange(3u, false);
+  DALI_TEST_EQUALS(adjacentBackspace.characterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(adjacentBackspace.numberOfCharacters, 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(adjacentDelete.characterIndex, 3u, TEST_LOCATION);
+  DALI_TEST_EQUALS(adjacentDelete.numberOfCharacters, 2u, TEST_LOCATION);
+
+  const Text::ProjectedReplacementRun* semanticLookup = projection.FindByLogicalCharacter(3u);
+  DALI_TEST_CHECK(semanticLookup != nullptr);
+  DALI_TEST_EQUALS(semanticLookup->logicalCharacterRange.characterIndex, 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(semanticLookup->logicalCharacterRange.numberOfCharacters, 4u, TEST_LOCATION);
+  DALI_TEST_EQUALS(semanticLookup->metrics.width, 30.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(semanticLookup->metrics.height, 18.0f, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionLtrLineBreakLayoutP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+
+  Vector<Text::Character>              text = Utf32("AAa b cBB");
+  Vector<Text::ReplacementRunSnapshot> candidates;
+  candidates.PushBack(Candidate(2u, 5u, 34.0f, 22.0f, 100u));
+  Text::ReplacementProjection projection =
+    Text::ReplacementProjection::Build(text, candidates);
+
+  Text::ReplacementLayoutTestOptions options;
+  options.contentSize = Vector2(300.0f, 100.0f);
+  Text::ReplacementRenderState result;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+  DALI_TEST_EQUALS(CountSyntheticGlyphs(result), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(result.processingModel->mLogicalModel->mLineBreakInfo.Count(),
+                   projection.GetProcessingCharacterCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(result.placements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(result.placements[0u].visible);
+  DALI_TEST_CHECK(!result.placements[0u].elided);
+  DALI_TEST_EQUALS(result.placements[0u].logicalCharacterRange.numberOfCharacters, 5u, TEST_LOCATION);
+  const Text::GlyphInfo& syntheticGlyph =
+    result.processingModel->mVisualModel->mGlyphs[result.placements[0u].syntheticGlyphIndex];
+  DALI_TEST_EQUALS(syntheticGlyph.fontId, 0u, TEST_LOCATION);
+  DALI_TEST_CHECK(!syntheticGlyph.isShaped);
+  DALI_TEST_EQUALS(syntheticGlyph.advance, 34.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(syntheticGlyph.height, 22.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  CheckLaidOutBoundariesAreAtomic(projection, result);
+
+  // Adjacent replacements exercise wrapping before/after an object and replacement-only lines.
+  Vector<Text::Character>              adjacentText = Utf32("abcdef");
+  Vector<Text::ReplacementRunSnapshot> adjacentCandidates;
+  adjacentCandidates.PushBack(Candidate(0u, 2u, 24.0f, 18.0f, 201u));
+  adjacentCandidates.PushBack(Candidate(2u, 2u, 24.0f, 18.0f, 202u));
+  adjacentCandidates.PushBack(Candidate(4u, 2u, 24.0f, 18.0f, 203u));
+  Text::ReplacementProjection adjacent =
+    Text::ReplacementProjection::Build(adjacentText, adjacentCandidates);
+  Text::ReplacementLayoutTestOptions wrapOptions;
+  wrapOptions.contentSize  = Vector2(30.0f, 200.0f);
+  wrapOptions.layoutType   = Text::Layout::Engine::MULTI_LINE_BOX;
+  wrapOptions.lineWrapMode = Text::LineWrapMode::CHARACTER;
+  Text::ReplacementRenderState wrapped;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(adjacent, services, wrapOptions, wrapped));
+  DALI_TEST_EQUALS(wrapped.placements.Count(), 3u, TEST_LOCATION);
+  DALI_TEST_EQUALS(wrapped.processingModel->mVisualModel->mLines.Count(), 3u, TEST_LOCATION);
+  for(const Text::ReplacementPlacement& placement : wrapped.placements)
+  {
+    DALI_TEST_CHECK(placement.visible);
+  }
+  CheckLaidOutBoundariesAreAtomic(adjacent, wrapped);
+
+  // Whitespace and ordinary glyphs on both sides force a break before and after the indivisible object. Break
+  // opportunities inside the logical "a b c" range have disappeared from the processing line-break table.
+  Vector<Text::Character>              surroundedText = Utf32("AA a b c BB");
+  Vector<Text::ReplacementRunSnapshot> surroundedCandidates;
+  surroundedCandidates.PushBack(Candidate(3u, 5u, 24.0f, 18.0f, 250u));
+  Text::ReplacementProjection surrounded =
+    Text::ReplacementProjection::Build(surroundedText, surroundedCandidates);
+  Text::ReplacementLayoutTestOptions surroundedOptions = wrapOptions;
+  surroundedOptions.contentSize                        = Vector2(30.0f, 200.0f);
+  Text::ReplacementRenderState surroundedResult;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(
+    surrounded, services, surroundedOptions, surroundedResult));
+  DALI_TEST_CHECK(surroundedResult.processingModel->mVisualModel->mLines.Count() >= 3u);
+  DALI_TEST_CHECK(surroundedResult.placements[0u].visible);
+  uint32_t objectLine = static_cast<uint32_t>(surroundedResult.processingModel->mVisualModel->mLines.Count());
+  for(uint32_t lineIndex = 0u;
+      lineIndex < surroundedResult.processingModel->mVisualModel->mLines.Count(); ++lineIndex)
+  {
+    const Text::LineRun& line = surroundedResult.processingModel->mVisualModel->mLines[lineIndex];
+    if(surroundedResult.placements[0u].syntheticGlyphIndex >= line.glyphRun.glyphIndex &&
+       surroundedResult.placements[0u].syntheticGlyphIndex < line.glyphRun.glyphIndex + line.glyphRun.numberOfGlyphs)
+    {
+      objectLine = lineIndex;
+      break;
+    }
+  }
+  DALI_TEST_CHECK(objectLine > 0u);
+  DALI_TEST_CHECK(objectLine + 1u < surroundedResult.processingModel->mVisualModel->mLines.Count());
+  CheckLaidOutBoundariesAreAtomic(surrounded, surroundedResult);
+
+  // An oversized object remains one unit and must not abort the remaining
+  // paragraph merely because its own line is narrower than the object.
+  Vector<Text::Character>              oversizedText = Utf32("beforeXYafter\nend");
+  Vector<Text::ReplacementRunSnapshot> oversizedCandidates;
+  oversizedCandidates.PushBack(Candidate(6u, 2u, 100.0f, 18.0f, 301u));
+  Text::ReplacementProjection oversized =
+    Text::ReplacementProjection::Build(oversizedText, oversizedCandidates);
+  Text::ReplacementLayoutTestOptions oversizedOptions = wrapOptions;
+  oversizedOptions.contentSize                        = Vector2(40.0f, 80.0f);
+  Text::ReplacementRenderState oversizedResult;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(oversized, services, oversizedOptions, oversizedResult));
+  DALI_TEST_EQUALS(CountSyntheticGlyphs(oversizedResult), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(oversized.GetProcessingCharacterCount(), 16u, TEST_LOCATION);
+  DALI_TEST_EQUALS(oversizedResult.placements[0u].logicalCharacterRange.numberOfCharacters, 2u, TEST_LOCATION);
+  DALI_TEST_CHECK(oversizedResult.placements[0u].visible);
+  const Vector<Text::LineRun>& oversizedLines = oversizedResult.processingModel->mVisualModel->mLines;
+  DALI_TEST_CHECK(oversizedLines.Count() >= 4u);
+  const Text::LineRun& lastOversizedLine = oversizedLines[oversizedLines.Count() - 1u];
+  DALI_TEST_CHECK(lastOversizedLine.characterRun.characterIndex +
+                    lastOversizedLine.characterRun.numberOfCharacters >=
+                  oversized.GetProcessingCharacterCount());
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionBackgroundIncludesAtomicBoxP(void)
+{
+  UiTestApplication application;
+
+  Text::ModelPtr originalModel        = Text::Model::New();
+  originalModel->mLogicalModel->mText = Utf32("AiconB");
+  Text::ColorRun background;
+  background.characterRun = Text::CharacterRun{2u, 1u}; // Partial intersection with [1, 5).
+  background.color        = Color::MAGENTA;
+  originalModel->mLogicalModel->mBackgroundColorRuns.PushBack(background);
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(1u, 4u, 24.0f, 18.0f, 311u));
+  source.sourceRevision            = 12u;
+  source.hasValidReplacementSource = true;
+
+  Text::ReplacementLayoutTestOptions options;
+  options.contentSize      = Vector2(100.0f, 40.0f);
+  options.sourceRevision   = source.sourceRevision;
+  options.layoutGeneration = 7u;
+
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+  Text::ReplacementRenderState        result;
+  DALI_TEST_CHECK(Text::LayoutReplacementSourceForTest(*originalModel, source, services, options, result));
+  DALI_TEST_CHECK(result.processingModel);
+  DALI_TEST_EQUALS(result.processingModel->mLogicalModel->mBackgroundColorRuns.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(result.processingModel->mLogicalModel->mBackgroundColorRuns[0u].characterRun.characterIndex,
+                   1u,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(result.processingModel->mLogicalModel->mBackgroundColorRuns[0u].characterRun.numberOfCharacters,
+                   1u,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(result.processingModel->mLogicalModel->mBackgroundColorRuns[0u].color,
+                   Color::MAGENTA,
+                   TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementSyntheticGlyphIdentityP(void)
+{
+  Text::GlyphInfo ordinaryFontZero;
+  ordinaryFontZero.fontId = 0u;
+  ordinaryFontZero.index  = 7u;
+  DALI_TEST_CHECK(!Text::IsSyntheticReplacementGlyph(ordinaryFontZero));
+
+  Text::GlyphInfo maxIndexOrdinaryFont;
+  maxIndexOrdinaryFont.fontId = 9u;
+  maxIndexOrdinaryFont.index  = Text::SYNTHETIC_REPLACEMENT_GLYPH_ID;
+  DALI_TEST_CHECK(!Text::IsSyntheticReplacementGlyph(maxIndexOrdinaryFont));
+
+  Text::GlyphInfo replacement;
+  replacement.fontId = 0u;
+  replacement.index  = Text::SYNTHETIC_REPLACEMENT_GLYPH_ID;
+  DALI_TEST_CHECK(Text::IsSyntheticReplacementGlyph(replacement));
+
+  END_TEST;
+}
+
+int UtcDaliReplacementCutoutFallsBackWithoutMutatingLogicalModelP(void)
+{
+  UiTestApplication application;
+
+  Text::ModelPtr originalModel        = Text::Model::New();
+  originalModel->mLogicalModel->mText = Utf32("AiconB");
+  originalModel->mVisualModel->SetCutoutEnabled(true);
+  originalModel->mVisualModel->SetBackgroundWithCutoutEnabled(true);
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(1u, 4u, 24.0f, 18.0f, 312u));
+  source.sourceRevision            = 13u;
+  source.hasValidReplacementSource = true;
+
+  Text::ReplacementLayoutTestOptions options;
+  options.contentSize      = Vector2(100.0f, 40.0f);
+  options.sourceRevision   = source.sourceRevision;
+  options.layoutGeneration = 8u;
+
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+  Text::ReplacementRenderState        result;
+  DALI_TEST_CHECK(Text::LayoutReplacementSourceForTest(*originalModel, source, services, options, result));
+  DALI_TEST_CHECK(result.processingModel);
+  DALI_TEST_CHECK(originalModel->IsCutoutEnabled());
+  DALI_TEST_CHECK(originalModel->IsBackgroundWithCutoutEnabled());
+  DALI_TEST_CHECK(!result.processingModel->IsCutoutEnabled());
+  DALI_TEST_CHECK(!result.processingModel->IsBackgroundWithCutoutEnabled());
+
+  END_TEST;
+}
+
+int UtcDaliReplacementVerticalAlignmentLineContainmentP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+
+  const Text::ReplacementVerticalAlignment alignments[] = {
+    Text::ReplacementVerticalAlignment::TEXT_BASELINE,
+    Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+    Text::ReplacementVerticalAlignment::TEXT_CENTER};
+  const float offsets[] = {-4.0f, 4.0f};
+
+  auto checkLayout = [&services](const std::string&                   utf8,
+                                 Vector<Text::ReplacementRunSnapshot> candidates,
+                                 bool                                 multiline)
+  {
+    const Vector<Text::Character> text       = Utf32(utf8);
+    Text::ReplacementProjection   projection = Text::ReplacementProjection::Build(text, candidates);
+
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize   = Vector2(92.0f, 240.0f);
+    options.layoutType    = multiline ? Text::Layout::Engine::MULTI_LINE_BOX
+                                      : Text::Layout::Engine::SINGLE_LINE_BOX;
+    options.lineWrapMode  = Text::LineWrapMode::CHARACTER;
+    options.fontPixelSize = 18.0f;
+
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_EQUALS(result.placements.Count(), candidates.Count(), TEST_LOCATION);
+
+    const Vector<Text::LineRun>& lines = result.processingModel->mVisualModel->mLines;
+    for(uint32_t placementIndex = 0u; placementIndex < result.placements.Count(); ++placementIndex)
+    {
+      const Text::ReplacementPlacement& placement = result.placements[placementIndex];
+      DALI_TEST_CHECK(placement.visible);
+      DALI_TEST_CHECK(!placement.elided);
+      DALI_TEST_CHECK(placement.lineIndex < lines.Count());
+
+      float lineTop = 0.0f;
+      for(uint32_t lineIndex = 0u; lineIndex < placement.lineIndex; ++lineIndex)
+      {
+        lineTop += Text::GetLineHeight(lines[lineIndex], false);
+      }
+      const Text::LineRun& line       = lines[placement.lineIndex];
+      const float          lineBottom = lineTop + line.ascender - line.descender;
+      DALI_TEST_CHECK(placement.position.y >= lineTop - Math::MACHINE_EPSILON_1000);
+      DALI_TEST_CHECK(placement.position.y + placement.size.y <=
+                      lineBottom + Math::MACHINE_EPSILON_1000);
+
+      const Text::ReplacementMetrics& metrics = candidates[placement.sourceRunIndex].metrics;
+      TextAbstraction::FontMetrics     surroundingMetrics;
+      bool                             hasSurroundingMetrics = false;
+      const auto includeTextMetrics = [&](const Text::GlyphRun& glyphRun)
+      {
+        const Vector<Text::GlyphInfo>& glyphs = result.processingModel->mVisualModel->mGlyphs;
+        const Text::GlyphIndex end =
+          std::min<Text::GlyphIndex>(glyphRun.glyphIndex + glyphRun.numberOfGlyphs, static_cast<Text::GlyphIndex>(glyphs.Count()));
+        for(Text::GlyphIndex glyphIndex = glyphRun.glyphIndex; glyphIndex < end; ++glyphIndex)
+        {
+          if(glyphs[glyphIndex].fontId == 0u || !result.finalElision.IsOriginalGlyphVisible(glyphIndex))
+          {
+            continue;
+          }
+          TextAbstraction::FontMetrics fontMetrics;
+          services.fontClient.GetFontMetrics(glyphs[glyphIndex].fontId, fontMetrics);
+          surroundingMetrics.ascender = hasSurroundingMetrics
+                                           ? std::max(surroundingMetrics.ascender, fontMetrics.ascender)
+                                           : fontMetrics.ascender;
+          surroundingMetrics.descender = hasSurroundingMetrics
+                                           ? std::min(surroundingMetrics.descender, fontMetrics.descender)
+                                           : fontMetrics.descender;
+          hasSurroundingMetrics = true;
+        }
+      };
+      includeTextMetrics(line.glyphRun);
+
+      if(!hasSurroundingMetrics)
+      {
+        TextAbstraction::FontDescription defaultFontDescription;
+        const Text::FontId defaultFontId = services.fontClient.GetFontId(defaultFontDescription,
+                                                                                       options.fontPointSize);
+        services.fontClient.GetFontMetrics(defaultFontId, surroundingMetrics);
+        hasSurroundingMetrics = true;
+      }
+      if(metrics.verticalAlignment == Text::ReplacementVerticalAlignment::TEXT_BASELINE)
+      {
+        DALI_TEST_EQUALS(placement.position.y + placement.size.y,
+                         lineTop + line.ascender + metrics.verticalOffset,
+                         Math::MACHINE_EPSILON_1000,
+                         TEST_LOCATION);
+      }
+      else if(metrics.verticalAlignment == Text::ReplacementVerticalAlignment::TEXT_BOTTOM)
+      {
+        DALI_TEST_CHECK(hasSurroundingMetrics);
+        DALI_TEST_EQUALS(placement.position.y + placement.size.y,
+                         lineTop + line.ascender - surroundingMetrics.descender + metrics.verticalOffset,
+                         Math::MACHINE_EPSILON_1000,
+                         TEST_LOCATION);
+      }
+      else
+      {
+        DALI_TEST_CHECK(hasSurroundingMetrics);
+        DALI_TEST_EQUALS(placement.position.y + 0.5f * placement.size.y,
+                         lineTop + line.ascender -
+                           0.5f * (surroundingMetrics.ascender + surroundingMetrics.descender) +
+                           metrics.verticalOffset,
+                         Math::MACHINE_EPSILON_1000,
+                         TEST_LOCATION);
+      }
+    }
+  };
+
+  for(const Text::ReplacementVerticalAlignment alignment : alignments)
+  {
+    for(const float offset : offsets)
+    {
+      Vector<Text::ReplacementRunSnapshot> mixed;
+      mixed.PushBack(Candidate(1u, 4u, 34.0f, 44.0f, 401u));
+      mixed.PushBack(Candidate(8u, 4u, 18.0f, 12.0f, 402u));
+      mixed[0u].metrics.verticalAlignment = alignment;
+      mixed[0u].metrics.verticalOffset    = offset;
+      mixed[1u].metrics.verticalAlignment = alignment;
+      mixed[1u].metrics.verticalOffset    = -offset;
+      checkLayout("AiconB\nCiconD", mixed, true);
+
+      Vector<Text::ReplacementRunSnapshot> replacementOnly;
+      replacementOnly.PushBack(Candidate(0u, 4u, 30.0f, 38.0f, 403u));
+      replacementOnly[0u].metrics.verticalAlignment = alignment;
+      replacementOnly[0u].metrics.verticalOffset    = offset;
+      checkLayout("icon", replacementOnly, false);
+    }
+  }
+
+  // Typesetter centers overflowing CLIP content with a negative offset. The
+  // separately registered image visual must use that same offset or it drifts
+  // down into later lines while the text is clipped around the center.
+  Vector<Text::ReplacementRunSnapshot> overflowCandidates;
+  overflowCandidates.PushBack(Candidate(13u, 7u, 180.0f, 130.0f, 404u));
+  overflowCandidates[0u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_CENTER;
+  const Vector<Text::Character> overflowText =
+    Utf32("prefix words [large] trailing words that wrap across several lines");
+  Text::ReplacementProjection overflowProjection = Text::ReplacementProjection::Build(
+    overflowText,
+    overflowCandidates);
+
+  Text::ReplacementLayoutTestOptions overflowOptions;
+  overflowOptions.contentSize         = Vector2(192.0f, 100.0f);
+  overflowOptions.layoutType          = Text::Layout::Engine::MULTI_LINE_BOX;
+  overflowOptions.lineWrapMode        = Text::LineWrapMode::WORD;
+  overflowOptions.horizontalAlignment = Text::Alignment::CENTER;
+  overflowOptions.verticalAlignment   = Text::Alignment::CENTER;
+  overflowOptions.fontPixelSize       = 28.0f;
+
+  Text::ReplacementRenderState overflowResult;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(overflowProjection,
+                                                 services,
+                                                 overflowOptions,
+                                                 overflowResult));
+  DALI_TEST_CHECK(overflowResult.layoutSize.height > overflowOptions.contentSize.height);
+  DALI_TEST_EQUALS(overflowResult.placements.Count(), 1u, TEST_LOCATION);
+  const Text::ReplacementPlacement& overflowPlacement = overflowResult.placements[0u];
+  DALI_TEST_CHECK(overflowPlacement.visible);
+
+  const Vector<Text::LineRun>& overflowLines    = overflowResult.processingModel->mVisualModel->mLines;
+  float                        unalignedLineTop = 0.0f;
+  for(uint32_t lineIndex = 0u; lineIndex < overflowPlacement.lineIndex; ++lineIndex)
+  {
+    unalignedLineTop += Text::GetLineHeight(overflowLines[lineIndex], false);
+  }
+  const float expectedVerticalOffset =
+    0.5f * (overflowOptions.contentSize.height - overflowResult.layoutSize.height);
+  const Text::LineRun& overflowLine      = overflowLines[overflowPlacement.lineIndex];
+  const float          alignedLineTop    = unalignedLineTop + expectedVerticalOffset;
+  const float          alignedLineBottom = alignedLineTop + overflowLine.ascender - overflowLine.descender;
+  DALI_TEST_CHECK(expectedVerticalOffset < 0.0f);
+  DALI_TEST_CHECK(overflowPlacement.position.y < unalignedLineTop);
+  DALI_TEST_CHECK(overflowPlacement.position.y >= alignedLineTop - Math::MACHINE_EPSILON_1000);
+  DALI_TEST_CHECK(overflowPlacement.position.y + overflowPlacement.size.y <=
+                  alignedLineBottom + Math::MACHINE_EPSILON_1000);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementControllerModelGeometryAndAffinityContractP(void)
+{
+  UiTestApplication application;
+
+  Text::ControllerPtr     controller     = Text::Controller::New();
+  Text::Controller::Impl& controllerImpl = Text::Controller::Impl::GetImplementation(*controller.Get());
+  controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  controller->SetText("AiconB");
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(1u, 4u, 32.0f, 24.0f, 501u));
+  source.sourceRevision                                 = 21u;
+  source.hasValidReplacementSource                      = true;
+  controllerImpl.GetOrCreateReplacementSourceSnapshot() = source;
+  controller->Relayout(Size(180.0f, 80.0f));
+
+  const Text::ReplacementRenderState& replacement = controllerImpl.GetReplacementRenderState();
+  DALI_TEST_CHECK(replacement.processingModel);
+  DALI_TEST_EQUALS(controller->GetLogicalTextModel()->GetNumberOfCharacters(), 6u, TEST_LOCATION);
+  DALI_TEST_EQUALS(controller->GetRenderTextModel()->GetNumberOfCharacters(), 3u, TEST_LOCATION);
+  DALI_TEST_CHECK(controller->GetLogicalTextModel() != controller->GetRenderTextModel());
+  DALI_TEST_EQUALS(controller->GetLineCount(180.0f),
+                   replacement.processingModel->GetNumberOfLines(),
+                   TEST_LOCATION);
+
+  const Text::ReplacementPlacement& placement       = replacement.placements[0u];
+  const Bounds                      characterBounds = controller->GetCharacterBoundingRectangle(2u);
+  DALI_TEST_EQUALS(characterBounds.x, placement.position.x, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(characterBounds.y, placement.position.y, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(characterBounds.width, placement.size.x, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(characterBounds.height, placement.size.y, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+
+  const Vector<Vector2> sizes     = controller->GetTextSize(2u, 2u);
+  const Vector<Vector2> positions = controller->GetTextPosition(2u, 2u);
+  DALI_TEST_EQUALS(sizes.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(positions.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(sizes[0u], placement.size, TEST_LOCATION);
+  DALI_TEST_EQUALS(positions[0u], placement.position, TEST_LOCATION);
+
+  const Bounds rangeBounds = controller->GetTextBoundingRectangle(1u, 4u);
+  DALI_TEST_CHECK(rangeBounds.width >= placement.size.x - Math::MACHINE_EPSILON_1000);
+  DALI_TEST_CHECK(rangeBounds.height >= placement.size.y - Math::MACHINE_EPSILON_1000);
+
+  const int physicalLeft  = controller->GetCharacterIndexAtPosition(placement.position.x + 1.0f,
+                                                                    placement.position.y + placement.size.y * 0.5f);
+  const int physicalRight = controller->GetCharacterIndexAtPosition(placement.position.x + placement.size.x - 1.0f,
+                                                                    placement.position.y + placement.size.y * 0.5f);
+  DALI_TEST_EQUALS(physicalLeft, placement.lineDirection ? 5 : 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(physicalRight, placement.lineDirection ? 1 : 5, TEST_LOCATION);
+
+  Text::ControllerPtr     rtlController = Text::Controller::New();
+  Text::Controller::Impl& rtlImpl       = Text::Controller::Impl::GetImplementation(*rtlController.Get());
+  rtlController->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  rtlController->SetLayoutDirectionMode(Text::LayoutDirectionMode::CONTENTS);
+  rtlController->SetText("\xD7\x90ICON\xD7\x91");
+  Text::ReplacementSourceSnapshot rtlSource;
+  rtlSource.runs.PushBack(Candidate(1u, 4u, 36.0f, 24.0f, 502u));
+  rtlSource.sourceRevision                       = 22u;
+  rtlSource.hasValidReplacementSource            = true;
+  rtlImpl.GetOrCreateReplacementSourceSnapshot() = rtlSource;
+  rtlController->Relayout(Size(180.0f, 80.0f), LayoutDirection::RIGHT_TO_LEFT);
+  // The internal harness interposes no-op bidi reorder. Force the placement's
+  // already-computed visual direction to exercise Controller's RTL edge affinity.
+  Text::ReplacementPlacement& rtlPlacement = rtlImpl.GetOrCreateReplacementRenderState().placements[0u];
+  rtlPlacement.lineDirection               = true;
+  DALI_TEST_EQUALS(rtlController->GetCharacterIndexAtPosition(
+                     rtlPlacement.position.x + 1.0f,
+                     rtlPlacement.position.y + rtlPlacement.size.y * 0.5f),
+                   5,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(rtlController->GetCharacterIndexAtPosition(
+                     rtlPlacement.position.x + rtlPlacement.size.x - 1.0f,
+                     rtlPlacement.position.y + rtlPlacement.size.y * 0.5f),
+                   1,
+                   TEST_LOCATION);
+
+  Text::ControllerPtr     adjacentController = Text::Controller::New();
+  Text::Controller::Impl& adjacentImpl       = Text::Controller::Impl::GetImplementation(*adjacentController.Get());
+  adjacentController->SetText("Aabcd");
+  Text::ReplacementSourceSnapshot adjacentSource;
+  adjacentSource.runs.PushBack(Candidate(1u, 2u, 20.0f, 18.0f, 503u));
+  adjacentSource.runs.PushBack(Candidate(3u, 2u, 22.0f, 20.0f, 504u));
+  adjacentSource.sourceRevision                       = 23u;
+  adjacentSource.hasValidReplacementSource            = true;
+  adjacentImpl.GetOrCreateReplacementSourceSnapshot() = adjacentSource;
+  adjacentController->Relayout(Size(120.0f, 60.0f));
+  DALI_TEST_EQUALS(adjacentImpl.GetReplacementRenderState().placements.Count(), 2u, TEST_LOCATION);
+  const Bounds firstAdjacent = adjacentController->GetCharacterBoundingRectangle(2u);
+  const Bounds lastCharacter = adjacentController->GetCharacterBoundingRectangle(4u);
+  DALI_TEST_EQUALS(firstAdjacent.width, 20.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(lastCharacter.width, 22.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+
+  Text::ControllerPtr     elidedController = Text::Controller::New();
+  Text::Controller::Impl& elidedImpl       = Text::Controller::Impl::GetImplementation(*elidedController.Get());
+  elidedController->SetTextElideEnabled(true);
+  elidedController->SetText("AabcdefghijZ");
+  Text::ReplacementSourceSnapshot elidedSource;
+  for(uint32_t index = 0u; index < 5u; ++index)
+  {
+    elidedSource.runs.PushBack(Candidate(1u + index * 2u, 2u, 20.0f, 18.0f, 510u + index));
+  }
+  elidedSource.sourceRevision                       = 24u;
+  elidedSource.hasValidReplacementSource            = true;
+  elidedImpl.GetOrCreateReplacementSourceSnapshot() = elidedSource;
+  elidedController->Relayout(Size(62.0f, 40.0f));
+  bool foundElided = false;
+  for(const Text::ReplacementPlacement& elidedPlacement : elidedImpl.GetReplacementRenderState().placements)
+  {
+    if(elidedPlacement.elided)
+    {
+      foundElided                             = true;
+      const Text::CharacterIndex index        = elidedPlacement.logicalCharacterRange.characterIndex;
+      const Bounds               elidedBounds = elidedController->GetCharacterBoundingRectangle(index);
+      DALI_TEST_EQUALS(elidedBounds.width, 0.0f, TEST_LOCATION);
+      DALI_TEST_EQUALS(elidedBounds.height, 0.0f, TEST_LOCATION);
+      DALI_TEST_EQUALS(elidedController->GetTextSize(index, index).Count(), 0u, TEST_LOCATION);
+      DALI_TEST_EQUALS(elidedController->GetTextBoundingRectangle(index, index).width, 0.0f, TEST_LOCATION);
+      break;
+    }
+  }
+  DALI_TEST_CHECK(foundElided);
+
+  // CENTER + END ellipsis repositions the final compacted sequence. Public
+  // geometry and hit testing must consume the same placement used by the
+  // renderer and ImageVisual, not the pre-elision LineRun alignment.
+  Text::ControllerPtr     centeredController = Text::Controller::New();
+  Text::Controller::Impl& centeredImpl       = Text::Controller::Impl::GetImplementation(*centeredController.Get());
+  centeredController->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  centeredController->SetHorizontalAlignment(Text::Alignment::CENTER);
+  centeredController->SetTextElideEnabled(true);
+  centeredController->SetLineWrapMode(Text::LineWrapMode::CHARACTER);
+  centeredController->SetText("Long prefix words\uFFFCtrailing text");
+  Text::ReplacementSourceSnapshot centeredSource;
+  centeredSource.runs.PushBack(Candidate(17u, 1u, 70.0f, 28.0f, 520u));
+  centeredSource.sourceRevision                       = 25u;
+  centeredSource.hasValidReplacementSource            = true;
+  centeredImpl.GetOrCreateReplacementSourceSnapshot() = centeredSource;
+
+  bool foundCenteredVisibleElision = false;
+  for(float width = 80.0f; width <= 360.0f && !foundCenteredVisibleElision; width += 2.0f)
+  {
+    centeredController->Relayout(Size(width, 80.0f));
+    const Text::ReplacementRenderState& centeredState = centeredImpl.GetReplacementRenderState();
+    if(!centeredState.finalElision.textElided || centeredState.placements.Empty() || !centeredState.placements[0u].visible)
+    {
+      continue;
+    }
+
+    const Text::ReplacementPlacement& centeredPlacement = centeredState.placements[0u];
+    const Bounds                      centeredBounds    = centeredController->GetCharacterBoundingRectangle(17u);
+    DALI_TEST_EQUALS(centeredBounds.x,
+                     centeredPlacement.position.x,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(centeredBounds.width,
+                     centeredPlacement.size.x,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    const Vector<Vector2> centeredPositions = centeredController->GetTextPosition(17u, 17u);
+    DALI_TEST_EQUALS(centeredPositions.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(centeredPositions[0u], centeredPlacement.position, TEST_LOCATION);
+    DALI_TEST_EQUALS(centeredController->GetCharacterIndexAtPosition(
+                       centeredPlacement.position.x + 1.0f,
+                       centeredPlacement.position.y + centeredPlacement.size.y * 0.5f),
+                     17,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(centeredController->GetCharacterIndexAtPosition(
+                       centeredPlacement.position.x + centeredPlacement.size.x - 1.0f,
+                       centeredPlacement.position.y + centeredPlacement.size.y * 0.5f),
+                     18,
+                     TEST_LOCATION);
+    foundCenteredVisibleElision = true;
+  }
+  DALI_TEST_CHECK(foundCenteredVisibleElision);
+
+  DALI_TEST_CHECK(!controller->GetTextSize(std::numeric_limits<Text::CharacterIndex>::max(),
+                                           std::numeric_limits<Text::CharacterIndex>::max())
+                     .Count());
+  DALI_TEST_CHECK(controller->GetTextSize(1u, std::numeric_limits<Text::CharacterIndex>::max()).Count() > 0u);
+
+  controllerImpl.GetOrCreateReplacementSourceSnapshot().runs.Clear();
+  controller->SetText("plain");
+  controller->Relayout(Size(181.0f, 80.0f));
+  DALI_TEST_CHECK(controller->GetLogicalTextModel() == controller->GetRenderTextModel());
+  DALI_TEST_EQUALS(controller->GetLogicalTextModel()->GetNumberOfCharacters(), 5u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementEditableEllipsisFocusLossResetsScrollP(void)
+{
+  UiTestApplication application;
+
+  Text::ControllerPtr controller = Text::Controller::New();
+  Text::DecoratorPtr  decorator  = Text::Decorator::New(*controller, *controller);
+  InputMethodContext  inputMethodContext;
+  controller->EnableTextInput(decorator, inputMethodContext);
+  controller->GetLayoutEngine().SetLayout(Text::Layout::Engine::SINGLE_LINE_BOX);
+  controller->SetHorizontalScrollEnabled(true);
+  controller->SetTextElideEnabled(true);
+  controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  controller->SetText("Leading replacement text that is wider than the control");
+
+  Text::Controller::Impl& impl = Text::Controller::Impl::GetImplementation(*controller.Get());
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(8u, 11u, 96.0f, 24.0f, 530u));
+  source.sourceRevision                       = 30u;
+  source.hasValidReplacementSource            = true;
+  impl.GetOrCreateReplacementSourceSnapshot() = source;
+
+  const Size controlSize(140.0f, 50.0f);
+  controller->KeyboardFocusGainEvent(false);
+  controller->Relayout(controlSize);
+
+  impl.mModel->mScrollPosition.x = -48.0f;
+  impl.SyncReplacementScrollPosition();
+  DALI_TEST_EQUALS(controller->GetHorizontalScrollPosition(), 48.0f, TEST_LOCATION);
+
+  controller->KeyboardFocusLostEvent();
+  controller->Relayout(controlSize);
+
+  DALI_TEST_EQUALS(controller->GetHorizontalScrollPosition(), 0.0f, TEST_LOCATION);
+  const Text::ReplacementRenderState& state = impl.GetReplacementRenderState();
+  DALI_TEST_CHECK(state.processingModel);
+  DALI_TEST_EQUALS(state.processingModel->mScrollPosition, Vector2::ZERO, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementEditableTrailingCursorRemainsVisibleAfterPanP(void)
+{
+  UiTestApplication application;
+
+  Text::ControllerPtr controller = Text::Controller::New();
+  Text::DecoratorPtr  decorator  = Text::Decorator::New(*controller, *controller);
+  InputMethodContext  inputMethodContext;
+  controller->EnableTextInput(decorator, inputMethodContext);
+  controller->GetLayoutEngine().SetLayout(Text::Layout::Engine::SINGLE_LINE_BOX);
+  controller->SetHorizontalScrollEnabled(true);
+  controller->SetTextElideEnabled(true);
+  controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  controller->SetText("Leading icon and trailing text that is wider than the control");
+  decorator->SetCursorWidth(6);
+  controller->GetLayoutEngine().SetCursorWidth(6);
+
+  Text::Controller::Impl& impl = Text::Controller::Impl::GetImplementation(*controller.Get());
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(8u, 4u, 72.0f, 24.0f, 531u));
+  source.sourceRevision                       = 31u;
+  source.hasValidReplacementSource            = true;
+  impl.GetOrCreateReplacementSourceSnapshot() = source;
+
+  const Size controlSize(140.0f, 50.0f);
+  controller->KeyboardFocusGainEvent(false);
+  controller->Relayout(controlSize);
+
+  impl.mEventData->mPrimaryCursorPosition =
+    static_cast<Text::CharacterIndex>(impl.mModel->mLogicalModel->mText.Count());
+  Text::CursorInfo cursorInfo;
+  impl.GetCursorPosition(impl.mEventData->mPrimaryCursorPosition, cursorInfo);
+  impl.ScrollToMakePositionVisible(cursorInfo.primaryPosition, cursorInfo.lineHeight);
+  impl.UpdateCursorPosition(cursorInfo);
+  impl.SyncReplacementScrollPosition();
+
+  const float cursorWidth          = decorator->GetEffectiveCursorWidth();
+  const float cursorVisibleScroll  = controller->GetHorizontalScrollPosition();
+  const float cursorRightBeforePan = cursorInfo.primaryPosition.x + impl.mModel->mScrollPosition.x + cursorWidth;
+  DALI_TEST_CHECK(cursorVisibleScroll > 0.0f);
+  DALI_TEST_EQUALS(cursorRightBeforePan,
+                   controlSize.width,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+
+  controller->PanEvent(GestureState::STARTED, Vector2::ZERO);
+  controller->Relayout(controlSize);
+  controller->PanEvent(GestureState::CONTINUING, Vector2(-10000.0f, 0.0f));
+  controller->Relayout(controlSize);
+
+  const float cursorRightAfterPan = cursorInfo.primaryPosition.x + impl.mModel->mScrollPosition.x + cursorWidth;
+  DALI_TEST_EQUALS(controller->GetHorizontalScrollPosition(),
+                   cursorVisibleScroll,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(cursorRightAfterPan,
+                   controlSize.width,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+
+  controller->PanEvent(GestureState::FINISHED, Vector2::ZERO);
+  controller->Relayout(controlSize);
+  DALI_TEST_EQUALS(decorator->GetActiveCursor(),
+                   static_cast<unsigned int>(Text::ACTIVE_CURSOR_PRIMARY),
+                   TEST_LOCATION);
+
+  const Vector2& layoutSize            = impl.GetEditableGeometryModel()->mVisualModel->GetLayoutSize();
+  const float    textOnlyScrollRange   = layoutSize.width - controlSize.width;
+  const float    cursorOnlyScrollRange = cursorVisibleScroll - textOnlyScrollRange;
+  DALI_TEST_CHECK(cursorOnlyScrollRange > 0.0f);
+
+  // Gesture propagation must use the same cursor-extended boundary as scroll clamping.
+  impl.mModel->mScrollPosition.x = -(textOnlyScrollRange + 0.5f * cursorOnlyScrollRange);
+  DALI_TEST_CHECK(controller->IsScrollable(Vector2(-0.25f * cursorOnlyScrollRange, 0.0f)));
+  impl.mModel->mScrollPosition.x = -cursorVisibleScroll;
+  DALI_TEST_CHECK(!controller->IsScrollable(Vector2(-0.25f * cursorOnlyScrollRange, 0.0f)));
+  DALI_TEST_CHECK(controller->IsScrollable(Vector2(0.25f * cursorOnlyScrollRange, 0.0f)));
+
+  // A cursor away from the trailing edge must not add blank space to the existing text scroll range.
+  impl.mEventData->mPrimaryCursorPosition = 0u;
+  const float expectedTextBoundary = layoutSize.width + impl.mModel->mAlignmentOffset - controlSize.width;
+  controller->PanEvent(GestureState::STARTED, Vector2::ZERO);
+  controller->Relayout(controlSize);
+  controller->PanEvent(GestureState::CONTINUING, Vector2(-10000.0f, 0.0f));
+  controller->Relayout(controlSize);
+  DALI_TEST_EQUALS(controller->GetHorizontalScrollPosition(),
+                   expectedTextBoundary,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  controller->PanEvent(GestureState::FINISHED, Vector2::ZERO);
+  controller->Relayout(controlSize);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementEditableCaretAndVisualLayerP(void)
+{
+  UiTestApplication application;
+
+  const auto createEditableController = [](bool multiline = true)
+  {
+    Text::ControllerPtr controller = Text::Controller::New();
+    Text::DecoratorPtr  decorator  = Text::Decorator::New(*controller, *controller);
+    Dali::InputMethodContext inputMethodContext;
+    controller->EnableTextInput(decorator, inputMethodContext);
+    controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+    controller->SetMultiLineEnabled(multiline);
+    controller->SetTextElideEnabled(false);
+    return controller;
+  };
+
+  Text::ControllerPtr     controller = createEditableController();
+  Text::Controller::Impl& impl       = Text::Controller::Impl::GetImplementation(*controller.Get());
+  controller->SetText("AiconB");
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(1u, 4u, 84.0f, 112.0f, 531u));
+  source.sourceRevision                       = 31u;
+  source.hasValidReplacementSource            = true;
+  impl.GetOrCreateReplacementSourceSnapshot() = source;
+  controller->Relayout(Size(220.0f, 180.0f));
+
+  const Text::ReplacementPlacement& placement = impl.GetReplacementRenderState().placements[0u];
+  DALI_TEST_CHECK(placement.visible);
+  DALI_TEST_CHECK(placement.leadingCaretMetric.height > 0.0f);
+  DALI_TEST_CHECK(placement.trailingCaretMetric.height > 0.0f);
+
+  Text::CursorInfo before;
+  Text::CursorInfo after;
+  impl.GetCursorPosition(1u, before);
+  impl.GetCursorPosition(5u, after);
+
+  DALI_TEST_CHECK(before.hasPrimaryCaretGeometry);
+  DALI_TEST_CHECK(after.hasPrimaryCaretGeometry);
+  DALI_TEST_EQUALS(before.primaryPosition.x,
+                   placement.position.x,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(after.primaryPosition.x,
+                   placement.position.x + placement.size.x,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(before.primaryCaretPosition.y,
+                   placement.baseline - placement.leadingCaretMetric.ascender,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(after.primaryCaretPosition.y,
+                   placement.baseline - placement.trailingCaretMetric.ascender,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_CHECK(after.primaryCaretHeight < placement.size.y);
+  DALI_TEST_CHECK(after.lineHeight > after.primaryCaretHeight);
+
+  impl.UpdateCursorPosition(after);
+  const Vector2& storedCursorPosition = impl.mEventData->mDecorator->GetPosition(Text::PRIMARY_CURSOR);
+  DALI_TEST_EQUALS(storedCursorPosition,
+                   after.primaryPosition + impl.mModel->mScrollPosition,
+                   TEST_LOCATION);
+  float storedX;
+  float storedY;
+  float storedCursorHeight;
+  float storedLineHeight;
+  impl.mEventData->mDecorator->GetPosition(Text::PRIMARY_CURSOR,
+                                           storedX,
+                                           storedY,
+                                           storedCursorHeight,
+                                           storedLineHeight);
+  DALI_TEST_EQUALS(storedCursorHeight,
+                   after.primaryCursorHeight,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(storedLineHeight, after.lineHeight, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+
+  // Exercise the color multiplier paths for every decorator actor.
+  Text::DecoratorPtr decorator = impl.mEventData->mDecorator;
+  decorator->SetHandleImage(Text::GRAB_HANDLE, Text::HANDLE_IMAGE_RELEASED, "grab-handle.png");
+  decorator->SetHandleImage(Text::LEFT_SELECTION_HANDLE, Text::HANDLE_IMAGE_RELEASED, "left-handle.png");
+  decorator->SetHandleImage(Text::RIGHT_SELECTION_HANDLE, Text::HANDLE_IMAGE_RELEASED, "right-handle.png");
+  decorator->SetHandleImage(Text::LEFT_SELECTION_HANDLE_MARKER, Text::HANDLE_IMAGE_RELEASED, "left-marker.png");
+  decorator->SetHandleImage(Text::RIGHT_SELECTION_HANDLE_MARKER, Text::HANDLE_IMAGE_RELEASED, "right-marker.png");
+  decorator->SetPosition(Text::GRAB_HANDLE, 20.0f, 20.0f, 18.0f);
+  decorator->SetPosition(Text::LEFT_SELECTION_HANDLE, 40.0f, 20.0f, 18.0f);
+  decorator->SetPosition(Text::RIGHT_SELECTION_HANDLE, 80.0f, 20.0f, 18.0f);
+  decorator->SetHandleActive(Text::GRAB_HANDLE, true);
+  decorator->SetHandleActive(Text::LEFT_SELECTION_HANDLE, true);
+  decorator->SetHandleActive(Text::RIGHT_SELECTION_HANDLE, true);
+  decorator->ResizeHighlightQuads(1u);
+  decorator->AddHighlight(0u, Vector4(10.0f, 10.0f, 90.0f, 40.0f));
+  decorator->SetHighLightBox(Vector2(10.0f, 10.0f), Size(80.0f, 30.0f), 0.0f);
+  decorator->SetHighlightActive(true);
+
+  struct NoopDecoratorRelayoutContainer : public RelayoutContainer
+  {
+    void Add(const Actor&, const Vector2&) override
+    {
+    }
+  } decoratorRelayoutContainer;
+
+  decorator->Relayout(Vector2(220.0f, 180.0f), decoratorRelayoutContainer);
+  decorator->SetHandleColor(Color::MAGENTA);
+  decorator->SetHighlightColor(Color::CYAN);
+  DALI_TEST_EQUALS(decorator->GetHandleColor(), Color::MAGENTA, TEST_LOCATION);
+  DALI_TEST_EQUALS(decorator->GetHighlightColor(), Color::CYAN, TEST_LOCATION);
+
+  const auto [visibleTop, visibleBottom] = impl.CalculateScrollTarget(after);
+  DALI_TEST_CHECK(visibleBottom - visibleTop >= after.lineHeight - Math::MACHINE_EPSILON_1000);
+
+  struct CaretCase
+  {
+    Text::ReplacementPlacement placement;
+    Text::CursorInfo            before;
+    Text::CursorInfo            after;
+  };
+  const auto layoutCaretCase = [&createEditableController](const char*                         text,
+                                                           Text::CharacterIndex                start,
+                                                           Text::Length                        length,
+                                                           Text::ReplacementRunSnapshot        run,
+                                                           const Size&                         controlSize,
+                                                           bool                                multiline)
+  {
+    Text::ControllerPtr     caseController = createEditableController(multiline);
+    Text::Controller::Impl& caseImpl = Text::Controller::Impl::GetImplementation(*caseController.Get());
+    caseController->SetText(text);
+    run.logicalCharacterRange = Text::CharacterRun{start, length};
+    Text::ReplacementSourceSnapshot caseSource;
+    caseSource.runs.PushBack(run);
+    caseSource.sourceRevision                       = run.occurrenceIdentity;
+    caseSource.hasValidReplacementSource            = true;
+    caseImpl.GetOrCreateReplacementSourceSnapshot() = caseSource;
+    caseController->Relayout(controlSize);
+
+    CaretCase result;
+    result.placement = caseImpl.GetReplacementRenderState().placements[0u];
+    caseImpl.GetCursorPosition(start, result.before);
+    caseImpl.GetCursorPosition(start + length, result.after);
+    return result;
+  };
+
+  Text::ReplacementRunSnapshot smallRun = Candidate(1u, 4u, 18.0f, 14.0f, 533u);
+  const CaretCase small = layoutCaretCase("AiconB", 1u, 4u, smallRun, Size(220.0f, 80.0f), false);
+  DALI_TEST_EQUALS(small.before.primaryCaretHeight,
+                   before.primaryCaretHeight,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(small.after.primaryCaretHeight,
+                   placement.trailingCaretMetric.height,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_CHECK(small.placement.size.y < placement.size.y);
+
+  const Text::ReplacementVerticalAlignment alignments[] = {
+    Text::ReplacementVerticalAlignment::TEXT_BASELINE,
+    Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+    Text::ReplacementVerticalAlignment::TEXT_CENTER};
+  const float offsets[] = {-9.0f, 7.0f};
+  uint64_t    occurrence = 534u;
+  for(const Text::ReplacementVerticalAlignment alignment : alignments)
+  {
+    for(const float offset : offsets)
+    {
+      Text::ReplacementRunSnapshot alignedRun = Candidate(1u, 4u, 88.0f, 74.0f, static_cast<uint32_t>(occurrence++));
+      alignedRun.metrics.verticalAlignment     = alignment;
+      alignedRun.metrics.verticalOffset        = offset;
+      const CaretCase aligned = layoutCaretCase("AiconB",
+                                                1u,
+                                                4u,
+                                                alignedRun,
+                                                Size(220.0f, 160.0f),
+                                                true);
+      DALI_TEST_EQUALS(aligned.before.primaryCaretHeight,
+                       small.before.primaryCaretHeight,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(aligned.after.primaryCaretHeight,
+                       small.after.primaryCaretHeight,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(aligned.before.primaryCaretPosition.y,
+                       aligned.placement.baseline - aligned.placement.leadingCaretMetric.ascender,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_CHECK(std::isfinite(aligned.before.primaryCaretPosition.x));
+      DALI_TEST_CHECK(std::isfinite(aligned.before.primaryCaretPosition.y));
+      DALI_TEST_CHECK(std::isfinite(aligned.before.primaryCaretHeight));
+    }
+  }
+
+  Text::ReplacementRunSnapshot tallerThanControlRun = Candidate(1u, 4u, 92.0f, 260.0f, static_cast<uint32_t>(occurrence++));
+  const CaretCase tallerThanControl = layoutCaretCase("AiconB",
+                                                      1u,
+                                                      4u,
+                                                      tallerThanControlRun,
+                                                      Size(220.0f, 160.0f),
+                                                      true);
+  DALI_TEST_CHECK(tallerThanControl.after.primaryCaretHeight < tallerThanControl.placement.size.y);
+  DALI_TEST_CHECK(tallerThanControl.after.lineHeight > tallerThanControl.after.primaryCaretHeight);
+
+  // The internal harness interposes a no-op bidi reorder. Exercise the
+  // production RTL boundary branch with the final placement direction that
+  // the real-layout diagnostic obtains from the bidi service.
+  Text::ReplacementPlacement& rtlPlacement = impl.GetOrCreateReplacementRenderState().placements[0u];
+  rtlPlacement.lineDirection               = true;
+  impl.GetCursorPosition(1u, before);
+  impl.GetCursorPosition(5u, after);
+  DALI_TEST_EQUALS(before.primaryPosition.x,
+                   rtlPlacement.position.x + rtlPlacement.size.x,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(after.primaryPosition.x,
+                   rtlPlacement.position.x,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+
+  Text::ControllerPtr     adjacentController = createEditableController(false);
+  Text::Controller::Impl& adjacentImpl =
+    Text::Controller::Impl::GetImplementation(*adjacentController.Get());
+  adjacentController->SetText("AabcdwxyzB");
+  Text::ReplacementSourceSnapshot adjacentSource;
+  adjacentSource.runs.PushBack(Candidate(1u, 4u, 38.0f, 28.0f, static_cast<uint32_t>(occurrence++)));
+  adjacentSource.runs.PushBack(Candidate(5u, 4u, 64.0f, 44.0f, static_cast<uint32_t>(occurrence++)));
+  adjacentSource.sourceRevision                       = occurrence;
+  adjacentSource.hasValidReplacementSource            = true;
+  adjacentImpl.GetOrCreateReplacementSourceSnapshot() = adjacentSource;
+  adjacentController->Relayout(Size(260.0f, 100.0f));
+  const Text::ReplacementPlacement& secondAdjacent =
+    adjacentImpl.GetReplacementRenderState().placements[1u];
+  Text::CursorInfo sharedBoundary;
+  adjacentImpl.GetCursorPosition(5u, sharedBoundary);
+  DALI_TEST_CHECK(sharedBoundary.hasPrimaryCaretGeometry);
+  DALI_TEST_EQUALS(sharedBoundary.primaryPosition.x,
+                   secondAdjacent.position.x,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+
+  Text::ControllerPtr     replacementOnlyController = createEditableController();
+  Text::Controller::Impl& replacementOnlyImpl =
+    Text::Controller::Impl::GetImplementation(*replacementOnlyController.Get());
+  replacementOnlyController->SetText("icon");
+  Text::ReplacementSourceSnapshot replacementOnlySource;
+  replacementOnlySource.runs.PushBack(Candidate(0u, 4u, 96.0f, 128.0f, 532u));
+  replacementOnlySource.sourceRevision                       = 32u;
+  replacementOnlySource.hasValidReplacementSource            = true;
+  replacementOnlyImpl.GetOrCreateReplacementSourceSnapshot() = replacementOnlySource;
+  replacementOnlyController->Relayout(Size(220.0f, 180.0f));
+
+  Text::CursorInfo replacementOnlyBefore;
+  Text::CursorInfo replacementOnlyAfter;
+  replacementOnlyImpl.GetCursorPosition(0u, replacementOnlyBefore);
+  replacementOnlyImpl.GetCursorPosition(4u, replacementOnlyAfter);
+  DALI_TEST_CHECK(replacementOnlyBefore.hasPrimaryCaretGeometry);
+  DALI_TEST_CHECK(replacementOnlyAfter.hasPrimaryCaretGeometry);
+  DALI_TEST_CHECK(replacementOnlyAfter.primaryCaretHeight > 0.0f);
+  DALI_TEST_CHECK(replacementOnlyAfter.primaryCaretHeight < replacementOnlyAfter.lineHeight);
+
+  Text::ControllerPtr     ordinaryController = createEditableController();
+  Text::Controller::Impl& ordinaryImpl =
+    Text::Controller::Impl::GetImplementation(*ordinaryController.Get());
+  ordinaryController->SetText("ordinary editable text");
+  ordinaryController->Relayout(Size(220.0f, 80.0f));
+  Text::CursorInfo ordinaryCursor;
+  ordinaryImpl.GetCursorPosition(8u, ordinaryCursor);
+  DALI_TEST_CHECK(!ordinaryCursor.hasPrimaryCaretGeometry);
+  DALI_TEST_CHECK(!ordinaryCursor.hasSecondaryCaretGeometry);
+  DALI_TEST_CHECK(ordinaryCursor.primaryCursorHeight > 0.0f);
+
+  View  owner         = View::New();
+  Actor contentParent = Actor::New();
+  Actor highlight     = Actor::New();
+  Actor textActor     = Actor::New();
+  Actor cursorLayer   = Actor::New();
+  contentParent.Add(highlight);
+  contentParent.Add(textActor);
+  contentParent.Add(cursorLayer);
+  const auto getChildOrder = [&contentParent](Actor child)
+  {
+    for(uint32_t index = 0u; index < contentParent.GetChildCount(); ++index)
+    {
+      if(contentParent.GetChildAt(index) == child)
+      {
+        return index;
+      }
+    }
+    return std::numeric_limits<uint32_t>::max();
+  };
+
+  {
+    Dali::Ui::Internal::Text::EditableInlineReplacementData data(owner);
+    data.PlaceVisualLayer(contentParent, textActor, cursorLayer, Vector2(200.0f, 160.0f));
+    DALI_TEST_CHECK(data.visualLayer.GetParent() == contentParent);
+    DALI_TEST_CHECK(getChildOrder(highlight) < getChildOrder(data.visualLayer));
+    DALI_TEST_CHECK(getChildOrder(data.visualLayer) < getChildOrder(textActor));
+    DALI_TEST_CHECK(getChildOrder(data.visualLayer) < getChildOrder(cursorLayer));
+  }
+  DALI_TEST_EQUALS(contentParent.GetChildCount(), 3u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementEditableVisualLayerRecreationP(void)
+{
+  UiTestApplication application;
+
+  struct NoopRelayoutContainer : public RelayoutContainer
+  {
+    void Add(const Actor&, const Vector2&) override
+    {
+    }
+  } relayoutContainer;
+
+  auto buildImageText = [](const char* source, const Vector2& reservedSize)
+  {
+    Text::StyledTextBuilder builder = Text::StyledTextBuilder::New("AiconB\nsecond line");
+    DALI_TEST_CHECK(builder.SetSpan(
+      Text::ImageSpan::New(Text::ImageAttributes(source, reservedSize)), 1u, 5u));
+    return builder.Build();
+  };
+
+  const Text::StyledText styledTexts[] = {
+    buildImageText("unused-a.png", Vector2(32.0f, 24.0f)),
+    buildImageText("unused-a.png", Vector2(48.0f, 30.0f)),
+    buildImageText("unused-b.png", Vector2(32.0f, 24.0f)),
+    buildImageText("unused-b.png", Vector2(48.0f, 30.0f))};
+
+  Text::StyledTextBuilder coloredBuilder = Text::StyledTextBuilder::New("colored text");
+  DALI_TEST_CHECK(coloredBuilder.SetSpan(Text::ForegroundColorSpan::New(UiColor(Color::RED)), 0u, 7u));
+  const Text::StyledText coloredText = coloredBuilder.Build();
+
+  auto countInlineVisuals = [](Ui::View layer)
+  {
+    uint32_t count = 0u;
+    auto&    viewData = Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(layer));
+    for(uint32_t slot = 0u; slot < 16u; ++slot)
+    {
+      const std::string name = "__dali_ui_inline_replacement_" + std::to_string(slot);
+      const Property::Index index = layer.GetPropertyIndex(Dali::String(name.c_str()));
+      if(index != Property::INVALID_INDEX && viewData.GetVisual(index))
+      {
+        ++count;
+      }
+    }
+    return count;
+  };
+
+  auto checkLayer = [&application, &countInlineVisuals](
+                      Dali::Ui::Internal::Text::EditableInlineReplacementData* data,
+                      const Vector2&                                            expectedSize)
+  {
+    DALI_TEST_CHECK(data);
+    DALI_TEST_CHECK(data->visualLayer.GetParent());
+    DALI_TEST_EQUALS(data->visualLayer.GetRequestedWidth(), expectedSize.x, TEST_LOCATION);
+    DALI_TEST_EQUALS(data->visualLayer.GetRequestedHeight(), expectedSize.y, TEST_LOCATION);
+    DALI_TEST_EQUALS(data->visualLayer.GetProperty<Vector3>(Actor::Property::SIZE).GetVectorXY(),
+                     expectedSize,
+                     0.01f,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(countInlineVisuals(data->visualLayer), 1u, TEST_LOCATION);
+
+    application.SendNotification();
+    application.Render();
+    DALI_TEST_EQUALS(data->visualLayer.GetCurrentProperty<Vector3>(Actor::Property::SIZE).GetVectorXY(),
+                     expectedSize,
+                     0.01f,
+                     TEST_LOCATION);
+  };
+
+  struct LayerMeasureCounter
+  {
+    MeasuredSize OnMeasure(Ui::View layer, float, float)
+    {
+      ++count;
+      return MeasuredSize(layer.GetRequestedWidth(), layer.GetRequestedHeight());
+    }
+
+    uint32_t count{0u};
+  };
+
+  auto exerciseControl = [&](auto control, auto& impl, const Vector2& smallSize, const Vector2& largeSize)
+  {
+    control.SetPadding(Insets(0.0f, 0.0f, 0.0f, 0.0f));
+    const Vector2 lifecycleSizes[] = {smallSize, smallSize, largeSize, largeSize, smallSize};
+
+    for(uint32_t cycle = 0u; cycle < 5u; ++cycle)
+    {
+      Vector2 currentSize = lifecycleSizes[cycle];
+      control.SetStyledText(styledTexts[cycle % 4u]);
+      impl.OnRelayout(currentSize, relayoutContainer);
+
+      auto* data = Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl);
+      checkLayer(data, currentSize);
+
+      if(cycle == 0u)
+      {
+        auto* const initialData  = data;
+        Ui::View    initialLayer = data->visualLayer;
+        const Property::Index visualIndex =
+          initialLayer.GetPropertyIndex("__dali_ui_inline_replacement_0");
+        DALI_TEST_CHECK(visualIndex != Property::INVALID_INDEX);
+        auto& initialViewData =
+          Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(initialLayer));
+        Ui::Integration::Visual::Base initialVisual = initialViewData.GetVisual(visualIndex);
+        DALI_TEST_CHECK(initialVisual);
+
+        LayerMeasureCounter measureCounter;
+        initialLayer.SetMeasureCallback(
+          MeasureCallback::New(&measureCounter, &LayerMeasureCounter::OnMeasure));
+        initialLayer.Measure(1000.0f, 1000.0f);
+        DALI_TEST_EQUALS(measureCounter.count, 1u, TEST_LOCATION);
+
+        for(uint32_t repeat = 0u; repeat < 10u; ++repeat)
+        {
+          impl.OnRelayout(smallSize, relayoutContainer);
+          data = Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl);
+          DALI_TEST_CHECK(data == initialData);
+          DALI_TEST_CHECK(data->visualLayer == initialLayer);
+          checkLayer(data, smallSize);
+          initialLayer.Measure(1000.0f, 1000.0f);
+          DALI_TEST_EQUALS(measureCounter.count, 1u, TEST_LOCATION);
+          DALI_TEST_CHECK(initialViewData.GetVisual(visualIndex) == initialVisual);
+        }
+
+        impl.OnRelayout(largeSize, relayoutContainer);
+        data        = Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl);
+        currentSize = largeSize;
+        checkLayer(data, currentSize);
+        initialLayer.Measure(1000.0f, 1000.0f);
+        DALI_TEST_EQUALS(measureCounter.count, 2u, TEST_LOCATION);
+        DALI_TEST_CHECK(initialViewData.GetVisual(visualIndex) == initialVisual);
+
+        impl.OnRelayout(largeSize, relayoutContainer);
+        checkLayer(Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl), currentSize);
+        initialLayer.Measure(1000.0f, 1000.0f);
+        DALI_TEST_EQUALS(measureCounter.count, 2u, TEST_LOCATION);
+        DALI_TEST_CHECK(initialViewData.GetVisual(visualIndex) == initialVisual);
+        initialLayer.SetMeasureCallback({});
+
+        for(uint32_t variant = 1u; variant < 4u; ++variant)
+        {
+          control.SetStyledText(styledTexts[variant]);
+          impl.OnRelayout(currentSize, relayoutContainer);
+          data = Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl);
+          DALI_TEST_CHECK(data == initialData);
+          checkLayer(data, currentSize);
+        }
+      }
+
+      data = Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl);
+      Ui::View oldLayer = data->visualLayer;
+      control.SetStyledText(styledTexts[cycle % 4u]);
+      impl.OnRelayout(currentSize, relayoutContainer);
+      data = Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl);
+      DALI_TEST_CHECK(data);
+      DALI_TEST_CHECK(data->visualLayer == oldLayer);
+      checkLayer(data, currentSize);
+
+      control.SetText("plain text");
+      impl.OnRelayout(currentSize, relayoutContainer);
+      DALI_TEST_CHECK(!Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl));
+      DALI_TEST_CHECK(!oldLayer.GetParent());
+      DALI_TEST_EQUALS(countInlineVisuals(oldLayer), 0u, TEST_LOCATION);
+    }
+
+    control.SetStyledText(coloredText);
+    impl.OnRelayout(smallSize, relayoutContainer);
+    DALI_TEST_CHECK(!Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl));
+    control.SetText("plain text");
+    impl.OnRelayout(smallSize, relayoutContainer);
+    DALI_TEST_CHECK(!Dali::Ui::Internal::Text::GetEditableInlineReplacementData(impl));
+  };
+
+  InputField field = InputField::New();
+  auto& fieldImpl = static_cast<Dali::Ui::Integration::InputFieldImpl&>(field.GetImplementation());
+  exerciseControl(field, fieldImpl, Vector2(240.0f, 64.0f), Vector2(300.0f, 72.0f));
+
+  InputEditor editor = InputEditor::New();
+  auto& editorImpl = static_cast<Dali::Ui::Integration::InputEditorImpl&>(editor.GetImplementation());
+  exerciseControl(editor, editorImpl, Vector2(240.0f, 120.0f), Vector2(300.0f, 160.0f));
+
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerDescriptorAndOwnershipP(void)
+{
+  UiTestApplication application;
+
+  Text::ReplacementSourceSnapshot source;
+  source.sourceRevision            = 5u;
+  Text::ReplacementRunSnapshot run = Candidate(1u, 4u, 24.0f, 18.0f, 321u);
+  run.type                         = Text::ReplacementType::IMAGE;
+  run.occurrenceIdentity           = 11u;
+  run.image.source                 = "missing-inline-manager-test.png";
+  source.runs.PushBack(run);
+
+  Vector<Text::ReplacementPlacement> placements;
+  Text::ReplacementPlacement         placement;
+  placement.logicalCharacterRange = run.logicalCharacterRange;
+  placement.sourceRunIndex        = 0u;
+  placement.occurrenceIdentity    = run.occurrenceIdentity;
+  placement.position              = Vector2(4.0f, 6.0f);
+  placement.size                  = Vector2(24.0f, 18.0f);
+  placement.visible               = true;
+  placements.PushBack(placement);
+
+  View                                                firstOwner  = View::New();
+  View                                                secondOwner = View::New();
+  application.GetScene().Add(firstOwner);
+  application.GetScene().Add(secondOwner);
+  Dali::Ui::Internal::Text::InlineReplacementViewHost firstHost(
+    firstOwner,
+    Ui::Integration::DepthIndex::CONTENT + 1);
+  Dali::Ui::Internal::Text::InlineReplacementViewHost secondHost(
+    secondOwner,
+    Ui::Integration::DepthIndex::CONTENT + 7);
+  Dali::Ui::Internal::Text::InlineReplacementManager firstManager;
+  Dali::Ui::Internal::Text::InlineReplacementManager secondManager;
+
+  const Property::Index firstVisualIndex  = firstHost.AllocateVisualSlot();
+  const Property::Index secondVisualIndex = secondHost.AllocateVisualSlot();
+  DALI_TEST_CHECK(firstVisualIndex != Property::INVALID_INDEX);
+  DALI_TEST_CHECK(secondVisualIndex != Property::INVALID_INDEX);
+  firstHost.ReleaseVisualSlot(firstVisualIndex);
+  secondHost.ReleaseVisualSlot(secondVisualIndex);
+  auto& firstViewData  = Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(firstOwner));
+  auto& secondViewData = Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(secondOwner));
+
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2(3.0f, 2.0f),
+                                      Vector2(94.0f, 36.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      5u));
+  DALI_TEST_EQUALS(firstOwner.GetChildCount(), 0u, TEST_LOCATION);
+
+  Ui::Integration::Visual::Base inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  DALI_TEST_CHECK(inlineVisual);
+  auto& inlineVisualImpl = Ui::GetImplementation(inlineVisual);
+  DALI_TEST_CHECK(!inlineVisualImpl.IsFittingModeRequired());
+  DALI_TEST_CHECK(!inlineVisualImpl.IsResourceReadyRelayoutRequired());
+  DALI_TEST_EQUALS(inlineVisual.GetDepthIndex(), Ui::Integration::DepthIndex::CONTENT + 1, TEST_LOCATION);
+
+  int  expectedDesiredWidth  = 24;
+  int  expectedDesiredHeight = 18;
+  auto getTransform          = [&inlineVisual, &expectedDesiredWidth, &expectedDesiredHeight](Vector2& size, Vector2& offset)
+  {
+    Property::Map visualMap;
+    inlineVisual.CreatePropertyMap(visualMap);
+
+    int fittingMode = -1;
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::ImageVisual::Property::FITTING_MODE)->Get(fittingMode));
+    DALI_TEST_EQUALS(fittingMode,
+                     static_cast<int>(Ui::Image::FittingMode::FIT_KEEP_ASPECT_RATIO),
+                     TEST_LOCATION);
+
+    int  desiredWidth          = 0;
+    int  desiredHeight         = 0;
+    bool orientationCorrection = false;
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::ImageVisual::Property::DESIRED_WIDTH)->Get(desiredWidth));
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::ImageVisual::Property::DESIRED_HEIGHT)->Get(desiredHeight));
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::ImageVisual::Property::ORIENTATION_CORRECTION)->Get(orientationCorrection));
+    DALI_TEST_EQUALS(desiredWidth, expectedDesiredWidth, TEST_LOCATION);
+    DALI_TEST_EQUALS(desiredHeight, expectedDesiredHeight, TEST_LOCATION);
+    DALI_TEST_CHECK(orientationCorrection);
+
+    Property::Map transform;
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::Visual::Property::TRANSFORM)->Get(transform));
+    DALI_TEST_CHECK(transform.Find(Ui::Integration::Visual::Transform::Property::SIZE)->Get(size));
+    DALI_TEST_CHECK(transform.Find(Ui::Integration::Visual::Transform::Property::OFFSET)->Get(offset));
+  };
+
+  auto getPixelArea = [&inlineVisual]()
+  {
+    Property::Map visualMap;
+    inlineVisual.CreatePropertyMap(visualMap);
+    Vector4 pixelArea;
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::ImageVisual::Property::PIXEL_AREA)->Get(pixelArea));
+    return pixelArea;
+  };
+
+  auto getOpacity = [&inlineVisual]()
+  {
+    Property::Map visualMap;
+    inlineVisual.CreatePropertyMap(visualMap);
+    float opacity = 1.0f;
+    DALI_TEST_CHECK(visualMap.Find(Ui::Integration::Visual::Property::OPACITY)->Get(opacity));
+    return opacity;
+  };
+
+  Vector2 inlineSize;
+  Vector2 inlineOffset;
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineSize, Vector2(24.0f, 18.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(inlineOffset, Vector2(7.0f, 8.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(getOpacity(), 0.0f, TEST_LOCATION);
+
+  Ui::Integration::Visual::Base originalVisual = inlineVisual;
+
+  // A pending image owns its final hidden geometry but cannot draw a stretched
+  // reserved-box frame. Failure keeps the synthetic advance, unregisters the
+  // failed visual and does not request text relayout.
+  inlineVisualImpl.ResourceReady(Ui::Visual::ResourceStatus::FAILED);
+  firstManager.Refresh();
+  DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+
+  DALI_TEST_CHECK(secondManager.Update(secondHost,
+                                       source,
+                                       placements,
+                                       Vector2::ZERO,
+                                       Vector2(80.0f, 30.0f),
+                                       Vector2(80.0f, 30.0f),
+                                       1.0f,
+                                       5u));
+  Ui::Integration::Visual::Base secondVisual = secondViewData.GetVisual(secondVisualIndex);
+  DALI_TEST_CHECK(secondVisual);
+  DALI_TEST_EQUALS(secondVisual.GetDepthIndex(), Ui::Integration::DepthIndex::CONTENT + 7, TEST_LOCATION);
+
+  // A stale request is rejected without disturbing either control-local entry.
+  DALI_TEST_CHECK(!firstManager.Update(firstHost,
+                                       source,
+                                       placements,
+                                       Vector2::ZERO,
+                                       Vector2(100.0f, 40.0f),
+                                       Vector2(100.0f, 40.0f),
+                                       1.0f,
+                                       4u));
+  DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+
+  // Hash equality cannot hide a source change: source string is correctness identity.
+  source.runs[0u].image.source = "other-missing-inline-manager-test.png";
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      5u));
+  inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  DALI_TEST_CHECK(inlineVisual != originalVisual);
+  DALI_TEST_EQUALS(getOpacity(), 0.0f, TEST_LOCATION);
+
+  const Property::Index progressIndex = firstOwner.RegisterProperty("uImageSpanRevealProgress", 0.5f);
+  Vector<Text::ReplacementRevealTiming> revealTimings;
+  revealTimings.PushBack({run.occurrenceIdentity, 0.4f, 0.2f});
+  DALI_TEST_CHECK(firstManager.ApplyRevealTimings(revealTimings, 5u, progressIndex));
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager), 1u, TEST_LOCATION);
+
+  // Completion from the discarded source cannot reveal the current visual.
+  Ui::GetImplementation(originalVisual).ResourceReady(Ui::Visual::ResourceStatus::READY);
+  firstManager.Refresh();
+  DALI_TEST_EQUALS(getOpacity(), 0.0f, TEST_LOCATION);
+
+  // Commit sampling/transform first, then reveal in the same manager refresh.
+  Ui::GetImplementation(inlineVisual).ResourceReady(Ui::Visual::ResourceStatus::READY);
+  firstManager.Refresh();
+  // READY changes only the base-opacity source. It must not write 1.0 into
+  // the constraint-owned target and cause a one-frame flash.
+  DALI_TEST_EQUALS(getOpacity(), 0.0f, TEST_LOCATION);
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineSize, Vector2(24.0f, 18.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(inlineOffset, Vector2(4.0f, 6.0f), TEST_LOCATION);
+
+  // ImageSpan Reveal is an update-thread constraint sourced by the owner.
+  // Resource readiness remains an independent base opacity input.
+  VisualRenderer revealRenderer = inlineVisual.GetRenderer();
+  DALI_TEST_CHECK(revealRenderer);
+  firstOwner.AddRenderer(revealRenderer);
+  const Property::Index baseOpacityIndex =
+    revealRenderer.GetPropertyIndex("__dali_ui_inline_replacement_reveal_base_opacity");
+  DALI_TEST_CHECK(baseOpacityIndex != Property::INVALID_INDEX);
+  DALI_TEST_EQUALS(revealRenderer.GetProperty<float>(baseOpacityIndex), 1.0f, 0.01f, TEST_LOCATION);
+  auto checkRevealOpacity = [&](float progress, float expected)
+  {
+    firstOwner.SetProperty(progressIndex, progress);
+    application.SendNotification();
+    application.Render();
+    application.SendNotification();
+    application.Render();
+    DALI_TEST_EQUALS(revealRenderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                     expected,
+                     0.01f,
+                     TEST_LOCATION);
+  };
+  checkRevealOpacity(0.5f, 0.5f); // The first READY frame respects current progress.
+  checkRevealOpacity(0.0f, 0.0f);
+  checkRevealOpacity(0.8f, 1.0f);
+  checkRevealOpacity(0.45f, 0.25f); // The same formula naturally supports reverse playback.
+
+  // Geometry/alignment-only updates reuse the existing runtime visual.
+  const Ui::Integration::Visual::Base sourceChangedVisual = inlineVisual;
+  placements[0u].position                                 = Vector2(13.0f, 9.0f);
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      5u));
+  inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  DALI_TEST_CHECK(inlineVisual == sourceChangedVisual);
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager), 1u, TEST_LOCATION);
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineOffset, Vector2(13.0f, 9.0f), TEST_LOCATION);
+
+  // A new authored snapshot with the same occurrence and descriptor reuses
+  // the existing visual while committing its new placement.
+  source.sourceRevision      = 6u;
+  placements[0u].position.x = 17.0f;
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      6u));
+  inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  DALI_TEST_CHECK(inlineVisual == sourceChangedVisual);
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager), 0u, TEST_LOCATION);
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineOffset, Vector2(17.0f, 9.0f), TEST_LOCATION);
+
+  // Zero fade is an atomic step, driven by the same owner progress property.
+  revealTimings[0u].fadeDuration = 0.0f;
+  DALI_TEST_CHECK(firstManager.ApplyRevealTimings(revealTimings, 6u, progressIndex));
+  checkRevealOpacity(0.399f, 0.0f);
+  checkRevealOpacity(0.4f, 1.0f);
+
+  // Async-style timing may arrive before the matching placement snapshot.
+  // It is retained, but must not bind to entries from the previous source.
+  revealTimings[0u].start        = 0.2f;
+  revealTimings[0u].fadeDuration = 0.2f;
+  DALI_TEST_CHECK(firstManager.ApplyRevealTimings(revealTimings, 7u, progressIndex));
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealTimingCount(firstManager), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager), 0u, TEST_LOCATION);
+  source.sourceRevision = 7u;
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u,
+                                      true));
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager), 1u, TEST_LOCATION);
+  checkRevealOpacity(0.3f, 0.5f);
+
+  // The registered visual has no child-actor clip. Its quad and sampled pixel
+  // area must be cropped explicitly to the content box.
+  placements[0u].position = Vector2(-8.0f, 9.0f);
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u,
+                                      true));
+  inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineOffset, Vector2(0.0f, 9.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(inlineSize, Vector2(16.0f, 18.0f), TEST_LOCATION);
+  const Vector4 clippedPixelArea = getPixelArea();
+  DALI_TEST_EQUALS(clippedPixelArea.x, 1.0f / 3.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippedPixelArea.y, 0.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippedPixelArea.z, 2.0f / 3.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippedPixelArea.w, 1.0f, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+
+  // PIXEL Reveal keeps its visual-local schedule when ImageVisual sampling is
+  // cropped. The manager precomposes the inverse pixel-area transform into
+  // the fragment timing coefficients instead of redeclaring pixelArea there.
+  revealTimings[0u].progressionSpan = 0.3f;
+  revealTimings[0u].rightToLeft     = false;
+  DALI_TEST_CHECK(firstManager.ApplyRevealTimings(revealTimings, 7u, progressIndex));
+  VisualRenderer pixelRevealRenderer = inlineVisual.GetRenderer();
+  DALI_TEST_CHECK(pixelRevealRenderer);
+  const Property::Index pixelTimingIndex =
+    pixelRevealRenderer.GetPropertyIndex("uInlineReplacementRevealTiming");
+  DALI_TEST_CHECK(pixelTimingIndex != Property::INVALID_INDEX);
+  const Vector3 pixelTiming = pixelRevealRenderer.GetProperty<Vector3>(pixelTimingIndex);
+  DALI_TEST_EQUALS(pixelTiming.x,
+                   revealTimings[0u].start - 0.5f * revealTimings[0u].progressionSpan,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(pixelTiming.y,
+                   revealTimings[0u].progressionSpan,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(pixelTiming.z,
+                   revealTimings[0u].fadeDuration,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+
+  TextureSet yuvTextures = TextureSet::New();
+  yuvTextures.SetTexture(0u, Texture::New(TextureType::TEXTURE_2D, Pixel::L8, 24u, 18u));
+  yuvTextures.SetTexture(1u, Texture::New(TextureType::TEXTURE_2D, Pixel::CHROMINANCE_U, 12u, 9u));
+  yuvTextures.SetTexture(2u, Texture::New(TextureType::TEXTURE_2D, Pixel::CHROMINANCE_V, 12u, 9u));
+  pixelRevealRenderer.SetTextures(yuvTextures);
+  firstManager.Refresh();
+  DALI_TEST_CHECK(!Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::IsRevealPixelSpatial(
+    firstManager,
+    run.occurrenceIdentity));
+  DALI_TEST_CHECK(!Ui::GetImplementation(inlineVisual).IsUsingCustomShader());
+  DALI_TEST_EQUALS(
+    Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager),
+    1u,
+    TEST_LOCATION);
+
+  // Decode-size identity changes recreate the visual while reusing the owner-local slot.
+  source.runs[0u].metrics.width  = 30.0f;
+  source.runs[0u].metrics.height = 20.0f;
+  expectedDesiredWidth           = 30;
+  expectedDesiredHeight          = 20;
+  placements[0u].position        = Vector2(13.0f, 9.0f);
+  placements[0u].size            = Vector2(30.0f, 20.0f);
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u));
+  inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  DALI_TEST_CHECK(inlineVisual != sourceChangedVisual);
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineSize, Vector2(30.0f, 20.0f), TEST_LOCATION);
+
+  // Effective scale changes runtime sampling and final geometry without
+  // changing the authored replacement metrics.
+  expectedDesiredWidth  = 60;
+  expectedDesiredHeight = 40;
+  placements[0u].size   = Vector2(60.0f, 40.0f);
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(140.0f, 80.0f),
+                                      Vector2(140.0f, 80.0f),
+                                      2.0f,
+                                      7u));
+  inlineVisual = firstViewData.GetVisual(firstVisualIndex);
+  getTransform(inlineSize, inlineOffset);
+  DALI_TEST_EQUALS(inlineSize, Vector2(60.0f, 40.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(source.runs[0u].metrics.width, 30.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(source.runs[0u].metrics.height, 20.0f, TEST_LOCATION);
+
+  placements[0u].visible = false;
+  placements[0u].elided  = true;
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u));
+  DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+  DALI_TEST_CHECK(secondViewData.GetVisual(secondVisualIndex));
+
+  placements[0u].visible = true;
+  placements[0u].elided  = false;
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u));
+  DALI_TEST_CHECK(firstViewData.GetVisual(firstVisualIndex));
+
+  // JSON would otherwise bypass the factory's static-only option and create
+  // an AnimatedVectorImageVisual. v1 keeps the reserved box but no runtime visual.
+  source.runs[0u].image.source = "animated-inline-manager-test.json";
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u));
+  DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+  firstManager.Clear();
+  DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+
+  // Repeated create/clear cycles reuse the owner-local slot. Custom property
+  // count reaches a high-water mark after the first slot and does not grow.
+  source.runs[0u].image.source = "missing-inline-manager-high-water.png";
+  const uint32_t propertyHighWater = firstOwner.GetPropertyCount();
+  for(uint32_t cycle = 0u; cycle < 32u; ++cycle)
+  {
+    DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                       source,
+                                       placements,
+                                       Vector2::ZERO,
+                                       Vector2(100.0f, 40.0f),
+                                       Vector2(100.0f, 40.0f),
+                                       1.0f,
+                                       7u));
+    Ui::Integration::Visual::Base discardedVisual = firstViewData.GetVisual(firstVisualIndex);
+    DALI_TEST_CHECK(discardedVisual);
+    firstManager.Clear();
+    DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+    Ui::GetImplementation(discardedVisual).ResourceReady(Ui::Visual::ResourceStatus::READY);
+    firstManager.Refresh();
+    DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+    DALI_TEST_EQUALS(firstOwner.GetPropertyCount(), propertyHighWater, TEST_LOCATION);
+
+    const Property::Index reusedIndex = firstHost.AllocateVisualSlot();
+    DALI_TEST_EQUALS(reusedIndex, firstVisualIndex, TEST_LOCATION);
+    firstHost.ReleaseVisualSlot(reusedIndex);
+  }
+
+  // Decode failure removes only the runtime visual. The authored timing gap
+  // remains stable and is not rescheduled around a late resource outcome.
+  source.runs[0u].image.source = "missing-inline-manager-reveal-failure.png";
+  DALI_TEST_CHECK(firstManager.Update(firstHost,
+                                      source,
+                                      placements,
+                                      Vector2::ZERO,
+                                      Vector2(100.0f, 40.0f),
+                                      Vector2(100.0f, 40.0f),
+                                      1.0f,
+                                      7u));
+  DALI_TEST_CHECK(firstManager.ApplyRevealTimings(revealTimings, 7u, progressIndex));
+  Ui::Integration::Visual::Base failedRevealVisual = firstViewData.GetVisual(firstVisualIndex);
+  DALI_TEST_CHECK(failedRevealVisual);
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealTimingCount(firstManager), 1u, TEST_LOCATION);
+  Ui::GetImplementation(failedRevealVisual).ResourceReady(Ui::Visual::ResourceStatus::FAILED);
+  firstManager.Refresh();
+  DALI_TEST_CHECK(!firstViewData.GetVisual(firstVisualIndex));
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealTimingCount(firstManager), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor::GetRevealConstraintCount(firstManager), 0u, TEST_LOCATION);
+  firstManager.Clear();
+
+  // Owner teardown and the later clear path must both be idempotent.
+  secondManager.PrepareOwnerDestruction();
+  secondManager.PrepareOwnerDestruction();
+  DALI_TEST_CHECK(secondViewData.GetVisual(secondVisualIndex));
+  secondOwner.Reset();
+  Ui::GetImplementation(secondVisual).ResourceReady(Ui::Visual::ResourceStatus::READY);
+  secondManager.Refresh();
+  secondManager.Clear();
+  secondManager.Clear();
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerPixelBindingOrderingP(void)
+{
+  UiTestApplication application;
+  using Accessor = Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor;
+
+  Texture      texture  = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, 48u, 32u);
+  Ui::ImageUrl imageUrl = Ui::ImageUrl::New(texture, true);
+
+  Text::ReplacementSourceSnapshot source;
+  source.sourceRevision            = 101u;
+  Text::ReplacementRunSnapshot run = Candidate(1u, 1u, 48.0f, 32.0f, 901u);
+  run.type                         = Text::ReplacementType::IMAGE;
+  run.occurrenceIdentity           = 901u;
+  run.image.source                 = imageUrl.GetUrl().CStr();
+  source.runs.PushBack(run);
+
+  Vector<Text::ReplacementPlacement> placements;
+  Text::ReplacementPlacement         placement;
+  placement.logicalCharacterRange = run.logicalCharacterRange;
+  placement.sourceRunIndex        = 0u;
+  placement.occurrenceIdentity    = run.occurrenceIdentity;
+  placement.position              = Vector2(7.0f, 5.0f);
+  placement.size                  = Vector2(48.0f, 32.0f);
+  placement.visible               = true;
+  placements.PushBack(placement);
+
+  View owner = View::New();
+  application.GetScene().Add(owner);
+  Dali::Ui::Internal::Text::InlineReplacementViewHost host(
+    owner,
+    Ui::Integration::DepthIndex::CONTENT + 1);
+  Dali::Ui::Internal::Text::InlineReplacementManager manager;
+
+  const Property::Index visualIndex = host.AllocateVisualSlot();
+  DALI_TEST_CHECK(visualIndex != Property::INVALID_INDEX);
+  host.ReleaseVisualSlot(visualIndex);
+  auto& viewData = Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(owner));
+
+  const Property::Index progressIndex = owner.RegisterProperty("uInlinePixelOrderingProgress", 0.4f);
+  Vector<Text::ReplacementRevealTiming> timings;
+  timings.PushBack({run.occurrenceIdentity, 0.35f, 0.2f, 0.3f, false});
+
+  // Texture-backed ImageUrl can synchronously report READY from
+  // RegisterVisual(). Placement must already be authoritative, while the
+  // visual remains hidden until the PIXEL binding is complete.
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 true));
+  Ui::Integration::Visual::Base visual   = viewData.GetVisual(visualIndex);
+  VisualRenderer                renderer = visual.GetRenderer();
+  DALI_TEST_CHECK(visual && renderer);
+  DALI_TEST_EQUALS(Ui::GetImplementation(visual).GetResourceStatus(),
+                   Ui::Visual::ResourceStatus::READY,
+                   TEST_LOCATION);
+  DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+  DALI_TEST_CHECK(Accessor::IsRevealBindingRequired(manager));
+  DALI_TEST_CHECK(!Accessor::IsEntryVisible(manager, run.occurrenceIdentity));
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+
+  Property::Map visualMap;
+  visual.CreatePropertyMap(visualMap);
+  Property::Map transform;
+  Vector2       transformSize;
+  Vector2       transformOffset;
+  DALI_TEST_CHECK(visualMap.Find(Ui::Integration::Visual::Property::TRANSFORM)->Get(transform));
+  DALI_TEST_CHECK(transform.Find(Ui::Integration::Visual::Transform::Property::SIZE)->Get(transformSize));
+  DALI_TEST_CHECK(transform.Find(Ui::Integration::Visual::Transform::Property::OFFSET)->Get(transformOffset));
+  DALI_TEST_EQUALS(transformSize, placement.size, TEST_LOCATION);
+  DALI_TEST_EQUALS(transformOffset, placement.position, TEST_LOCATION);
+
+  Shader creationShader = renderer.GetShader();
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_CHECK(Accessor::IsEntryVisible(manager, run.occurrenceIdentity));
+  DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+  DALI_TEST_CHECK(renderer.GetShader() == creationShader);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+  Constraint pixelConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+  const Property::Index pixelProgressIndex = renderer.GetPropertyIndex("uInlineReplacementRevealProgress");
+  DALI_TEST_CHECK(pixelConstraint);
+  DALI_TEST_EQUALS(pixelConstraint.GetTargetProperty(), pixelProgressIndex, TEST_LOCATION);
+  DALI_TEST_CHECK(pixelConstraint.GetTargetProperty() != Dali::DevelRenderer::Property::OPACITY);
+
+  application.SendNotification();
+  application.Render();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(pixelProgressIndex), 0.4f, 0.01f, TEST_LOCATION);
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                   1.0f,
+                   0.01f,
+                   TEST_LOCATION);
+
+  // Valid timing published before geometry is accepted as DEFERRED. It must
+  // survive unchanged and complete on the next placement Update without a
+  // custom shader remove/reinstall cycle.
+  manager.ClearReveal();
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 true));
+  Accessor::ResetEntryGeometry(manager, run.occurrenceIdentity);
+  Shader deferredShader = renderer.GetShader();
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealSourceRevision(manager), source.sourceRevision, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_CHECK(!Accessor::IsEntryVisible(manager, run.occurrenceIdentity));
+  DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+  DALI_TEST_CHECK(renderer.GetShader() == deferredShader);
+
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 true));
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(Accessor::IsEntryVisible(manager, run.occurrenceIdentity));
+  DALI_TEST_CHECK(renderer.GetShader() == deferredShader);
+
+  // Exercise the update-thread value when a partially applied atomic opacity
+  // constraint is replaced by the PIXEL progress constraint.
+  timings[0u].progressionSpan = 0.0f;
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 false));
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraint(manager, run.occurrenceIdentity).GetRemoveAction(),
+                   Constraint::DISCARD,
+                   TEST_LOCATION);
+  application.SendNotification();
+  application.Render();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY) < 0.99f);
+
+  timings[0u].progressionSpan = 0.3f;
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 true));
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraint(manager, run.occurrenceIdentity).GetRemoveAction(),
+                   Constraint::DISCARD,
+                   TEST_LOCATION);
+  application.SendNotification();
+  application.Render();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                   1.0f,
+                   0.01f,
+                   TEST_LOCATION);
+
+  // The zero endpoint used to bake complete transparency and leave the PIXEL
+  // image invisible after the atomic constraint was removed.
+  owner.SetProperty(progressIndex, 0.0f);
+  timings[0u].progressionSpan = 0.0f;
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 false));
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  application.SendNotification();
+  application.Render();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                   0.0f,
+                   0.01f,
+                   TEST_LOCATION);
+
+  timings[0u].progressionSpan = 0.3f;
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 true));
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  application.SendNotification();
+  application.Render();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                   1.0f,
+                   0.01f,
+                   TEST_LOCATION);
+  owner.SetProperty(progressIndex, 1.0f);
+  application.SendNotification();
+  application.Render();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(renderer.GetPropertyIndex("uInlineReplacementRevealProgress")),
+                   1.0f,
+                   0.01f,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                   1.0f,
+                   0.01f,
+                   TEST_LOCATION);
+
+  // Async publication applies timing before placement. Authored PIXEL with
+  // fade ratio 1 resolves to scalar opacity; the later placement update must
+  // preserve the shader paired with that binding, not reinstall a spatial one.
+  timings[0u].progressionSpan = 0.0f;
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  Constraint scalarConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+  DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(120.0f, 60.0f),
+                                 Vector2(120.0f, 60.0f),
+                                 1.0f,
+                                 source.sourceRevision,
+                                 true));
+  manager.Refresh();
+  DALI_TEST_CHECK(visual.GetRenderer() == renderer);
+  DALI_TEST_CHECK(Accessor::GetRevealConstraint(manager, run.occurrenceIdentity) == scalarConstraint);
+  DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+  timings[0u].progressionSpan = 0.3f;
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+
+  // Atomic and spatial modes own mutually exclusive targets. None removes
+  // both the binding and replacement-owned shader without hiding a READY image.
+  for(uint32_t cycle = 0u; cycle < 100u; ++cycle)
+  {
+    timings[0u].progressionSpan = 0.0f;
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   false));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    Constraint atomicConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(atomicConstraint);
+    DALI_TEST_EQUALS(atomicConstraint.GetTargetProperty(),
+                     static_cast<Property::Index>(Dali::DevelRenderer::Property::OPACITY),
+                     TEST_LOCATION);
+    DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+
+    timings[0u].progressionSpan = 0.3f;
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   true));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    pixelConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(pixelConstraint);
+    DALI_TEST_EQUALS(pixelConstraint.GetTargetProperty(),
+                     renderer.GetPropertyIndex("uInlineReplacementRevealProgress"),
+                     TEST_LOCATION);
+    DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+
+    manager.ClearReveal();
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 0u, TEST_LOCATION);
+    DALI_TEST_CHECK(!Accessor::IsRevealBindingRequired(manager));
+    DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+    DALI_TEST_CHECK(Accessor::IsEntryVisible(manager, run.occurrenceIdentity));
+  }
+
+  // CHARACTER and WORD share this atomic replacement binding. Exercise its
+  // full transition matrix against PIXEL and None at representative progress
+  // values so temporary constraints can never leave baked renderer state.
+  const float transitionProgresses[]{0.0f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f};
+  for(const float progress : transitionProgresses)
+  {
+    owner.SetProperty(progressIndex, progress);
+    timings[0u].start           = 0.25f;
+    timings[0u].fadeDuration    = 0.25f;
+    timings[0u].progressionSpan = 0.0f;
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   false));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    Constraint atomicTransition = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(atomicTransition);
+    DALI_TEST_EQUALS(atomicTransition.GetTargetProperty(),
+                     static_cast<Property::Index>(Dali::DevelRenderer::Property::OPACITY),
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(atomicTransition.GetRemoveAction(), Constraint::DISCARD, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+
+    // Atomic -> PIXEL must discard the constrained opacity at every progress.
+    timings[0u].progressionSpan = 0.3f;
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   true));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    Constraint pixelTransition = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(pixelTransition);
+    DALI_TEST_EQUALS(atomicTransition.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+    DALI_TEST_EQUALS(pixelTransition.GetTargetProperty(), pixelProgressIndex, TEST_LOCATION);
+    DALI_TEST_EQUALS(pixelTransition.GetRemoveAction(), Constraint::DISCARD, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+    application.SendNotification();
+    application.Render();
+    application.SendNotification();
+    application.Render();
+    DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                     1.0f,
+                     0.01f,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(pixelProgressIndex), progress, 0.01f, TEST_LOCATION);
+
+    // PIXEL -> atomic must remove the shader and let only the new opacity
+    // constraint determine the result.
+    timings[0u].progressionSpan = 0.0f;
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   false));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    atomicTransition = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(atomicTransition);
+    DALI_TEST_EQUALS(pixelTransition.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+    DALI_TEST_EQUALS(atomicTransition.GetTargetProperty(),
+                     static_cast<Property::Index>(Dali::DevelRenderer::Property::OPACITY),
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(atomicTransition.GetRemoveAction(), Constraint::DISCARD, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+
+    // Return to PIXEL, then cover PIXEL -> None -> PIXEL.
+    timings[0u].progressionSpan = 0.3f;
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   true));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    pixelTransition = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(pixelTransition);
+    manager.ClearReveal();
+    DALI_TEST_EQUALS(pixelTransition.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 0u, TEST_LOCATION);
+    DALI_TEST_CHECK(!Ui::GetImplementation(visual).IsUsingCustomShader());
+    application.SendNotification();
+    application.Render();
+    DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                     1.0f,
+                     0.01f,
+                     TEST_LOCATION);
+
+    DALI_TEST_CHECK(manager.Update(host,
+                                   source,
+                                   placements,
+                                   Vector2::ZERO,
+                                   Vector2(120.0f, 60.0f),
+                                   Vector2(120.0f, 60.0f),
+                                   1.0f,
+                                   source.sourceRevision,
+                                   true));
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    pixelTransition = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(pixelTransition);
+    DALI_TEST_EQUALS(pixelTransition.GetTargetProperty(), pixelProgressIndex, TEST_LOCATION);
+    DALI_TEST_EQUALS(pixelTransition.GetRemoveAction(), Constraint::DISCARD, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(Ui::GetImplementation(visual).IsUsingCustomShader());
+
+    // PIXEL -> PIXEL timing replacement may replace one Constraint, but must
+    // never stack it or disturb the unconstrained opacity.
+    Constraint previousPixelTransition = pixelTransition;
+    timings[0u].start                   = 0.2f;
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    pixelTransition = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(pixelTransition && pixelTransition != previousPixelTransition);
+    DALI_TEST_EQUALS(previousPixelTransition.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+    DALI_TEST_EQUALS(pixelTransition.GetTargetProperty(), pixelProgressIndex, TEST_LOCATION);
+    DALI_TEST_EQUALS(pixelTransition.GetRemoveAction(), Constraint::DISCARD, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    application.SendNotification();
+    application.Render();
+    application.SendNotification();
+    application.Render();
+    DALI_TEST_EQUALS(renderer.GetCurrentProperty<float>(Dali::DevelRenderer::Property::OPACITY),
+                     1.0f,
+                     0.01f,
+                     TEST_LOCATION);
+
+    manager.ClearReveal();
+  }
+
+  // Pending resources cover GTR, TGR and GRT. A binding completed while the
+  // resource is pending stays hidden, and the first READY frame consumes the
+  // current progress. A resource completed before timing likewise stays
+  // hidden until that timing is accepted.
+  for(uint32_t ordering = 0u; ordering < 3u; ++ordering)
+  {
+    const bool timingBeforePlacement = ordering == 1u;
+    const bool readyBeforeTiming     = ordering == 2u;
+    View delayedOwner = View::New();
+    application.GetScene().Add(delayedOwner);
+    Dali::Ui::Internal::Text::InlineReplacementViewHost delayedHost(
+      delayedOwner,
+      Ui::Integration::DepthIndex::CONTENT + 1);
+    Dali::Ui::Internal::Text::InlineReplacementManager delayedManager;
+
+    Text::ReplacementSourceSnapshot delayedSource = source;
+    delayedSource.sourceRevision              = 201u + ordering;
+    delayedSource.runs[0u].occurrenceIdentity = 902u + ordering;
+    delayedSource.runs[0u].image.source        = "missing-inline-pixel-ordering.png";
+    Vector<Text::ReplacementPlacement> delayedPlacements = placements;
+    delayedPlacements[0u].occurrenceIdentity = delayedSource.runs[0u].occurrenceIdentity;
+    const Property::Index delayedProgressIndex =
+      delayedOwner.RegisterProperty("uInlinePixelDelayedProgress", 0.0f);
+    Vector<Text::ReplacementRevealTiming> delayedTimings;
+    delayedTimings.PushBack({delayedSource.runs[0u].occurrenceIdentity, 0.35f, 0.2f, 0.3f, false});
+
+    if(timingBeforePlacement)
+    {
+      DALI_TEST_CHECK(delayedManager.ApplyRevealTimings(delayedTimings,
+                                                        delayedSource.sourceRevision,
+                                                        delayedProgressIndex));
+      DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(delayedManager), 1u, TEST_LOCATION);
+    }
+    DALI_TEST_CHECK(delayedManager.Update(delayedHost,
+                                          delayedSource,
+                                          delayedPlacements,
+                                          Vector2::ZERO,
+                                          Vector2(120.0f, 60.0f),
+                                          Vector2(120.0f, 60.0f),
+                                          1.0f,
+                                          delayedSource.sourceRevision,
+                                          true));
+    const Property::Index delayedVisualIndex = delayedOwner.GetPropertyIndex("__dali_ui_inline_replacement_0");
+    DALI_TEST_CHECK(delayedVisualIndex != Property::INVALID_INDEX);
+    auto& delayedViewData = Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(delayedOwner));
+    Ui::Integration::Visual::Base delayedVisual = delayedViewData.GetVisual(delayedVisualIndex);
+    VisualRenderer delayedRenderer = delayedVisual.GetRenderer();
+    DALI_TEST_CHECK(delayedVisual && delayedRenderer);
+    if(readyBeforeTiming)
+    {
+      DALI_TEST_EQUALS(delayedOwner.GetRendererCount(), 0u, TEST_LOCATION);
+      delayedOwner.AddRenderer(delayedRenderer);
+      Ui::GetImplementation(delayedVisual).ResourceReady(Ui::Visual::ResourceStatus::READY);
+      delayedManager.Refresh();
+      DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(delayedManager), 0u, TEST_LOCATION);
+      DALI_TEST_CHECK(!Accessor::IsEntryVisible(delayedManager,
+                                                delayedSource.runs[0u].occurrenceIdentity));
+    }
+    if(!timingBeforePlacement)
+    {
+      DALI_TEST_CHECK(delayedManager.ApplyRevealTimings(delayedTimings,
+                                                        delayedSource.sourceRevision,
+                                                        delayedProgressIndex));
+    }
+
+    DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(delayedManager), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(delayedManager), 1u, TEST_LOCATION);
+    Constraint delayedConstraint = Accessor::GetRevealConstraint(
+      delayedManager,
+      delayedSource.runs[0u].occurrenceIdentity);
+    DALI_TEST_CHECK(delayedConstraint);
+    DALI_TEST_CHECK(delayedConstraint.GetTargetObject() == delayedRenderer);
+    DALI_TEST_EQUALS(delayedConstraint.GetTargetProperty(),
+                     delayedRenderer.GetPropertyIndex("uInlineReplacementRevealProgress"),
+                     TEST_LOCATION);
+    // VisualRenderer owns its scene object before ImageVisual adds it to the
+    // actor's renderer list, so the binding is already live while loading.
+    DALI_TEST_EQUALS(delayedConstraint.GetState(), Constraint::State::APPLIED, TEST_LOCATION);
+
+    // Distinguish a live binding from a renderer uniform frozen at its
+    // registration value while the resource is pending and the renderer has
+    // not yet been added to the owner's renderer list.
+    Animation delayedAnimation = Animation::New(0.05f);
+    delayedAnimation.AnimateTo(Property(delayedOwner, delayedProgressIndex), 0.8f);
+    delayedAnimation.Play();
+    application.SendNotification();
+    application.Render(32u);
+    application.SendNotification();
+    application.Render(32u);
+    DALI_TEST_EQUALS(delayedOwner.GetCurrentProperty<float>(delayedProgressIndex),
+                     0.8f,
+                     0.01f,
+                     TEST_LOCATION);
+    if(!readyBeforeTiming)
+    {
+      DALI_TEST_CHECK(!Accessor::IsEntryVisible(delayedManager,
+                                                delayedSource.runs[0u].occurrenceIdentity));
+      DALI_TEST_EQUALS(delayedOwner.GetRendererCount(), 0u, TEST_LOCATION);
+      delayedOwner.AddRenderer(delayedRenderer);
+      Ui::GetImplementation(delayedVisual).ResourceReady(Ui::Visual::ResourceStatus::READY);
+      delayedManager.Refresh();
+    }
+    DALI_TEST_CHECK(Accessor::IsEntryVisible(delayedManager,
+                                             delayedSource.runs[0u].occurrenceIdentity));
+    const Property::Index delayedPixelProgressIndex =
+      delayedRenderer.GetPropertyIndex("uInlineReplacementRevealProgress");
+    DALI_TEST_CHECK(delayedPixelProgressIndex != Property::INVALID_INDEX);
+    application.SendNotification();
+    application.Render();
+    application.SendNotification();
+    application.Render();
+    DALI_TEST_EQUALS(delayedConstraint.GetState(), Constraint::State::APPLIED, TEST_LOCATION);
+    DALI_TEST_EQUALS(delayedRenderer.GetCurrentProperty<float>(delayedPixelProgressIndex),
+                     0.8f,
+                     0.01f,
+                     TEST_LOCATION);
+  }
+
+  // TRG is the timing-first form of the synchronous Texture/ImageUrl path:
+  // READY re-enters during RegisterVisual(), then commits final geometry and
+  // the already accepted timing before the visual can become visible.
+  View timingFirstReadyOwner = View::New();
+  application.GetScene().Add(timingFirstReadyOwner);
+  Dali::Ui::Internal::Text::InlineReplacementViewHost timingFirstReadyHost(
+    timingFirstReadyOwner,
+    Ui::Integration::DepthIndex::CONTENT + 1);
+  Dali::Ui::Internal::Text::InlineReplacementManager timingFirstReadyManager;
+  Text::ReplacementSourceSnapshot timingFirstReadySource = source;
+  timingFirstReadySource.sourceRevision                  = 204u;
+  timingFirstReadySource.runs[0u].occurrenceIdentity     = 905u;
+  Vector<Text::ReplacementPlacement> timingFirstReadyPlacements = placements;
+  timingFirstReadyPlacements[0u].occurrenceIdentity = timingFirstReadySource.runs[0u].occurrenceIdentity;
+  const Property::Index timingFirstReadyProgressIndex =
+    timingFirstReadyOwner.RegisterProperty("uInlinePixelTimingFirstReadyProgress", 0.4f);
+  Vector<Text::ReplacementRevealTiming> timingFirstReadyTimings;
+  timingFirstReadyTimings.PushBack(
+    {timingFirstReadySource.runs[0u].occurrenceIdentity, 0.35f, 0.2f, 0.3f, false});
+  DALI_TEST_CHECK(timingFirstReadyManager.ApplyRevealTimings(timingFirstReadyTimings,
+                                                             timingFirstReadySource.sourceRevision,
+                                                             timingFirstReadyProgressIndex));
+  DALI_TEST_CHECK(timingFirstReadyManager.Update(timingFirstReadyHost,
+                                                 timingFirstReadySource,
+                                                 timingFirstReadyPlacements,
+                                                 Vector2::ZERO,
+                                                 Vector2(120.0f, 60.0f),
+                                                 Vector2(120.0f, 60.0f),
+                                                 1.0f,
+                                                 timingFirstReadySource.sourceRevision,
+                                                 true));
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(timingFirstReadyManager), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(timingFirstReadyManager), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(Accessor::IsEntryVisible(timingFirstReadyManager,
+                                           timingFirstReadySource.runs[0u].occurrenceIdentity));
+
+  END_TEST;
+}
+
+namespace
+{
+using ReplacementManager  = Ui::Internal::Text::InlineReplacementManager;
+using ReplacementAccessor = Ui::Internal::Text::InlineReplacementManagerTestAccessor;
+
+struct BlurCaptureFixture
+{
+  explicit BlurCaptureFixture(UiTestApplication& application)
+  : owner(View::New()),
+    host(owner, Ui::Integration::DepthIndex::CONTENT + 1),
+    manager(std::make_unique<ReplacementManager>()),
+    image(Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, 4u, 4u)),
+    url(Ui::ImageUrl::New(image, true))
+  {
+    application.GetScene().Add(owner);
+    source.sourceRevision = 17u;
+    for(uint32_t index = 0u; index < 2u; ++index)
+    {
+      auto run         = ImageCandidate(index, 1u, index + 1u);
+      run.image.source = url.GetUrl().CStr();
+      source.runs.PushBack(run);
+      Text::ReplacementPlacement placement;
+      placement.logicalCharacterRange = run.logicalCharacterRange;
+      placement.sourceRunIndex        = index;
+      placement.occurrenceIdentity    = run.occurrenceIdentity;
+      placement.position              = Vector2(24.0f * static_cast<float>(index), 0.0f);
+      placement.size                  = Vector2(20.0f, 18.0f);
+      placement.visible               = true;
+      placements.PushBack(placement);
+      timings.PushBack({run.occurrenceIdentity, 0.0f, 0.5f});
+    }
+  }
+
+  bool Update()
+  {
+    return manager->Update(host, source, placements, Vector2::ZERO,
+                           Vector2(100.0f, 40.0f), Vector2(100.0f, 40.0f),
+                           1.0f, source.sourceRevision);
+  }
+
+  bool Publish()
+  {
+    return Update() && manager->ApplyRevealTimings(timings, source.sourceRevision,
+                                                   owner.RegisterProperty("uCaptureProgress", 0.5f));
+  }
+
+  View                                          owner;
+  Ui::Internal::Text::InlineReplacementViewHost host;
+  std::unique_ptr<ReplacementManager>           manager;
+  Texture                                       image;
+  Ui::ImageUrl                                  url;
+  Text::ReplacementSourceSnapshot               source;
+  Vector<Text::ReplacementPlacement>            placements;
+  Vector<Text::ReplacementRevealTiming>         timings;
+};
+} // namespace
+
+int UtcDaliInlineReplacementManagerBlurCaptureEntryRemovalP(void)
+{
+  UiTestApplication application;
+  // Both a live and an expired retention actor must allow selective teardown.
+  for(bool expireRetention : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    DALI_TEST_CHECK(fixture.Publish());
+    auto& manager = *fixture.manager;
+    auto  sources = manager.GetReadyBlurCaptureSources(fixture.source.sourceRevision);
+    DALI_TEST_EQUALS(sources.size(), static_cast<size_t>(2u), TEST_LOCATION);
+    Actor client    = Actor::New();
+    Actor retention = Actor::New();
+    for(const auto& source : sources)
+    {
+      DALI_TEST_CHECK(manager.CaptureBlurRenderer(client, fixture.source.sourceRevision, source, retention));
+    }
+    DALI_TEST_EQUALS(retention.GetRendererCount(), 2u, TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    if(expireRetention)
+    {
+      WeakHandle<Actor> retired(retention);
+      retention.Reset();
+      DALI_TEST_CHECK(!retired.GetHandle());
+    }
+    DALI_TEST_CHECK(ReplacementAccessor::RemoveEntry(manager, sources[0u].occurrenceIdentity));
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(manager), static_cast<size_t>(1u), TEST_LOCATION);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetBlurCaptureSourceCount(manager), static_cast<size_t>(1u), TEST_LOCATION);
+    if(retention)
+    {
+      DALI_TEST_EQUALS(retention.GetRendererCount(), 1u, TEST_LOCATION);
+      DALI_TEST_CHECK(retention.GetRendererAt(0u) == sources[1u].renderer);
+    }
+    manager.ReleaseBlurCapture(client);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetBlurCaptureSourceCount(manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(fixture.owner.GetRendererAt(0u) == sources[1u].renderer);
+    if(retention)
+    {
+      DALI_TEST_EQUALS(retention.GetRendererCount(), 0u, TEST_LOCATION);
+    }
+    manager.Clear();
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerBlurCaptureClientP(void)
+{
+  UiTestApplication  application;
+  BlurCaptureFixture fixture(application);
+  DALI_TEST_CHECK(fixture.Publish());
+  auto&      manager  = *fixture.manager;
+  const auto revision = fixture.source.sourceRevision;
+  const auto sources  = manager.GetReadyBlurCaptureSources(revision);
+  DALI_TEST_EQUALS(sources.size(), static_cast<size_t>(2u), TEST_LOCATION);
+  DALI_TEST_CHECK(manager.GetReadyBlurCaptureSources(0u).empty());
+  DALI_TEST_CHECK(manager.GetReadyBlurCaptureSources(revision + 1u).empty());
+  Actor client      = Actor::New();
+  Actor otherClient = Actor::New();
+  Actor retention   = Actor::New();
+  DALI_TEST_CHECK(!manager.CaptureBlurRenderer({}, revision, sources[0u], retention));
+  DALI_TEST_CHECK(!manager.CaptureBlurRenderer(client, revision, sources[0u], {}));
+  DALI_TEST_CHECK(!manager.CaptureBlurRenderer(client, revision + 1u, sources[0u], retention));
+  auto staleSource               = sources[0u];
+  staleSource.occurrenceIdentity = 999u;
+  DALI_TEST_CHECK(!manager.CaptureBlurRenderer(client, revision, staleSource, retention));
+  staleSource          = sources[0u];
+  staleSource.renderer = sources[1u].renderer;
+  DALI_TEST_CHECK(!manager.CaptureBlurRenderer(client, revision, staleSource, retention));
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 2u, TEST_LOCATION);
+  for(uint32_t repeat = 0u; repeat < 2u; ++repeat)
+  {
+    DALI_TEST_CHECK(manager.CaptureBlurRenderer(client, revision, sources[0u], retention));
+    DALI_TEST_EQUALS(retention.GetRendererCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetBlurCaptureSourceCount(manager), static_cast<size_t>(1u), TEST_LOCATION);
+  }
+  DALI_TEST_CHECK(!manager.CaptureBlurRenderer(otherClient, revision, sources[1u], retention));
+  manager.ReleaseBlurCapture(otherClient);
+  DALI_TEST_EQUALS(retention.GetRendererCount(), 1u, TEST_LOCATION);
+  // An expired client cannot keep ownership or prevent a new capture.
+  client.Reset();
+  DALI_TEST_CHECK(manager.CaptureBlurRenderer(otherClient, revision, sources[1u], retention));
+  DALI_TEST_EQUALS(retention.GetRendererCount(), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(retention.GetRendererAt(0u) == sources[1u].renderer);
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(fixture.owner.GetRendererAt(0u) == sources[0u].renderer);
+  // Update must restore the captured renderer before mutating its visual.
+  DALI_TEST_CHECK(fixture.Update());
+  DALI_TEST_EQUALS(retention.GetRendererCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(ReplacementAccessor::GetBlurCaptureSourceCount(manager), static_cast<size_t>(0u), TEST_LOCATION);
+  manager.ReleaseBlurCapture(otherClient);
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 2u, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerBlurCaptureDuringUpdateP(void)
+{
+  UiTestApplication  application;
+  BlurCaptureFixture fixture(application);
+  DALI_TEST_CHECK(fixture.Publish());
+  auto&      manager  = *fixture.manager;
+  const auto revision = fixture.source.sourceRevision;
+  const auto sources  = manager.GetReadyBlurCaptureSources(revision);
+  DALI_TEST_EQUALS(sources.size(), static_cast<size_t>(2u), TEST_LOCATION);
+  Actor client    = Actor::New();
+  Actor retention = Actor::New();
+  DALI_TEST_CHECK(manager.CaptureBlurRenderer(client, revision, sources[0u], retention));
+  bool              attempted = false;
+  bool              captured  = false;
+  ConnectionTracker tracker;
+  auto              renderer = sources[0u].renderer;
+  renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index, const Property::Value&)
+  {
+    attempted = true;
+    captured |= manager.CaptureBlurRenderer(client, revision, sources[0u], retention);
+  });
+  manager.ClearReveal();
+  tracker.DisconnectAll();
+  DALI_TEST_CHECK(attempted && !captured);
+  DALI_TEST_EQUALS(retention.GetRendererCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 2u, TEST_LOCATION);
+  DALI_TEST_CHECK(manager.GetReadyBlurCaptureSources(revision).empty());
+  // Leaving the update scope must permit capture again after republishing.
+  DALI_TEST_CHECK(fixture.Publish());
+  DALI_TEST_CHECK(manager.CaptureBlurRenderer(client, revision, sources[0u], retention));
+  manager.Clear();
+  DALI_TEST_EQUALS(retention.GetRendererCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerRemoveEntryCancelledP(void)
+{
+  UiTestApplication application;
+  for(bool destroy : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    DALI_TEST_CHECK(fixture.Publish());
+    auto renderer = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u).GetRenderer();
+    DALI_TEST_CHECK(renderer);
+    bool              cancelled = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index, const Property::Value&)
+    {
+      if(!cancelled)
+      {
+        cancelled = true;
+        if(destroy)
+        {
+          fixture.manager.reset();
+        }
+        else
+        {
+          fixture.manager->Clear();
+        }
+      }
+    });
+    fixture.placements.Clear();
+    DALI_TEST_CHECK(!fixture.Update());
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    if(!destroy)
+    {
+      DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+      DALI_TEST_CHECK(!ReplacementAccessor::HasHost(*fixture.manager));
+    }
+    else
+    {
+      DALI_TEST_CHECK(!fixture.manager);
+    }
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerCreateEntryCancelledP(void)
+{
+  UiTestApplication application;
+  for(bool destroy : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    // A new host reuses the owner's named slot. RegisterProperty then emits
+    // PropertySetSignal, just as it does when reattaching to an existing View.
+    Ui::Internal::Text::InlineReplacementViewHost previousHost(fixture.owner, Ui::Integration::DepthIndex::CONTENT + 1);
+    const auto                                    slot      = previousHost.AllocateVisualSlot();
+    bool                                          cancelled = false;
+    ConnectionTracker                             tracker;
+    fixture.owner.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index index, const Property::Value&)
+    {
+      if(!cancelled && index == slot)
+      {
+        cancelled = true;
+        if(destroy)
+        {
+          fixture.manager.reset();
+        }
+        else
+        {
+          fixture.manager->Clear();
+        }
+      }
+    });
+    DALI_TEST_CHECK(!fixture.Update());
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    if(!destroy)
+    {
+      DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+      DALI_TEST_CHECK(!ReplacementAccessor::HasHost(*fixture.manager));
+      DALI_TEST_CHECK(fixture.Publish());
+      DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 2u, TEST_LOCATION);
+    }
+    else
+    {
+      DALI_TEST_CHECK(!fixture.manager);
+    }
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerCapturedOwnerDestructionP(void)
+{
+  UiTestApplication application;
+  for(bool expireRetention : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    DALI_TEST_CHECK(fixture.Publish());
+    Actor                             client    = Actor::New();
+    Actor                             retention = Actor::New();
+    std::vector<WeakHandle<Renderer>> renderers;
+    {
+      const auto sources = fixture.manager->GetReadyBlurCaptureSources(fixture.source.sourceRevision);
+      DALI_TEST_EQUALS(sources.size(), static_cast<size_t>(2u), TEST_LOCATION);
+      for(const auto& source : sources)
+      {
+        DALI_TEST_CHECK(fixture.manager->CaptureBlurRenderer(client, fixture.source.sourceRevision, source, retention));
+        auto renderer = source.renderer;
+        renderers.emplace_back(renderer);
+      }
+    }
+    if(expireRetention)
+    {
+      retention.Reset();
+    }
+    fixture.manager->PrepareOwnerDestruction();
+    fixture.manager->PrepareOwnerDestruction();
+    DALI_TEST_CHECK(!ReplacementAccessor::HasHost(*fixture.manager));
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetBlurCaptureSourceCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    if(retention)
+    {
+      DALI_TEST_EQUALS(retention.GetRendererCount(), 0u, TEST_LOCATION);
+    }
+    // Late release must not restore a renderer after owner teardown begins.
+    fixture.manager->ReleaseBlurCapture(client);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+    fixture.owner.Reset();
+    fixture.manager->Clear();
+    application.RunIdles();
+    for(const auto& renderer : renderers)
+    {
+      DALI_TEST_CHECK(!renderer.GetHandle());
+    }
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerHostSwitchP(void)
+{
+  UiTestApplication  application;
+  BlurCaptureFixture fixture(application);
+  DALI_TEST_CHECK(fixture.Publish());
+  auto previousVisual = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+  View nextOwner      = View::New();
+  application.GetScene().Add(nextOwner);
+  Ui::Internal::Text::InlineReplacementViewHost nextHost(nextOwner, Ui::Integration::DepthIndex::CONTENT + 1);
+  DALI_TEST_CHECK(fixture.manager->Update(nextHost, fixture.source, fixture.placements, Vector2::ZERO,
+                                          Vector2(100.0f, 40.0f), Vector2(100.0f, 40.0f), 1.0f, fixture.source.sourceRevision));
+  DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(nextOwner.GetRendererCount(), 2u, TEST_LOCATION);
+  DALI_TEST_CHECK(ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u) != previousVisual);
+  DALI_TEST_EQUALS(ReplacementAccessor::GetRevealConstraintCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+  DALI_TEST_CHECK(fixture.manager->ApplyRevealTimings(fixture.timings, fixture.source.sourceRevision,
+                                                      nextOwner.RegisterProperty("uCaptureProgress", 0.5f)));
+  DALI_TEST_EQUALS(fixture.manager->GetReadyBlurCaptureSources(fixture.source.sourceRevision).size(), static_cast<size_t>(2u), TEST_LOCATION);
+  fixture.manager->Clear();
+  DALI_TEST_EQUALS(nextOwner.GetRendererCount(), 0u, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerUpdateCancelledP(void)
+{
+  enum class Change
+  {
+    SOURCE_REVISION,
+    HOST,
+    IMAGE_SIZE,
+    FAILED_IMAGE
+  };
+  UiTestApplication application;
+  for(auto change : {Change::SOURCE_REVISION, Change::HOST, Change::IMAGE_SIZE, Change::FAILED_IMAGE})
+  {
+    BlurCaptureFixture fixture(application);
+    DALI_TEST_CHECK(fixture.Publish());
+    auto                                          visual   = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+    auto                                          renderer = visual.GetRenderer();
+    Ui::Internal::Text::InlineReplacementViewHost nextHost(fixture.owner, Ui::Integration::DepthIndex::CONTENT + 1);
+    if(change == Change::SOURCE_REVISION)
+    {
+      ++fixture.source.sourceRevision;
+    }
+    else if(change == Change::IMAGE_SIZE)
+    {
+      fixture.source.runs[0u].metrics.width += 1.0f;
+      fixture.placements[0u].size.x += 1.0f;
+    }
+    else if(change == Change::FAILED_IMAGE)
+    {
+      Ui::GetImplementation(visual).ResourceReady(Ui::Visual::ResourceStatus::FAILED);
+    }
+    bool              cancelled = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index, const Property::Value&)
+    {
+      if(!cancelled)
+      {
+        cancelled = true;
+        fixture.manager->Clear();
+      }
+    });
+    DALI_TEST_CHECK(!fixture.manager->Update(change == Change::HOST ? nextHost : fixture.host,
+                                             fixture.source, fixture.placements, Vector2::ZERO,
+                                             Vector2(100.0f, 40.0f), Vector2(100.0f, 40.0f), 1.0f, fixture.source.sourceRevision));
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_CHECK(!ReplacementAccessor::HasHost(*fixture.manager));
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    DALI_TEST_CHECK(fixture.Publish());
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 2u, TEST_LOCATION);
+    fixture.manager->Clear();
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerGeometryCancelledP(void)
+{
+  enum class Change
+  {
+    CROP,
+    POSITION,
+    PIXEL_TIMING
+  };
+  UiTestApplication application;
+  for(auto change : {Change::CROP, Change::POSITION, Change::PIXEL_TIMING})
+  {
+    BlurCaptureFixture fixture(application);
+    if(change == Change::CROP)
+    {
+      fixture.placements[0u].position.x = -8.0f;
+    }
+    if(change == Change::PIXEL_TIMING)
+    {
+      fixture.timings[0u].progressionSpan = 0.5f;
+    }
+    DALI_TEST_CHECK(fixture.Publish());
+    auto visual   = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+    auto renderer = visual.GetRenderer();
+    auto property = static_cast<Property::Index>(VisualRenderer::Property::TRANSFORM_OFFSET);
+    if(change == Change::CROP)
+    {
+      property = renderer.GetPropertyIndex("pixelArea");
+    }
+    else if(change == Change::PIXEL_TIMING)
+    {
+      property = renderer.GetPropertyIndex("uInlineReplacementRevealTiming");
+    }
+    DALI_TEST_CHECK(property != Property::INVALID_INDEX);
+    fixture.placements[0u].position.x += 2.0f;
+    bool              cancelled = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index index, const Property::Value&)
+    {
+      if(!cancelled && index == property)
+      {
+        cancelled = true;
+        fixture.manager->Clear();
+      }
+    });
+    DALI_TEST_CHECK(!fixture.manager->Update(fixture.host, fixture.source, fixture.placements, Vector2::ZERO,
+                                             Vector2(100.0f, 40.0f), Vector2(100.0f, 40.0f), 1.0f,
+                                             fixture.source.sourceRevision, change == Change::PIXEL_TIMING));
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerRefreshCancelledP(void)
+{
+  UiTestApplication application;
+  for(bool failedImage : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    fixture.timings[0u].progressionSpan = failedImage ? 0.0f : 0.5f;
+    DALI_TEST_CHECK(fixture.Publish());
+    auto visual   = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+    auto renderer = visual.GetRenderer();
+    if(failedImage)
+    {
+      Ui::GetImplementation(visual).ResourceReady(Ui::Visual::ResourceStatus::FAILED);
+    }
+    bool              cancelled = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index, const Property::Value&)
+    {
+      if(!cancelled)
+      {
+        cancelled = true;
+        fixture.manager->Clear();
+      }
+    });
+    fixture.manager->Refresh();
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_CHECK(!ReplacementAccessor::HasHost(*fixture.manager));
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerBindingCancelledP(void)
+{
+  enum class Change
+  {
+    SOURCE_REVISION,
+    OPACITY,
+    PIXEL_TIMING
+  };
+  UiTestApplication application;
+  for(auto change : {Change::SOURCE_REVISION, Change::OPACITY, Change::PIXEL_TIMING})
+  {
+    BlurCaptureFixture fixture(application);
+    fixture.timings[0u].progressionSpan = change == Change::PIXEL_TIMING ? 0.5f : 0.0f;
+    DALI_TEST_CHECK(fixture.Publish());
+    auto visual   = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+    auto renderer = visual.GetRenderer();
+    auto property = static_cast<Property::Index>(Renderer::Property::MIX_COLOR);
+    if(change == Change::OPACITY)
+    {
+      property = renderer.GetPropertyIndex("__dali_ui_inline_replacement_reveal_base_opacity");
+    }
+    else if(change == Change::PIXEL_TIMING)
+    {
+      property = renderer.GetPropertyIndex("uInlineReplacementRevealTiming");
+    }
+    DALI_TEST_CHECK(property != Property::INVALID_INDEX);
+    fixture.timings[0u].fadeDuration = 0.75f;
+    bool              cancelled      = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index index, const Property::Value&)
+    {
+      if(!cancelled && index == property)
+      {
+        cancelled = true;
+        fixture.manager->Clear();
+      }
+    });
+    DALI_TEST_CHECK(!fixture.manager->ApplyRevealTimings(fixture.timings,
+                                                         fixture.source.sourceRevision + (change == Change::SOURCE_REVISION ? 1u : 0u),
+                                                         fixture.owner.GetPropertyIndex("uCaptureProgress")));
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetRevealTimingCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerRequiredBindingCancelledP(void)
+{
+  UiTestApplication application;
+  for(bool fullFade : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    // Ordinary visible images have no Reveal timing yet.
+    DALI_TEST_CHECK(fixture.Update());
+    const auto        progress  = fixture.owner.RegisterProperty("uCaptureProgress", 0.5f);
+    auto              visual    = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+    auto              renderer  = visual.GetRenderer();
+    bool              cancelled = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index, const Property::Value&)
+    {
+      if(!cancelled)
+      {
+        cancelled = true;
+        fixture.manager->Clear();
+      }
+    });
+    fixture.manager->RequireRevealBinding(progress, fullFade);
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerClearCancelledP(void)
+{
+  UiTestApplication application;
+  for(bool restoreVisibility : {false, true})
+  {
+    BlurCaptureFixture fixture(application);
+    if(restoreVisibility)
+    {
+      // PIXEL placement awaiting timing stays hidden until ClearReveal.
+      DALI_TEST_CHECK(fixture.manager->Update(fixture.host, fixture.source, fixture.placements, Vector2::ZERO,
+                                              Vector2(100.0f, 40.0f), Vector2(100.0f, 40.0f), 1.0f,
+                                              fixture.source.sourceRevision, true));
+      DALI_TEST_CHECK(!ReplacementAccessor::IsEntryVisible(*fixture.manager, 1u));
+    }
+    else
+    {
+      DALI_TEST_CHECK(fixture.Publish());
+    }
+    auto              visual    = ReplacementAccessor::GetEntryVisual(*fixture.manager, 1u);
+    auto              renderer  = visual.GetRenderer();
+    bool              cancelled = false;
+    ConnectionTracker tracker;
+    renderer.PropertySetSignal().Connect(&tracker, [&](Handle, Property::Index index, const Property::Value& value)
+    {
+      // Visual opacity is published as the alpha component of MIX_COLOR.
+      if(!cancelled && index == Renderer::Property::MIX_COLOR &&
+         (restoreVisibility ? value.Get<Vector4>().a == 1.0f : ReplacementAccessor::GetRevealTimingCount(*fixture.manager) == 0u))
+      {
+        cancelled = true;
+        fixture.manager->Clear();
+      }
+    });
+    if(restoreVisibility)
+    {
+      fixture.manager->ClearReveal();
+    }
+    else
+    {
+      fixture.manager->Clear();
+    }
+    tracker.DisconnectAll();
+    DALI_TEST_CHECK(cancelled);
+    DALI_TEST_EQUALS(ReplacementAccessor::GetEntryCount(*fixture.manager), static_cast<size_t>(0u), TEST_LOCATION);
+    DALI_TEST_EQUALS(fixture.owner.GetRendererCount(), 0u, TEST_LOCATION);
+    fixture.owner.Unparent();
+  }
+  END_TEST;
+}
+
+int UtcDaliInlineReplacementManagerRevealLifecycleP(void)
+{
+  UiTestApplication application;
+
+  Text::ReplacementSourceSnapshot source;
+  source.sourceRevision            = 17u;
+  Text::ReplacementRunSnapshot run = Candidate(1u, 1u, 24.0f, 18.0f, 41u);
+  run.type                         = Text::ReplacementType::IMAGE;
+  run.occurrenceIdentity           = 71u;
+  run.image.source                 = "missing-inline-reveal-lifecycle-a.png";
+  source.runs.PushBack(run);
+
+  Vector<Text::ReplacementPlacement> placements;
+  Text::ReplacementPlacement         placement;
+  placement.logicalCharacterRange = run.logicalCharacterRange;
+  placement.sourceRunIndex        = 0u;
+  placement.occurrenceIdentity    = run.occurrenceIdentity;
+  placement.position              = Vector2(4.0f, 6.0f);
+  placement.size                  = Vector2(24.0f, 18.0f);
+  placement.visible               = true;
+  placements.PushBack(placement);
+
+  View owner = View::New();
+  application.GetScene().Add(owner);
+  Dali::Ui::Internal::Text::InlineReplacementViewHost host(
+    owner,
+    Ui::Integration::DepthIndex::CONTENT + 1);
+  Dali::Ui::Internal::Text::InlineReplacementManager manager;
+  using Accessor = Dali::Ui::Internal::Text::InlineReplacementManagerTestAccessor;
+
+  const Property::Index visualIndex = host.AllocateVisualSlot();
+  DALI_TEST_CHECK(visualIndex != Property::INVALID_INDEX);
+  host.ReleaseVisualSlot(visualIndex);
+  auto& viewData = Dali::Ui::Internal::ViewDataImpl::Get(Dali::Ui::GetImpl(owner));
+
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(100.0f, 40.0f),
+                                 Vector2(100.0f, 40.0f),
+                                 1.0f,
+                                 source.sourceRevision));
+  DALI_TEST_EQUALS(Accessor::GetEntryCount(manager), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(Accessor::HasHost(manager));
+
+  Ui::Integration::Visual::Base visual   = viewData.GetVisual(visualIndex);
+  VisualRenderer                renderer = visual.GetRenderer();
+  DALI_TEST_CHECK(visual && renderer);
+
+  const Property::Index                 progressIndex = owner.RegisterProperty("uInlineRevealLifecycleProgress", 0.5f);
+  Vector<Text::ReplacementRevealTiming> timings;
+  timings.PushBack({run.occurrenceIdentity, 0.25f, 0.25f});
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 1u, TEST_LOCATION);
+
+  Constraint activeConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+  DALI_TEST_CHECK(activeConstraint);
+  DALI_TEST_CHECK(activeConstraint.GetState() != Constraint::State::INITIALIZED);
+  DALI_TEST_CHECK(activeConstraint.GetTargetObject() == renderer);
+  DALI_TEST_EQUALS(activeConstraint.GetSourceCount(), 2u, TEST_LOCATION);
+  DALI_TEST_CHECK(activeConstraint.GetSourceAt(0u).object == renderer);
+  DALI_TEST_CHECK(activeConstraint.GetSourceAt(1u).object == owner);
+
+  const Property::Index baseOpacityIndex =
+    renderer.GetPropertyIndex("__dali_ui_inline_replacement_reveal_base_opacity");
+  DALI_TEST_CHECK(baseOpacityIndex != Property::INVALID_INDEX);
+  DALI_TEST_EQUALS(Accessor::GetRevealBaseOpacityIndex(manager, run.occurrenceIdentity),
+                   baseOpacityIndex,
+                   TEST_LOCATION);
+  const uint32_t rendererPropertyHighWater = renderer.GetPropertyCount();
+
+  // Re-publishing an identical schedule must preserve the single binding.
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  DALI_TEST_CHECK(Accessor::GetRevealConstraint(manager, run.occurrenceIdentity) == activeConstraint);
+
+  // The custom property belongs to the renderer. Repeated Reveal attachment
+  // may replace one Constraint, but can never accumulate constraints or
+  // register the named base-opacity property again.
+  for(uint32_t cycle = 0u; cycle < 1000u; ++cycle)
+  {
+    manager.ClearReveal();
+    DALI_TEST_EQUALS(activeConstraint.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 0u, TEST_LOCATION);
+    DALI_TEST_EQUALS(renderer.GetPropertyCount(), rendererPropertyHighWater, TEST_LOCATION);
+    DALI_TEST_EQUALS(renderer.GetPropertyIndex("__dali_ui_inline_replacement_reveal_base_opacity"),
+                     baseOpacityIndex,
+                     TEST_LOCATION);
+
+    manager.ClearReveal();
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    activeConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(activeConstraint);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(renderer.GetPropertyCount(), rendererPropertyHighWater, TEST_LOCATION);
+  }
+
+  // Enabled-to-enabled timing changes replace, rather than stack, the active
+  // update-thread binding.
+  for(uint32_t cycle = 0u; cycle < 32u; ++cycle)
+  {
+    Constraint previous = activeConstraint;
+    timings[0u].start   = (cycle & 1u) ? 0.2f : 0.3f;
+    DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+    activeConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+    DALI_TEST_CHECK(activeConstraint && activeConstraint != previous);
+    DALI_TEST_EQUALS(previous.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+    DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(renderer.GetPropertyCount(), rendererPropertyHighWater, TEST_LOCATION);
+  }
+
+  // Runtime descriptor replacement must remove the old renderer constraint
+  // before the old visual is unregistered and bind the new renderer with its
+  // own property lookup.
+  Constraint                    oldRendererConstraint = activeConstraint;
+  Ui::Integration::Visual::Base oldVisual             = visual;
+  source.runs[0u].image.source                        = "missing-inline-reveal-lifecycle-b.png";
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(100.0f, 40.0f),
+                                 Vector2(100.0f, 40.0f),
+                                 1.0f,
+                                 source.sourceRevision));
+  visual   = viewData.GetVisual(visualIndex);
+  renderer = visual.GetRenderer();
+  DALI_TEST_CHECK(visual && renderer && visual != oldVisual);
+  DALI_TEST_EQUALS(oldRendererConstraint.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 1u, TEST_LOCATION);
+  const Property::Index recreatedBaseOpacityIndex =
+    renderer.GetPropertyIndex("__dali_ui_inline_replacement_reveal_base_opacity");
+  DALI_TEST_CHECK(recreatedBaseOpacityIndex != Property::INVALID_INDEX);
+  DALI_TEST_EQUALS(Accessor::GetRevealBaseOpacityIndex(manager, run.occurrenceIdentity),
+                   recreatedBaseOpacityIndex,
+                   TEST_LOCATION);
+
+  activeConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+  manager.ClearReveal();
+  DALI_TEST_EQUALS(activeConstraint.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetEntryCount(manager), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(viewData.GetVisual(visualIndex));
+
+  manager.ClearReveal();
+  manager.Clear();
+  manager.Clear();
+  DALI_TEST_EQUALS(Accessor::GetEntryCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_CHECK(!Accessor::HasHost(manager));
+  DALI_TEST_CHECK(!viewData.GetVisual(visualIndex));
+
+  // Owner destruction is the one path that intentionally leaves the second
+  // visual handle in ViewDataImpl. The active Constraint is still removed
+  // first, the manager releases every handle, and its raw host pointer is
+  // detached before the owner can disappear.
+  DALI_TEST_CHECK(manager.Update(host,
+                                 source,
+                                 placements,
+                                 Vector2::ZERO,
+                                 Vector2(100.0f, 40.0f),
+                                 Vector2(100.0f, 40.0f),
+                                 1.0f,
+                                 source.sourceRevision));
+  DALI_TEST_CHECK(manager.ApplyRevealTimings(timings, source.sourceRevision, progressIndex));
+  Constraint teardownConstraint = Accessor::GetRevealConstraint(manager, run.occurrenceIdentity);
+  DALI_TEST_CHECK(teardownConstraint);
+  DALI_TEST_CHECK(viewData.GetVisual(visualIndex));
+
+  WeakHandle<View> weakOwner(owner);
+  manager.PrepareOwnerDestruction();
+  DALI_TEST_EQUALS(teardownConstraint.GetState(), Constraint::State::INITIALIZED, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetEntryCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealConstraintCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(Accessor::GetRevealTimingCount(manager), 0u, TEST_LOCATION);
+  DALI_TEST_CHECK(!Accessor::HasHost(manager));
+  DALI_TEST_CHECK(viewData.GetVisual(visualIndex));
+
+  manager.PrepareOwnerDestruction();
+  manager.Clear();
+  manager.Clear();
+  application.GetScene().Remove(owner);
+  owner.Reset();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(!weakOwner.GetHandle());
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionBidiLayoutsP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+
+  struct BidiCase
+  {
+    const char*          text;
+    Text::CharacterIndex start;
+    Text::Length         length;
+  };
+  const BidiCase cases[] = {
+    {"abICONcd", 2u, 4u},                                          // LTR + Latin replacement
+    {"x\xE2\x80\x8F\xD7\x90\xD7\x91ICON\xD7\x92\xD7\x93", 4u, 4u}, // explicit RTL + Hebrew
+    {"A\xE2\x80\x8F\xD7\x90\xD7\x91ICON\xD7\x92\xD7\x93"
+     "B",
+     4u, 4u}, // LTR paragraph around RTL
+    {"x\xE2\x80\x8F\xD7\x90"
+     "ABICONCD"
+     "\xD7\x91",
+     5u, 4u}, // RTL paragraph around LTR
+    {"Aab\xD7\x90\xD7\x91"
+     "cdB",
+     1u, 6u},               // replacement underlying text contains mixed bidi classes
+    {"A,(icon).B", 3u, 4u}, // neutral punctuation
+  };
+
+  for(uint32_t caseIndex = 0u; caseIndex < sizeof(cases) / sizeof(cases[0u]); ++caseIndex)
+  {
+    const BidiCase&                      testCase = cases[caseIndex];
+    Vector<Text::Character>              text     = Utf32(testCase.text);
+    Vector<Text::ReplacementRunSnapshot> candidates;
+    candidates.PushBack(Candidate(testCase.start, testCase.length, 28.0f, 20.0f, caseIndex + 1u));
+    Text::ReplacementProjection projection =
+      Text::ReplacementProjection::Build(text, candidates);
+
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize = Vector2(400.0f, 80.0f);
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_EQUALS(result.placements.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(result.placements[0u].visible);
+    DALI_TEST_CHECK(std::isfinite(result.placements[0u].position.x));
+    DALI_TEST_EQUALS(result.placements[0u].logicalCharacterRange.characterIndex, testCase.start, TEST_LOCATION);
+    DALI_TEST_EQUALS(result.placements[0u].logicalCharacterRange.numberOfCharacters, testCase.length, TEST_LOCATION);
+    const Text::CharacterIndex projectedReplacementIndex =
+      projection.LogicalCharacterToProjected(result.placements[0u].logicalCharacterRange.characterIndex);
+    DALI_TEST_EQUALS(projection.FindByProjectedCharacter(projectedReplacementIndex)->sourceRunIndex,
+                     0u, TEST_LOCATION);
+    // The internal UTC harness interposes a Latin-only script classifier and no-op bidi reorder. This test checks the
+    // explicit replacement lookup and boundary/placement invariants across bidi-shaped inputs. Production Hebrew and
+    // Bidi maps are asserted by the separate dali-replacement-real-layout-diagnostic executable.
+    const bool                 rtl     = result.placements[0u].lineDirection;
+    const Text::CharacterIndex leftHit = projection.HitTestLogicalBoundary(
+      projectedReplacementIndex, 1.0f, 28.0f, rtl);
+    const Text::CharacterIndex rightHit = projection.HitTestLogicalBoundary(
+      projectedReplacementIndex, 27.0f, 28.0f, rtl);
+    DALI_TEST_CHECK((leftHit == testCase.start || leftHit == testCase.start + testCase.length));
+    DALI_TEST_CHECK((rightHit == testCase.start || rightHit == testCase.start + testCase.length));
+    DALI_TEST_CHECK(leftHit != rightHit);
+    CheckLaidOutBoundariesAreAtomic(projection, result);
+  }
+
+  // Multiple adjacent replacements in an RTL paragraph remain two visual layout units.
+  Vector<Text::Character> adjacentText = Utf32(
+    "x\xE2\x80\x8F\xD7\x90"
+    "abcd"
+    "\xD7\x91");
+  Vector<Text::ReplacementRunSnapshot> adjacentCandidates;
+  adjacentCandidates.PushBack(Candidate(3u, 2u, 18.0f, 18.0f, 70u));
+  adjacentCandidates.PushBack(Candidate(5u, 2u, 19.0f, 18.0f, 71u));
+  Text::ReplacementProjection adjacent =
+    Text::ReplacementProjection::Build(adjacentText, adjacentCandidates);
+  Text::ReplacementLayoutTestOptions adjacentOptions;
+  adjacentOptions.contentSize = Vector2(300.0f, 80.0f);
+  Text::ReplacementRenderState adjacentResult;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(adjacent, services, adjacentOptions, adjacentResult));
+  DALI_TEST_EQUALS(adjacentResult.placements.Count(), 2u, TEST_LOCATION);
+  DALI_TEST_CHECK(adjacentResult.placements[0u].visible);
+  DALI_TEST_CHECK(adjacentResult.placements[1u].visible);
+  DALI_TEST_CHECK(adjacentResult.placements[0u].syntheticGlyphIndex != adjacentResult.placements[1u].syntheticGlyphIndex);
+  DALI_TEST_CHECK(adjacentResult.placements[0u].position.x != adjacentResult.placements[1u].position.x);
+  CheckLaidOutBoundariesAreAtomic(adjacent, adjacentResult);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProjectionEllipsisAtomicP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+
+  struct EllipsisCase
+  {
+    const char*          text;
+    Text::CharacterIndex firstReplacement;
+  };
+  const EllipsisCase cases[] = {
+    {"A\uFFFCx\uFFFCx\uFFFCx\uFFFCx\uFFFCZ", 1u},
+    {"x\u200Fא\uFFFCx\uFFFCx\uFFFCx\uFFFCx\uFFFCב", 3u},
+    {"A\u200Fא\uFFFCx\uFFFCx\uFFFCx\uFFFCx\uFFFCבZ", 3u},
+  };
+  constexpr float replacementWidths[]  = {8.0f, 24.0f, 48.0f, 80.0f, 32.0f};
+  constexpr float replacementHeights[] = {8.0f, 24.0f, 32.0f, 48.0f, 20.0f};
+
+  // Replacement content deliberately supports only the END policy. Existing START/MIDDLE engine defects are outside
+  // the acceptance result and must not be attributed to replacement projection.
+  for(uint32_t caseIndex = 0u; caseIndex < sizeof(cases) / sizeof(cases[0u]); ++caseIndex)
+  {
+    const EllipsisCase&                  testCase = cases[caseIndex];
+    Vector<Text::Character>              text     = Utf32(testCase.text);
+    Vector<Text::ReplacementRunSnapshot> candidates;
+    for(uint32_t replacementIndex = 0u; replacementIndex < 5u; ++replacementIndex)
+    {
+      candidates.PushBack(Candidate(testCase.firstReplacement + replacementIndex * 2u, 1u,
+                                    replacementWidths[replacementIndex], replacementHeights[replacementIndex],
+                                    400u + caseIndex * 10u + replacementIndex));
+    }
+    Text::ReplacementProjection projection =
+      Text::ReplacementProjection::Build(text, candidates);
+
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize      = Vector2(62.0f, 40.0f);
+    options.elideText        = true;
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_CHECK(result.finalElision.textElided);
+    DALI_TEST_EQUALS(result.placements.Count(), 5u, TEST_LOCATION);
+
+    uint32_t elidedCount = 0u;
+    for(const Text::ReplacementPlacement& placement : result.placements)
+    {
+      DALI_TEST_CHECK(placement.visible != placement.elided);
+      elidedCount += placement.elided ? 1u : 0u;
+      DALI_TEST_EQUALS(placement.logicalCharacterRange.numberOfCharacters, 1u, TEST_LOCATION);
+      DALI_TEST_CHECK(IsExactLogicalBoundary(projection, placement.logicalCharacterRange.characterIndex));
+      DALI_TEST_CHECK(IsExactLogicalBoundary(
+        projection, placement.logicalCharacterRange.characterIndex + placement.logicalCharacterRange.numberOfCharacters));
+    }
+    DALI_TEST_CHECK(elidedCount > 0u);
+    DALI_TEST_CHECK(elidedCount < result.placements.Count());
+    CheckFinalElisionContract(result);
+    CheckLaidOutBoundariesAreAtomic(projection, result);
+  }
+
+  // Sweep across the threshold where END ellipsis lands directly on a wide
+  // synthetic replacement. The replacement has fontId 0, but its non-zero
+  // advance must be removed from the fit width and its nearest text font must
+  // be used to replace that exact glyph with ellipsis. Otherwise the renderer
+  // walks backward and leaves a replacement-sized blank before the dots.
+  Vector<Text::Character>              boundaryText = Utf32("Long prefix words\uFFFCtrailing text");
+  Vector<Text::ReplacementRunSnapshot> boundaryCandidates;
+  boundaryCandidates.PushBack(Candidate(17u, 1u, 70.0f, 28.0f, 499u));
+  Text::ReplacementProjection boundaryProjection =
+    Text::ReplacementProjection::Build(boundaryText, boundaryCandidates);
+
+  bool sawVisibleAtThreshold = false;
+  bool sawElidedAtThreshold  = false;
+  for(float width = 80.0f; width <= 360.0f; width += 2.0f)
+  {
+    Text::ReplacementLayoutTestOptions boundaryOptions;
+    boundaryOptions.contentSize         = Vector2(width, 80.0f);
+    boundaryOptions.lineWrapMode        = Text::LineWrapMode::CHARACTER;
+    boundaryOptions.elideText           = true;
+    boundaryOptions.horizontalAlignment = Text::Alignment::CENTER;
+
+    Text::ReplacementRenderState boundaryResult;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(boundaryProjection,
+                                                   services,
+                                                   boundaryOptions,
+                                                   boundaryResult));
+    DALI_TEST_EQUALS(boundaryResult.placements.Count(), 1u, TEST_LOCATION);
+    const Text::ReplacementPlacement& boundaryPlacement = boundaryResult.placements[0u];
+    const Text::FinalElisionResult&   finalElision      = boundaryResult.finalElision;
+    DALI_TEST_EQUALS(boundaryPlacement.visible,
+                     finalElision.IsOriginalGlyphVisible(boundaryPlacement.syntheticGlyphIndex), TEST_LOCATION);
+    DALI_TEST_CHECK(boundaryPlacement.visible != boundaryPlacement.elided);
+    if(finalElision.textElided && boundaryPlacement.visible)
+    {
+      Text::GlyphIndex finalGlyphIndex = 0u;
+      DALI_TEST_CHECK(finalElision.FindFinalGlyphIndex(boundaryPlacement.syntheticGlyphIndex,
+                                                       finalGlyphIndex));
+      DALI_TEST_EQUALS(FindSourceGlyphIndex(finalElision, finalGlyphIndex),
+                       boundaryPlacement.syntheticGlyphIndex,
+                       TEST_LOCATION);
+      Vector2 finalGlyphPosition;
+      DALI_TEST_CHECK(finalElision.GetFinalGlyphPosition(boundaryPlacement.syntheticGlyphIndex,
+                                                         finalGlyphPosition));
+      Text::FinalGlyphGeometry finalGeometry;
+      DALI_TEST_CHECK(Text::GetFinalSourceGlyphGeometry(*boundaryResult.processingModel,
+                                                        finalElision,
+                                                        boundaryPlacement.syntheticGlyphIndex,
+                                                        finalGeometry));
+      DALI_TEST_EQUALS(finalGlyphPosition.x,
+                       finalGeometry.contentLocalPenPosition.x,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(boundaryPlacement.position.x,
+                       finalGeometry.contentLocalPenPosition.x,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+    }
+    sawVisibleAtThreshold |= boundaryPlacement.visible;
+    sawElidedAtThreshold |= finalElision.textElided && boundaryPlacement.elided;
+    boundaryResult.Clear(services.bidirectionalSupport);
+  }
+  DALI_TEST_CHECK(sawVisibleAtThreshold);
+  DALI_TEST_CHECK(sawElidedAtThreshold);
+
+  // A retained replacement expands the line box independently of relative
+  // text height. Single-line END ellipsis must preserve that replacement-aware
+  // spacing instead of recomputing it from the expanded box.
+  const Vector<Text::Character> mixedSizeText = Utf32("Sizes \uFFFC then \uFFFC then \uFFFC and ordinary trailing words");
+  Vector<Text::ReplacementRunSnapshot> mixedSizeCandidates;
+  mixedSizeCandidates.PushBack(Candidate(6u, 1u, 8.0f, 8.0f, 510u));
+  mixedSizeCandidates.PushBack(Candidate(13u, 1u, 120.0f, 60.0f, 511u));
+  mixedSizeCandidates.PushBack(Candidate(20u, 1u, 40.0f, 40.0f, 512u));
+  mixedSizeCandidates[0u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_BASELINE;
+  mixedSizeCandidates[1u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_BOTTOM;
+  mixedSizeCandidates[2u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_CENTER;
+  const Text::ReplacementProjection mixedSizeProjection =
+    Text::ReplacementProjection::Build(mixedSizeText, mixedSizeCandidates);
+
+  struct LineHeightMode
+  {
+    float relative;
+    float minimum;
+  };
+  const LineHeightMode lineHeightModes[] = {
+    {-1.0f, 0.0f}, // AUTO
+    {0.8f, 0.0f},
+    {1.0f, 0.0f},
+    {1.6f, 0.0f},
+    {-1.0f, 40.0f}, // absolute minimum
+  };
+  const float widths[] = {90.0f, 260.0f, 493.0f};
+  bool        sawVisibleReplacement = false;
+  bool        sawElidedReplacement  = false;
+  for(const LineHeightMode& lineHeightMode : lineHeightModes)
+  {
+    for(float width : widths)
+    {
+      Text::ReplacementLayoutTestOptions mixedSizeOptions;
+      mixedSizeOptions.contentSize      = Vector2(width, 472.0f);
+      mixedSizeOptions.layoutType       = Text::Layout::Engine::SINGLE_LINE_BOX;
+      mixedSizeOptions.elideText        = true;
+      mixedSizeOptions.fontPointSize    = 28u * 64u;
+      mixedSizeOptions.fontPixelSize    = 28.0f;
+      mixedSizeOptions.relativeLineSize = lineHeightMode.relative;
+      mixedSizeOptions.defaultLineSize  = lineHeightMode.minimum;
+
+      Text::ReplacementRenderState mixedSizeResult;
+      DALI_TEST_CHECK(Text::LayoutReplacementForTest(mixedSizeProjection, services, mixedSizeOptions, mixedSizeResult));
+      DALI_TEST_CHECK(mixedSizeResult.finalElision.textElided);
+      const Vector<Text::LineRun>& mixedSizeLines = mixedSizeResult.processingModel->mVisualModel->mLines;
+      DALI_TEST_EQUALS(mixedSizeLines.Count(), 1u, TEST_LOCATION);
+      const Text::LineRun& mixedSizeLine = mixedSizeLines[0u];
+      DALI_TEST_CHECK(mixedSizeLine.lineSpacing >= 0.0f);
+      const float mixedSizeLineHeight = Text::GetLineHeight(mixedSizeLine, false);
+      for(const Text::ReplacementPlacement& placement : mixedSizeResult.placements)
+      {
+        sawVisibleReplacement |= placement.visible;
+        sawElidedReplacement |= placement.elided;
+        if(placement.visible)
+        {
+          DALI_TEST_CHECK(placement.position.y >= -Math::MACHINE_EPSILON_1000);
+          DALI_TEST_CHECK(placement.position.y + placement.size.y <=
+                          mixedSizeLineHeight + Math::MACHINE_EPSILON_1000);
+        }
+      }
+      mixedSizeResult.Clear(services.bidirectionalSupport);
+    }
+  }
+  DALI_TEST_CHECK(sawVisibleReplacement);
+  DALI_TEST_CHECK(sawElidedReplacement);
+
+  uint32_t horizontalDpi = 0u;
+  uint32_t verticalDpi   = 0u;
+  TextAbstraction::FontClient::Get().GetDpi(horizontalDpi, verticalDpi);
+  bool sawAsyncVisibleReplacement = false;
+  bool sawAsyncElidedReplacement  = false;
+  for(const LineHeightMode& lineHeightMode : lineHeightModes)
+  {
+    for(float width : widths)
+    {
+      Text::AsyncTextParameters asyncParameters;
+      asyncParameters.text                                                = "Sizes \xEF\xBF\xBC then \xEF\xBF\xBC then \xEF\xBF\xBC and ordinary trailing words";
+      asyncParameters.fontSize                                            = 28.0f * 72.0f / static_cast<float>(horizontalDpi);
+      asyncParameters.textWidth                                           = width;
+      asyncParameters.textHeight                                          = 472.0f;
+      asyncParameters.ellipsis                                            = true;
+      asyncParameters.relativeLineSize                                    = lineHeightMode.relative;
+      asyncParameters.minLineSize                                         = lineHeightMode.minimum;
+      asyncParameters.replacementSourceSnapshot.runs                      = mixedSizeCandidates;
+      asyncParameters.replacementSourceSnapshot.hasValidReplacementSource = true;
+
+      Text::AsyncTextLoader asyncLoader = Text::AsyncTextLoader::New();
+      asyncLoader.RenderText(asyncParameters, false, Size::ZERO);
+      const Text::ReplacementRenderState* asyncResult =
+        Text::GetImplementation(asyncLoader).GetReplacementRenderState();
+      DALI_TEST_CHECK(asyncResult && asyncResult->processingModel);
+      const Vector<Text::LineRun>& asyncLines = asyncResult->processingModel->mVisualModel->mLines;
+      DALI_TEST_EQUALS(asyncLines.Count(), 1u, TEST_LOCATION);
+      DALI_TEST_CHECK(asyncLines[0u].lineSpacing >= 0.0f);
+      const float asyncLineHeight = Text::GetLineHeight(asyncLines[0u], false);
+      for(const Text::ReplacementPlacement& placement : asyncResult->placements)
+      {
+        sawAsyncVisibleReplacement |= placement.visible;
+        sawAsyncElidedReplacement |= placement.elided;
+        if(placement.visible)
+        {
+          DALI_TEST_CHECK(placement.position.y >= -Math::MACHINE_EPSILON_1000);
+          DALI_TEST_CHECK(placement.position.y + placement.size.y <=
+                          asyncLineHeight + Math::MACHINE_EPSILON_1000);
+        }
+      }
+    }
+  }
+  DALI_TEST_CHECK(sawAsyncVisibleReplacement);
+  DALI_TEST_CHECK(sawAsyncElidedReplacement);
+
+  // A source replacement that is completely outside the retained END result
+  // must use the exact legacy ordinary-text spacing formula. This distinguishes
+  // source presence from final line geometry.
+  const Vector<Text::Character> fullyElidedText  = Utf32("ordinary prefix words before replacement \uFFFC trailing");
+  Text::CharacterIndex          fullyElidedIndex = 0u;
+  while(fullyElidedIndex < fullyElidedText.Count() &&
+        fullyElidedText[fullyElidedIndex] != Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER)
+  {
+    ++fullyElidedIndex;
+  }
+  Vector<Text::ReplacementRunSnapshot> fullyElidedCandidates;
+  fullyElidedCandidates.PushBack(Candidate(fullyElidedIndex, 1u, 120.0f, 60.0f, 520u));
+  const Text::ReplacementProjection fullyElidedProjection =
+    Text::ReplacementProjection::Build(fullyElidedText, fullyElidedCandidates);
+  for(const LineHeightMode& lineHeightMode : lineHeightModes)
+  {
+    Text::ReplacementLayoutTestOptions fullyElidedOptions;
+    fullyElidedOptions.contentSize      = Vector2(120.0f, 200.0f);
+    fullyElidedOptions.layoutType       = Text::Layout::Engine::SINGLE_LINE_BOX;
+    fullyElidedOptions.elideText        = true;
+    fullyElidedOptions.fontPointSize    = 28u * 64u;
+    fullyElidedOptions.fontPixelSize    = 28.0f;
+    fullyElidedOptions.relativeLineSize = lineHeightMode.relative;
+    fullyElidedOptions.defaultLineSize  = lineHeightMode.minimum;
+
+    Text::ReplacementRenderState fullyElidedResult;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(fullyElidedProjection,
+                                                   services,
+                                                   fullyElidedOptions,
+                                                   fullyElidedResult));
+    DALI_TEST_EQUALS(fullyElidedResult.placements.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(fullyElidedResult.placements[0u].elided);
+    const Vector<Text::LineRun>& lines = fullyElidedResult.processingModel->mVisualModel->mLines;
+    DALI_TEST_EQUALS(lines.Count(), 1u, TEST_LOCATION);
+
+    DALI_TEST_CHECK(Text::GetLineHeight(lines[0u], false) < 60.0f);
+    fullyElidedResult.Clear(services.bidirectionalSupport);
+  }
+
+  // Multiline remains a sentinel: the single-line post-ellipsis correction is
+  // never entered, including when the replacement is fully elided.
+  Text::ReplacementLayoutTestOptions multilineOptions;
+  multilineOptions.contentSize      = Vector2(120.0f, 45.0f);
+  multilineOptions.layoutType       = Text::Layout::Engine::MULTI_LINE_BOX;
+  multilineOptions.elideText        = true;
+  Text::ReplacementRenderState multilineResult;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(fullyElidedProjection,
+                                                 services,
+                                                 multilineOptions,
+                                                 multilineResult));
+  DALI_TEST_CHECK(multilineResult.finalElision.textElided);
+  DALI_TEST_EQUALS(multilineResult.placements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(multilineResult.placements[0u].elided);
+  multilineResult.Clear(services.bidirectionalSupport);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementVerticalEndEllipsisLifecycleP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+
+  const std::string utf8 =
+    "An oversized replacement follows wrapped introductory prose and tests vertical END ellipsis. "
+    "More words place \uFFFC near a constrained line before many trailing sentences continue. "
+    "The large reserved box must be fully visible only when its whole line participates in the visible layout. "
+    "Otherwise the renderer must choose a text ellipsis boundary without flashing, cropping or retaining the large image. "
+    "Repeated trailing words add stable overflow for wide and narrow resize verification.";
+  Vector<Text::Character> text             = Utf32(utf8);
+  Text::CharacterIndex    replacementIndex = 0u;
+  while(replacementIndex < text.Count() && text[replacementIndex] != Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER)
+  {
+    ++replacementIndex;
+  }
+  DALI_TEST_CHECK(replacementIndex < text.Count());
+
+  Vector<Text::ReplacementRunSnapshot> candidates;
+  candidates.PushBack(Candidate(replacementIndex, 1u, 210.0f, 120.0f, 2700u));
+  const Text::ReplacementProjection projection = Text::ReplacementProjection::Build(text, candidates);
+  DALI_TEST_CHECK(projection.HasReplacements());
+
+  auto layout = [&](float width, float height, uint64_t generation)
+  {
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize      = Size(width, height);
+    options.layoutType       = Text::Layout::Engine::MULTI_LINE_BOX;
+    options.lineWrapMode     = Text::LineWrapMode::WORD;
+    options.elideText        = true;
+    options.fontPointSize    = 28u * 64u;
+    options.fontPixelSize    = 28.0f * 4.0f / 3.0f;
+    options.sourceRevision   = 270u;
+    options.layoutGeneration = generation;
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_EQUALS(result.placements.Count(), 1u, TEST_LOCATION);
+    CheckFinalElisionContract(result);
+    return result;
+  };
+
+  // Moved from the real-layout diagnostic: these visibility and ellipsis
+  // contracts use deterministic glyph metrics and do not need system fonts.
+  // The sample's vertical threshold is deterministic: more height can reveal
+  // additional END-prefix glyphs and the image, but cannot hide either again.
+  bool     sawImageVisible           = false;
+  bool     sawImageElided            = false;
+  uint32_t previousVisibleGlyphCount = 0u;
+  bool     previousImageVisible      = false;
+  uint64_t generation                = 1u;
+  uint32_t heightEllipsisLayouts = 0u;
+  for(float height = 40.0f; height <= 400.0f; height += 2.0f)
+  {
+    Text::ReplacementRenderState    result            = layout(400.0f, height, generation++);
+    const Text::FinalElisionResult& finalElision      = result.finalElision;
+    const uint32_t                  visibleGlyphCount = finalElision.textElided
+                                                          ? static_cast<uint32_t>(CountVisibleOriginalGlyphs(finalElision))
+                                                          : static_cast<uint32_t>(result.processingModel->mVisualModel->mGlyphs.Count());
+    DALI_TEST_CHECK(visibleGlyphCount >= previousVisibleGlyphCount);
+    DALI_TEST_CHECK(!previousImageVisible || result.placements[0u].visible);
+    previousVisibleGlyphCount = visibleGlyphCount;
+    previousImageVisible      = result.placements[0u].visible;
+    sawImageVisible |= result.placements[0u].visible;
+    sawImageElided |= result.placements[0u].elided;
+    heightEllipsisLayouts += finalElision.textElided ? 1u : 0u;
+    result.Clear(services.bidirectionalSupport);
+  }
+  DALI_TEST_CHECK(sawImageVisible);
+  DALI_TEST_CHECK(sawImageElided);
+  DALI_TEST_CHECK(heightEllipsisLayouts > 0u);
+
+  // Width changes exercise line-count thresholds and must retain a single
+  // drawable ellipsis unit even when horizontal and vertical pressure meet.
+  // Visible text count may move at word-wrap thresholds, but a visible image
+  // cannot become hidden again as width increases.
+  uint32_t previousLineCount         = 0u;
+  bool     previousWidthImageVisible = false;
+  bool     sawLineCountChange        = false;
+  bool sawWidthImageVisible = false;
+  bool sawWidthImageElided = false;
+  uint32_t widthEllipsisLayouts = 0u;
+  for(float width = 120.0f; width <= 600.0f; width += 2.0f)
+  {
+    Text::ReplacementRenderState result    = layout(width, 367.0f, generation++);
+    const uint32_t               lineCount = static_cast<const uint32_t>(result.processingModel->mVisualModel->mLines.Count());
+    DALI_TEST_CHECK(!previousWidthImageVisible || result.placements[0u].visible);
+    sawLineCountChange |= previousLineCount != 0u && previousLineCount != lineCount;
+    previousWidthImageVisible = result.placements[0u].visible;
+    previousLineCount         = lineCount;
+    sawWidthImageVisible |= result.placements[0u].visible;
+    sawWidthImageElided |= result.placements[0u].elided;
+    widthEllipsisLayouts += result.finalElision.textElided ? 1u : 0u;
+    result.Clear(services.bidirectionalSupport);
+  }
+  DALI_TEST_CHECK(sawLineCountChange);
+  DALI_TEST_CHECK(sawWidthImageVisible);
+  DALI_TEST_CHECK(sawWidthImageElided);
+  DALI_TEST_CHECK(widthEllipsisLayouts > 0u);
+
+  // Reuse one controller across narrow/wide/narrow generations. The second
+  // resolve of an unchanged generation is an idempotent cache hit, and the
+  // renderer-facing ViewModel consumes that same immutable sequence.
+  Text::ReplacementSourceSnapshot source;
+  source.runs                        = candidates;
+  source.sourceRevision              = 271u;
+  source.hasValidReplacementSource   = true;
+  Text::ControllerPtr     controller = Text::Controller::New();
+  Text::Controller::Impl& impl       = Text::Controller::Impl::GetImplementation(*controller.Get());
+  controller->SetText(utf8);
+  controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  controller->SetMultiLineEnabled(true);
+  controller->SetLineWrapMode(Text::LineWrapMode::WORD);
+  controller->SetTextElideEnabled(true);
+  impl.GetOrCreateReplacementSourceSnapshot() = source;
+
+  controller->Relayout(Size(400.0f, 90.0f));
+  const uint64_t narrowGeneration = impl.GetReplacementRenderState().finalElision.layoutGeneration;
+  const bool     narrowVisible    = impl.GetReplacementRenderState().placements[0u].visible;
+  CheckFinalElisionContract(impl.GetReplacementRenderState());
+
+  controller->Relayout(Size(400.0f, 320.0f));
+  DALI_TEST_CHECK(
+    impl.GetReplacementRenderState().finalElision.layoutGeneration > narrowGeneration);
+  DALI_TEST_CHECK(!narrowVisible && impl.GetReplacementRenderState().placements[0u].visible);
+  CheckFinalElisionContract(impl.GetReplacementRenderState());
+
+  Text::FinalElisionResult& repeatedResult     = impl.GetOrCreateReplacementRenderState().finalElision;
+  const uint64_t            repeatedGeneration = repeatedResult.layoutGeneration;
+  const uint32_t            repeatedGlyphCount = static_cast<const uint32_t>(repeatedResult.glyphs.Count());
+  const Text::GlyphInfo*    repeatedGlyphData  = repeatedResult.glyphs.Begin();
+  impl.mView.ResolveFinalElision(impl.GetFontClient(), repeatedResult, repeatedGeneration);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(repeatedResult.glyphs.Count()), repeatedGlyphCount, TEST_LOCATION);
+  DALI_TEST_CHECK(repeatedResult.glyphs.Begin() == repeatedGlyphData);
+
+  Text::ViewModel rendererView(impl.GetReplacementRenderState().processingModel.Get());
+  rendererView.SetFinalElisionResult(&repeatedResult);
+  rendererView.ElideGlyphs(impl.GetFontClient());
+  const uint32_t expectedRendererGlyphCount = repeatedResult.textElided
+                                                ? static_cast<uint32_t>(repeatedResult.glyphs.Count())
+                                                : static_cast<uint32_t>(impl.GetReplacementRenderState().processingModel->mVisualModel->mGlyphs.Count());
+  DALI_TEST_EQUALS(rendererView.GetNumberOfGlyphs(), expectedRendererGlyphCount, TEST_LOCATION);
+
+  controller->Relayout(Size(400.0f, 90.0f));
+  DALI_TEST_CHECK(
+    impl.GetReplacementRenderState().finalElision.layoutGeneration > repeatedGeneration);
+  DALI_TEST_EQUALS(impl.GetReplacementRenderState().placements[0u].visible, narrowVisible, TEST_LOCATION);
+  CheckFinalElisionContract(impl.GetReplacementRenderState());
+
+  // Async renderScale may execute several measurement layouts, but the final
+  // render owns exactly one result and has the same logical image decision.
+  struct AsyncSummary
+  {
+    bool            visible{false};
+    bool            textElided{false};
+    uint32_t        generatedEllipsisCount{0u};
+    uint32_t        lineCount{0u};
+    Text::LineIndex ellipsisLineIndex{Text::FinalElisionResult::INVALID_LINE_INDEX};
+  };
+  auto renderAsync = [&](float renderScale, const Size& size, uint64_t requestGeneration)
+  {
+    uint32_t horizontalDpi = 0u;
+    uint32_t verticalDpi   = 0u;
+    TextAbstraction::FontClient::Get().GetDpi(horizontalDpi, verticalDpi);
+    Text::AsyncTextParameters parameters;
+    parameters.text                        = utf8;
+    parameters.fontSize                    = 18.0f * 72.0f / static_cast<float>(horizontalDpi);
+    parameters.textWidth                   = size.width;
+    parameters.textHeight                  = size.height;
+    parameters.isMultiLine                 = true;
+    parameters.lineWrapMode                = Text::LineWrapMode::WORD;
+    parameters.ellipsis                    = true;
+    parameters.renderScale                 = renderScale;
+    parameters.replacementSourceSnapshot   = source;
+    parameters.replacementLayoutGeneration = requestGeneration;
+
+    Text::AsyncTextLoader loader            = Text::AsyncTextLoader::New();
+    bool                  cachedNaturalSize = false;
+    Size                  naturalSize       = Size::ZERO;
+    if(renderScale > 1.0f)
+    {
+      naturalSize = loader.SetupRenderScale(parameters, cachedNaturalSize);
+    }
+    const Text::AsyncTextRenderInfo renderInfo = loader.RenderText(parameters, cachedNaturalSize, naturalSize);
+    const Text::ReplacementRenderState* state = Text::GetImplementation(loader).GetReplacementRenderState();
+    DALI_TEST_CHECK(state);
+    CheckFinalElisionContract(*state);
+    DALI_TEST_EQUALS(renderInfo.replacementPlacements.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(renderInfo.replacementPlacements[0u].visible, state->placements[0u].visible, TEST_LOCATION);
+    const Text::FinalElisionResult& finalElision = state->finalElision;
+    return AsyncSummary{state->placements[0u].visible,
+                        finalElision.textElided,
+                        CountGeneratedFinalGlyphs(finalElision),
+                        static_cast<uint32_t>(state->processingModel->mVisualModel->mLines.Count()),
+                        finalElision.ellipsisLineIndex};
+  };
+
+  const AsyncSummary scaleOneNarrow = renderAsync(1.0f, Size(400.0f, 90.0f), 500u);
+  const AsyncSummary scaleTwoNarrow = renderAsync(2.0f, Size(400.0f, 90.0f), 501u);
+  DALI_TEST_EQUALS(scaleTwoNarrow.visible, scaleOneNarrow.visible, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaleTwoNarrow.textElided, scaleOneNarrow.textElided, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaleTwoNarrow.generatedEllipsisCount, scaleOneNarrow.generatedEllipsisCount, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaleTwoNarrow.ellipsisLineIndex, scaleOneNarrow.ellipsisLineIndex, TEST_LOCATION);
+  const AsyncSummary scaleOneWide = renderAsync(1.0f, Size(400.0f, 320.0f), 502u);
+  const AsyncSummary scaleTwoWide = renderAsync(2.0f, Size(400.0f, 320.0f), 503u);
+  DALI_TEST_EQUALS(scaleTwoWide.visible, scaleOneWide.visible, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaleTwoWide.textElided, scaleOneWide.textElided, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaleTwoWide.generatedEllipsisCount, scaleOneWide.generatedEllipsisCount, TEST_LOCATION);
+  DALI_TEST_EQUALS(scaleTwoWide.ellipsisLineIndex, scaleOneWide.ellipsisLineIndex, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProductionSyncAsyncParityP(void)
+{
+  UiTestApplication application;
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(0u, 2u, 28.0f, 20.0f, 700u));
+  source.sourceRevision            = 41u;
+  source.hasValidReplacementSource = true;
+
+  Text::ControllerPtr     controller     = Text::Controller::New();
+  Text::Controller::Impl& controllerImpl = Text::Controller::Impl::GetImplementation(*controller.Get());
+  controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  controller->SetRelativeLineSize(1.0f);
+  controller->SetUiScale(1.5f);
+  controller->SetText("ab");
+  DALI_TEST_CHECK(!controllerImpl.mReplacementData);
+  controllerImpl.GetOrCreateReplacementSourceSnapshot() = source;
+  DALI_TEST_CHECK(controllerImpl.mReplacementData);
+  controller->Relayout(Size(160.0f, 60.0f));
+
+  const Text::ReplacementRenderState& sync = controllerImpl.GetReplacementRenderState();
+  DALI_TEST_CHECK(sync.attempted);
+  DALI_TEST_EQUALS(sync.sourceRevision, 41u, TEST_LOCATION);
+  DALI_TEST_EQUALS(sync.projection.GetReplacementRuns().Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(CountSyntheticGlyphs(sync), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(sync.placements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(sync.placements[0u].size, Vector2(42.0f, 30.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(source.runs[0u].metrics.width, 28.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(source.runs[0u].metrics.height, 20.0f, TEST_LOCATION);
+
+  uint32_t horizontalDpi = 0u;
+  uint32_t verticalDpi   = 0u;
+  TextAbstraction::FontClient::Get().GetDpi(horizontalDpi, verticalDpi);
+
+  Text::AsyncTextParameters parameters;
+  parameters.text                        = "ab";
+  parameters.fontSize                    = 18.0f * 72.0f / static_cast<float>(horizontalDpi);
+  parameters.textWidth                   = 160.0f;
+  parameters.textHeight                  = 60.0f;
+  parameters.ellipsis                    = false;
+  parameters.replacementSourceSnapshot   = source;
+  parameters.replacementLayoutGeneration = 77u;
+  parameters.effectiveTextScale          = 1.5f;
+
+  Text::AsyncTextLoader               asyncLoader = Text::AsyncTextLoader::New();
+  const Text::AsyncTextRenderInfo     asyncInfo   = asyncLoader.GetHeightForWidth(parameters);
+
+  const Text::ReplacementRenderState* asyncRenderState =
+    Text::GetImplementation(asyncLoader).GetReplacementRenderState();
+
+  DALI_TEST_CHECK(asyncRenderState);
+  DALI_TEST_CHECK(asyncRenderState->attempted);
+  DALI_TEST_EQUALS(asyncRenderState->sourceRevision, sync.sourceRevision, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->layoutGeneration, 77u, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->projection.GetMode(), sync.projection.GetMode(), TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->projection.GetProcessingCharacterCount(),
+                   sync.projection.GetProcessingCharacterCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(CountSyntheticGlyphs(*asyncRenderState), CountSyntheticGlyphs(sync), TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->processingModel->mVisualModel->mLines.Count(),
+                   sync.processingModel->mVisualModel->mLines.Count(), TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements.Count(), sync.placements.Count(), TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].logicalCharacterRange.characterIndex,
+                   sync.placements[0u].logicalCharacterRange.characterIndex, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].logicalCharacterRange.numberOfCharacters,
+                   sync.placements[0u].logicalCharacterRange.numberOfCharacters, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].size, sync.placements[0u].size, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].position.x, sync.placements[0u].position.x,
+                   Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].position.y, sync.placements[0u].position.y,
+                   Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].lineIndex, sync.placements[0u].lineIndex, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].visible, sync.placements[0u].visible, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncRenderState->placements[0u].elided, sync.placements[0u].elided, TEST_LOCATION);
+  const Text::FinalElisionResult& syncFinal  = sync.finalElision;
+  const Text::FinalElisionResult& asyncFinal = asyncRenderState->finalElision;
+  DALI_TEST_EQUALS(asyncFinal.textElided, syncFinal.textElided, TEST_LOCATION);
+  DALI_TEST_EQUALS(CountGeneratedFinalGlyphs(asyncFinal), CountGeneratedFinalGlyphs(syncFinal), TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncFinal.ellipsisLineIndex, syncFinal.ellipsisLineIndex, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncInfo.replacementSourceRevision, 41u, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncInfo.replacementLayoutGeneration, 77u, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncInfo.replacementPlacements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncInfo.lineCount,
+                   static_cast<int>(asyncRenderState->processingModel->GetNumberOfLines()),
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncInfo.isTextDirectionRTL,
+                   asyncRenderState->processingModel->mVisualModel->mLines[0u].direction,
+                   TEST_LOCATION);
+
+  // Natural-size requests also replace the final placement state from their final Layout() call.
+  controller->GetNaturalSize(false);
+  const Size syncNaturalLayoutSize          = sync.layoutSize;
+  parameters.replacementLayoutGeneration    = 78u;
+  const Text::AsyncTextRenderInfo newerInfo = asyncLoader.GetNaturalSize(parameters);
+
+  // Previous asyncRenderState is invalidated. Get new render state.
+  const Text::ReplacementRenderState* newAsyncRenderState =
+    Text::GetImplementation(asyncLoader).GetReplacementRenderState();
+  DALI_TEST_EQUALS(newAsyncRenderState->layoutSize.width, syncNaturalLayoutSize.width,
+                   Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(newAsyncRenderState->layoutSize.height, syncNaturalLayoutSize.height,
+                   Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(newerInfo.replacementPlacements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(newerInfo.replacementLayoutGeneration, 78u, TEST_LOCATION);
+  DALI_TEST_EQUALS(newerInfo.lineCount,
+                   static_cast<int>(newAsyncRenderState->processingModel->GetNumberOfLines()),
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(newerInfo.isTextDirectionRTL,
+                   newAsyncRenderState->processingModel->mVisualModel->mLines[0u].direction,
+                   TEST_LOCATION);
+
+  // Sync and async removal both clear the newer generation without invoking projection.
+  controllerImpl.InvalidateReplacementRenderState();
+  controllerImpl.ClearReplacementData();
+  controller->Relayout(Size(161.0f, 60.0f));
+  const Text::ReplacementRenderState& removedSync = controllerImpl.GetReplacementRenderState();
+  DALI_TEST_CHECK(!removedSync.attempted);
+  DALI_TEST_EQUALS(removedSync.placements.Count(), 0u, TEST_LOCATION);
+
+  parameters.replacementSourceSnapshot.runs.Clear();
+  parameters.replacementSourceSnapshot.hasValidReplacementSource = false;
+  const Text::AsyncTextRenderInfo removedInfo = asyncLoader.GetNaturalSize(parameters);
+  DALI_TEST_EQUALS(removedInfo.replacementPlacements.Count(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(removedInfo.replacementSourceRevision, 0u, TEST_LOCATION);
+  DALI_TEST_CHECK(Text::GetImplementation(asyncLoader).GetReplacementRenderState() == nullptr);
+
+  controller->SetText("plain");
+  DALI_TEST_CHECK(!controllerImpl.mReplacementData);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementGradientSpanSyncAsyncParityP(void)
+{
+  UiTestApplication application;
+
+  const std::string          sourceText = "Left\uFFFCRight";
+  Dali::Ui::Gradient::Linear gradient(Vector2(12.0f, 4.0f), Vector2(180.0f, 36.0f));
+  gradient.SetUnits(Dali::Ui::Gradient::Units::USER_SPACE);
+  gradient.SetSpreadMethod(Dali::Ui::Gradient::SpreadMethod::REFLECT);
+  gradient.SetStartOffset(0.2f);
+  gradient.SetStopNodes({Dali::Ui::Gradient::StopNode(0.0f, UiColor(Color::RED)),
+                         Dali::Ui::Gradient::StopNode(0.5f, UiColor(Color::GREEN)),
+                         Dali::Ui::Gradient::StopNode(1.0f, UiColor(Color::BLUE))});
+
+  Text::StyledTextBuilder builder = Text::StyledTextBuilder::New(sourceText.c_str());
+  DALI_TEST_CHECK(builder.SetSpan(
+    Text::GradientSpan::New(gradient, Text::GradientSpan::BoundsMode::SPAN_BOUND), 0u, 10u));
+  DALI_TEST_CHECK(builder.SetSpan(
+    Text::ImageSpan::New(Text::ImageAttributes("unused-gradient-replacement.png", Vector2(24.0f, 18.0f))),
+    4u,
+    5u));
+  const Text::StyledText styledText = builder.Build();
+
+  Text::ControllerPtr     controller     = Text::Controller::New();
+  Text::Controller::Impl& controllerImpl = Text::Controller::Impl::GetImplementation(*controller.Get());
+  controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+  controller->SetStyledText(styledText);
+  controller->Relayout(Size(240.0f, 80.0f));
+
+  const Text::ReplacementRenderState& sync = controllerImpl.GetReplacementRenderState();
+  DALI_TEST_CHECK(sync.attempted);
+  DALI_TEST_CHECK(sync.processingModel);
+  DALI_TEST_EQUALS(sync.placements.Count(), 1u, TEST_LOCATION);
+  const auto* syncGradientData = sync.processingModel->GetGradientSpanModelData();
+  DALI_TEST_CHECK(syncGradientData);
+  DALI_TEST_EQUALS(syncGradientData->paints.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(syncGradientData->characterRuns.Count(), 2u, TEST_LOCATION);
+  CheckGradientSpanRun(syncGradientData->characterRuns[0u], 0u, 4u, 1u);
+  CheckGradientSpanRun(syncGradientData->characterRuns[1u], 5u, 5u, 1u);
+  DALI_TEST_EQUALS(syncGradientData->glyphPaintIndices.Count(),
+                   sync.processingModel->mVisualModel->mGlyphs.Count(), TEST_LOCATION);
+  DALI_TEST_EQUALS(syncGradientData->glyphPaintIndices[sync.placements[0u].syntheticGlyphIndex],
+                   0u,
+                   TEST_LOCATION);
+  DALI_TEST_CHECK(std::find(syncGradientData->glyphPaintIndices.Begin(),
+                            syncGradientData->glyphPaintIndices.End(),
+                            1u) != syncGradientData->glyphPaintIndices.End());
+  DALI_TEST_EQUALS(static_cast<uint32_t>(syncGradientData->paints[0u].style.units),
+                   static_cast<uint32_t>(Dali::Ui::Gradient::Units::USER_SPACE), TEST_LOCATION);
+  DALI_TEST_EQUALS(static_cast<uint32_t>(syncGradientData->paints[0u].boundsMode),
+                   static_cast<uint32_t>(Text::GradientSpan::BoundsMode::SPAN_BOUND), TEST_LOCATION);
+
+  Text::AsyncTextParameters parameters;
+  parameters.text                       = sourceText;
+  parameters.fontSize                   = 18.0f;
+  parameters.textColor                  = Color::BLACK;
+  parameters.textWidth                  = 240.0f;
+  parameters.textHeight                 = 80.0f;
+  parameters.originWidth                = parameters.textWidth;
+  parameters.originHeight               = parameters.textHeight;
+  parameters.maxTextureSize             = 4096;
+  parameters.requestType                = Dali::Ui::Integration::Text::Async::RENDER_FIXED_SIZE;
+  parameters.hasStyledTextStyleSnapshot = true;
+  parameters.styledTextStyleSnapshot =
+    Dali::Ui::Internal::Text::StyledTextApplier::BuildTextStyleRunSnapshot(styledText, 96.0f);
+  parameters.replacementSourceSnapshot =
+    Dali::Ui::Internal::Text::StyledTextApplier::BuildReplacementSourceSnapshot(styledText, 901u);
+  parameters.replacementLayoutGeneration = 801u;
+
+  Text::AsyncTextLoader           asyncLoader = Text::AsyncTextLoader::New();
+  const Text::AsyncTextRenderInfo asyncInfo   = asyncLoader.RenderText(parameters, false, Size::ZERO);
+  DALI_TEST_CHECK(asyncInfo.textPixelData);
+  DALI_TEST_EQUALS(asyncInfo.textPixelData.GetPixelFormat(), Pixel::RGBA8888, TEST_LOCATION);
+  DALI_TEST_CHECK(asyncInfo.hasMultipleTextColors);
+  const Text::ReplacementRenderState* async = Text::GetImplementation(asyncLoader).GetReplacementRenderState();
+  DALI_TEST_CHECK(async);
+  DALI_TEST_CHECK(async->processingModel);
+  const auto* asyncGradientData = async->processingModel->GetGradientSpanModelData();
+  DALI_TEST_CHECK(asyncGradientData);
+  DALI_TEST_EQUALS(asyncGradientData->characterRuns.Count(), 2u, TEST_LOCATION);
+  CheckGradientSpanRun(asyncGradientData->characterRuns[0u], 0u, 4u, 1u);
+  CheckGradientSpanRun(asyncGradientData->characterRuns[1u], 5u, 5u, 1u);
+  DALI_TEST_EQUALS(asyncGradientData->glyphPaintIndices.Count(),
+                   async->processingModel->mVisualModel->mGlyphs.Count(), TEST_LOCATION);
+  DALI_TEST_EQUALS(asyncGradientData->glyphPaintIndices[async->placements[0u].syntheticGlyphIndex],
+                   0u,
+                   TEST_LOCATION);
+
+  // One loader is reused across styled replacement -> plain -> styled replacement transitions.
+  Text::AsyncTextParameters plainParameters;
+  plainParameters.text                      = "plain source";
+  plainParameters.fontSize                  = parameters.fontSize;
+  plainParameters.textColor                 = parameters.textColor;
+  plainParameters.textWidth                 = parameters.textWidth;
+  plainParameters.textHeight                = parameters.textHeight;
+  plainParameters.originWidth               = parameters.originWidth;
+  plainParameters.originHeight              = parameters.originHeight;
+  plainParameters.maxTextureSize            = parameters.maxTextureSize;
+  plainParameters.requestType               = parameters.requestType;
+  const Text::AsyncTextRenderInfo plainInfo = asyncLoader.RenderText(plainParameters, false, Size::ZERO);
+  DALI_TEST_CHECK(plainInfo.textPixelData);
+  DALI_TEST_CHECK(!plainInfo.hasMultipleTextColors);
+  DALI_TEST_CHECK(Text::GetImplementation(asyncLoader).GetReplacementRenderState() == nullptr);
+
+  parameters.replacementLayoutGeneration       = 802u;
+  const Text::AsyncTextRenderInfo restoredInfo = asyncLoader.RenderText(parameters, false, Size::ZERO);
+  DALI_TEST_CHECK(restoredInfo.textPixelData);
+  DALI_TEST_EQUALS(restoredInfo.textPixelData.GetPixelFormat(), Pixel::RGBA8888, TEST_LOCATION);
+  DALI_TEST_CHECK(restoredInfo.hasMultipleTextColors);
+  const Text::ReplacementRenderState* restored = Text::GetImplementation(asyncLoader).GetReplacementRenderState();
+  DALI_TEST_CHECK(restored);
+  DALI_TEST_CHECK(restored->processingModel->GetGradientSpanModelData());
+  DALI_TEST_EQUALS(restored->processingModel->GetGradientSpanModelData()->characterRuns.Count(),
+                   2u,
+                   TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliReplacementAsyncRenderScalePlacementP(void)
+{
+  UiTestApplication application;
+
+  uint32_t horizontalDpi = 0u;
+  uint32_t verticalDpi   = 0u;
+  TextAbstraction::FontClient::Get().GetDpi(horizontalDpi, verticalDpi);
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(0u, 2u, 28.0f, 20.0f, 750u));
+  source.sourceRevision            = 51u;
+  source.hasValidReplacementSource = true;
+
+  Text::AsyncTextParameters parameters;
+  parameters.text                        = "ab";
+  parameters.fontSize                    = 18.0f * 72.0f / static_cast<float>(horizontalDpi);
+  parameters.textWidth                   = 160.0f;
+  parameters.textHeight                  = 60.0f;
+  parameters.renderScale                 = 2.0f;
+  parameters.effectiveTextScale          = 1.5f;
+  parameters.replacementSourceSnapshot   = source;
+  parameters.replacementLayoutGeneration = 81u;
+
+  Text::AsyncTextLoader               loader            = Text::AsyncTextLoader::New();
+  bool                                cachedNaturalSize = false;
+  const Size                          naturalSize       = loader.SetupRenderScale(parameters, cachedNaturalSize);
+  const Text::AsyncTextRenderInfo     renderInfo        = loader.RenderText(parameters, cachedNaturalSize, naturalSize);
+  const Text::ReplacementRenderState* processing =
+    Text::GetImplementation(loader).GetReplacementRenderState();
+
+  DALI_TEST_CHECK(processing);
+  DALI_TEST_CHECK(processing->processingModel);
+  DALI_TEST_EQUALS(processing->placements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(processing->placements[0u].size, Vector2(84.0f, 60.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(renderInfo.replacementPlacements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(renderInfo.replacementPlacements[0u].size, Vector2(42.0f, 30.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(source.runs[0u].metrics.width, 28.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(source.runs[0u].metrics.height, 20.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(renderInfo.replacementPlacements[0u].position.x,
+                   processing->placements[0u].position.x * 0.5f,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(renderInfo.replacementPlacements[0u].position.y,
+                   processing->placements[0u].position.y * 0.5f,
+                   Math::MACHINE_EPSILON_1000,
+                   TEST_LOCATION);
+  DALI_TEST_EQUALS(renderInfo.replacementSourceRevision, 51u, TEST_LOCATION);
+  DALI_TEST_EQUALS(renderInfo.replacementLayoutGeneration, 81u, TEST_LOCATION);
+
+  struct LineHeightSummary
+  {
+    float    lineHeight{0.0f};
+    float    textHeight{0.0f};
+    float    lineSpacing{0.0f};
+    float    selectedPointSize{0.0f};
+    uint32_t lineCount{0u};
+  };
+
+  enum class LineHeightFitMode
+  {
+    NONE,
+    RANGE,
+    CANDIDATES
+  };
+
+  auto renderLineHeight = [horizontalDpi](float renderScale, float effectiveTextScale,
+                                          float relativeLineSize, float minimumLineSize,
+                                          LineHeightFitMode fitMode)
+  {
+    Text::AsyncTextParameters lineParameters;
+    lineParameters.text               = "First line\nSecond \xEF\xBF\xBC line";
+    lineParameters.fontSize           = 18.0f * 72.0f / static_cast<float>(horizontalDpi);
+    lineParameters.textWidth          = 300.0f;
+    lineParameters.textHeight         = 200.0f;
+    lineParameters.isMultiLine        = true;
+    lineParameters.renderScale        = renderScale;
+    lineParameters.effectiveTextScale = effectiveTextScale;
+    lineParameters.relativeLineSize   = relativeLineSize;
+    lineParameters.minLineSize        = minimumLineSize;
+    if(fitMode == LineHeightFitMode::RANGE)
+    {
+      lineParameters.isTextFitEnabled = true;
+      lineParameters.textFitMinSize   = lineParameters.fontSize;
+      lineParameters.textFitMaxSize   = lineParameters.fontSize;
+      lineParameters.textFitStepSize  = 1.0f;
+    }
+    else if(fitMode == LineHeightFitMode::CANDIDATES)
+    {
+      lineParameters.isTextFitCandidatesEnabled = true;
+      lineParameters.textFitCandidates.PushBack(Text::Fit::Candidate(18.0f, 0.0f));
+    }
+    lineParameters.replacementSourceSnapshot.runs.PushBack(Candidate(18u, 1u, 8.0f, 8.0f, 901u));
+    lineParameters.replacementSourceSnapshot.hasValidReplacementSource = true;
+
+    Text::AsyncTextLoader lineLoader  = Text::AsyncTextLoader::New();
+    bool                  cached      = false;
+    Size                  naturalSize = Size::ZERO;
+    if(renderScale > 1.0f)
+    {
+      naturalSize = lineLoader.SetupRenderScale(lineParameters, cached);
+    }
+    if(fitMode == LineHeightFitMode::NONE)
+    {
+      lineLoader.RenderText(lineParameters, cached, naturalSize);
+    }
+    else
+    {
+      lineLoader.RenderTextFit(lineParameters, cached, naturalSize);
+    }
+
+    const Text::ReplacementRenderState* state = Text::GetImplementation(lineLoader).GetReplacementRenderState();
+    DALI_TEST_CHECK(state && state->processingModel);
+    const Text::Model*           model = state->processingModel.Get();
+    const Vector<Text::LineRun>& lines = model->mVisualModel->mLines;
+    DALI_TEST_CHECK(lines.Count() >= 2u);
+    const Text::LineRun& firstLine = lines[0u];
+    return LineHeightSummary{Text::GetLineHeight(firstLine, false),
+                             firstLine.ascender - firstLine.descender,
+                             firstLine.lineSpacing,
+                             lineParameters.fontSize,
+                             static_cast<uint32_t>(lines.Count())};
+  };
+
+  // RenderScale changes raster resolution only. After normalizing worker
+  // coordinates, explicit relative line height must match scale 1.
+  for(float effectiveTextScale : {1.0f, 1.5f})
+  {
+    for(float renderScale : {1.0f, 1.25f, 1.5f, 2.0f})
+    {
+      const LineHeightSummary summary =
+        renderLineHeight(renderScale, effectiveTextScale, 1.6f, 0.0f, LineHeightFitMode::NONE);
+      const float expectedLineHeight = std::floor(18.0f * effectiveTextScale * renderScale * 1.6f);
+      DALI_TEST_EQUALS(summary.lineHeight,
+                       expectedLineHeight,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_CHECK(summary.lineSpacing > 0.0f);
+    }
+  }
+
+  // TextFit selects an effective point size before Layout(). RenderScale is
+  // applied exactly once to the relative line-height reference for both fit
+  // algorithms.
+  for(LineHeightFitMode fitMode : {LineHeightFitMode::RANGE, LineHeightFitMode::CANDIDATES})
+  {
+    const LineHeightSummary scaleOne = renderLineHeight(1.0f, 1.5f, 1.6f, 0.0f, fitMode);
+    const LineHeightSummary scaleTwo = renderLineHeight(2.0f, 1.5f, 1.6f, 0.0f, fitMode);
+    DALI_TEST_EQUALS(scaleTwo.selectedPointSize,
+                     scaleOne.selectedPointSize,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(scaleTwo.lineHeight,
+                     std::floor(scaleOne.lineHeight * 2.0f),
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+  }
+
+  // AUTO and absolute line height already use scaled text/minimum metrics and
+  // remain compatibility sentinels for the narrowly scoped relative fix.
+  for(const auto& mode : {std::pair<float, float>{-1.0f, 0.0f},
+                          std::pair<float, float>{-1.0f, 40.0f}})
+  {
+    const LineHeightSummary scaleOne =
+      renderLineHeight(1.0f, 1.0f, mode.first, mode.second, LineHeightFitMode::NONE);
+    const LineHeightSummary scaleTwo =
+      renderLineHeight(2.0f, 1.0f, mode.first, mode.second, LineHeightFitMode::NONE);
+    DALI_TEST_EQUALS(scaleTwo.lineCount, scaleOne.lineCount, TEST_LOCATION);
+    DALI_TEST_EQUALS(scaleTwo.lineHeight / 2.0f, scaleOne.lineHeight,
+                     Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  }
+
+  struct BoundarySummary
+  {
+    float ordinaryLineHeight{0.0f};
+    bool  replacementVisible{false};
+  };
+
+  auto renderBoundary = [horizontalDpi](float renderScale, float textHeight, LineHeightFitMode fitMode)
+  {
+    Text::AsyncTextParameters boundaryParameters;
+    boundaryParameters.text = "first\nsecond\nthird\n\xEF\xBF\xBC";
+    // A fractional 26.6 point size makes the mock font expose the same
+    // high-resolution metric rounding which real hinted fonts exhibit.
+    boundaryParameters.fontSize         = 13.337f;
+    boundaryParameters.textWidth        = 300.0f;
+    boundaryParameters.textHeight       = textHeight;
+    boundaryParameters.isMultiLine      = true;
+    boundaryParameters.ellipsis         = true;
+    boundaryParameters.relativeLineSize = -1.0f;
+    boundaryParameters.renderScale      = renderScale;
+    if(fitMode == LineHeightFitMode::RANGE)
+    {
+      boundaryParameters.isTextFitEnabled = true;
+      boundaryParameters.textFitMinSize   = boundaryParameters.fontSize;
+      boundaryParameters.textFitMaxSize   = boundaryParameters.fontSize;
+      boundaryParameters.textFitStepSize  = 1.0f;
+    }
+    else if(fitMode == LineHeightFitMode::CANDIDATES)
+    {
+      boundaryParameters.isTextFitCandidatesEnabled = true;
+      boundaryParameters.textFitCandidates.PushBack(
+        Text::Fit::Candidate(boundaryParameters.fontSize * static_cast<float>(horizontalDpi) / 72.0f, 0.0f));
+    }
+    boundaryParameters.replacementSourceSnapshot.runs.PushBack(Candidate(19u, 1u, 120.0f, 120.0f, 902u));
+    boundaryParameters.replacementSourceSnapshot.hasValidReplacementSource = true;
+
+    Text::AsyncTextLoader boundaryLoader = Text::AsyncTextLoader::New();
+    bool                  cached         = false;
+    Size                  naturalSize    = Size::ZERO;
+    if(renderScale > 1.0f)
+    {
+      naturalSize = boundaryLoader.SetupRenderScale(boundaryParameters, cached);
+    }
+    if(fitMode == LineHeightFitMode::NONE)
+    {
+      boundaryLoader.RenderText(boundaryParameters, cached, naturalSize);
+    }
+    else
+    {
+      boundaryLoader.RenderTextFit(boundaryParameters, cached, naturalSize);
+    }
+
+    const Text::ReplacementRenderState* state = Text::GetImplementation(boundaryLoader).GetReplacementRenderState();
+    DALI_TEST_CHECK(state && state->processingModel);
+    DALI_TEST_EQUALS(state->placements.Count(), 1u, TEST_LOCATION);
+    const Vector<Text::LineRun>& lines = state->processingModel->mVisualModel->mLines;
+    DALI_TEST_CHECK(!lines.Empty());
+    return BoundarySummary{Text::GetLineHeight(lines[0u], false) / renderScale,
+                           state->placements[0u].visible};
+  };
+
+  // AUTO must make the same boundary decision at every raster scale. The
+  // fourth line fits exactly at scale 1 and contains the replacement.
+  const BoundarySummary unconstrained = renderBoundary(1.0f, 500.0f, LineHeightFitMode::NONE);
+  const float           exactHeight   = std::ceil(unconstrained.ordinaryLineHeight * 3.0f + 120.0f);
+  const BoundarySummary scaleOne      = renderBoundary(1.0f, exactHeight, LineHeightFitMode::NONE);
+  DALI_TEST_CHECK(scaleOne.replacementVisible);
+  DALI_TEST_CHECK(!renderBoundary(1.0f, exactHeight - 1.0f, LineHeightFitMode::NONE).replacementVisible);
+  for(float renderScale : {1.25f, 1.5f, 2.0f})
+  {
+    const BoundarySummary scaled = renderBoundary(renderScale, exactHeight, LineHeightFitMode::NONE);
+    DALI_TEST_CHECK(scaled.replacementVisible);
+    DALI_TEST_EQUALS(scaled.ordinaryLineHeight,
+                     scaleOne.ordinaryLineHeight,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+  }
+
+  // TextFit changes the selected point size but not the RenderScale contract:
+  // AUTO must retain the same exact replacement boundary for both fit modes.
+  for(LineHeightFitMode fitMode : {LineHeightFitMode::RANGE, LineHeightFitMode::CANDIDATES})
+  {
+    const BoundarySummary fitScaleOne = renderBoundary(1.0f, exactHeight, fitMode);
+    DALI_TEST_CHECK(fitScaleOne.replacementVisible);
+    DALI_TEST_CHECK(!renderBoundary(1.0f, exactHeight - 1.0f, fitMode).replacementVisible);
+    for(float renderScale : {1.25f, 1.5f, 2.0f})
+    {
+      const BoundarySummary scaled = renderBoundary(renderScale, exactHeight, fitMode);
+      DALI_TEST_CHECK(scaled.replacementVisible);
+      DALI_TEST_CHECK(std::fabs(scaled.ordinaryLineHeight - fitScaleOne.ordinaryLineHeight) <= 0.5f);
+    }
+  }
+
+  struct PlacementSummary
+  {
+    Vector2 position;
+    Vector2 size;
+  };
+  const auto renderPlacement = [](float renderScale, Text::ReplacementVerticalAlignment alignment)
+  {
+    const std::string placementText = "Latin 😀 مرحبا before \xEF\xBF\xBC 한국어 after";
+    const Vector<Text::Character> characters = Utf32(placementText);
+    Text::CharacterIndex replacementIndex = 0u;
+    while(replacementIndex < characters.Count() && characters[replacementIndex] != 0xFFFCu)
+    {
+      ++replacementIndex;
+    }
+    DALI_TEST_CHECK(replacementIndex < characters.Count());
+
+    Text::AsyncTextParameters placementParameters;
+    placementParameters.text             = placementText;
+    placementParameters.fontSize         = 13.337f;
+    placementParameters.textWidth        = 500.0f;
+    placementParameters.textHeight       = 120.0f;
+    placementParameters.originWidth      = placementParameters.textWidth;
+    placementParameters.originHeight     = placementParameters.textHeight;
+    placementParameters.isMultiLine      = true;
+    placementParameters.relativeLineSize = -1.0f;
+    placementParameters.renderScale      = renderScale;
+    placementParameters.maxTextureSize   = 4096;
+    placementParameters.replacementSourceSnapshot.runs.PushBack(
+      Candidate(replacementIndex, 1u, 42.0f, 30.0f, 904u));
+    placementParameters.replacementSourceSnapshot.runs[0u].metrics.verticalAlignment = alignment;
+    placementParameters.replacementSourceSnapshot.hasValidReplacementSource = true;
+
+    Text::AsyncTextLoader placementLoader = Text::AsyncTextLoader::New();
+    bool                  cached          = false;
+    Size                  naturalSize     = Size::ZERO;
+    if(renderScale > 1.0f)
+    {
+      naturalSize = placementLoader.SetupRenderScale(placementParameters, cached);
+    }
+    placementLoader.RenderText(placementParameters, cached, naturalSize);
+    const Text::ReplacementRenderState* state =
+      Text::GetImplementation(placementLoader).GetReplacementRenderState();
+    DALI_TEST_CHECK(state && state->placements.Count() == 1u);
+    DALI_TEST_CHECK(state->placements[0u].visible);
+    return PlacementSummary{state->placements[0u].position / renderScale,
+                            state->placements[0u].size / renderScale};
+  };
+
+  for(const Text::ReplacementVerticalAlignment alignment : {
+        Text::ReplacementVerticalAlignment::TEXT_BASELINE,
+        Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+        Text::ReplacementVerticalAlignment::TEXT_CENTER})
+  {
+    const PlacementSummary logical = renderPlacement(1.0f, alignment);
+    for(float renderScale : {1.25f, 1.5f, 2.0f})
+    {
+      const PlacementSummary scaled = renderPlacement(renderScale, alignment);
+      DALI_TEST_EQUALS(scaled.position.y, logical.position.y, 0.01f, TEST_LOCATION);
+      DALI_TEST_EQUALS(scaled.size, logical.size, 0.01f, TEST_LOCATION);
+    }
+  }
+
+  struct ReuseLineSummary
+  {
+    float ascender{0.0f};
+    float descender{0.0f};
+    float lineSpacing{0.0f};
+  };
+  struct ReuseSummary
+  {
+    std::vector<ReuseLineSummary> lines;
+    Size                          renderedSize;
+    Size                          layoutSize;
+    Vector2                       replacementPosition;
+    Text::ReplacementCaretMetric  leadingCaret;
+    Text::ReplacementCaretMetric  trailingCaret;
+    Text::LineIndex               replacementLine{0u};
+    Text::LineIndex               ellipsisLine{Text::FinalElisionResult::INVALID_LINE_INDEX};
+    int                           renderLineCount{0};
+    bool                          hasReplacement{false};
+    bool                          replacementVisible{false};
+    bool                          textElided{false};
+  };
+  struct ReuseCase
+  {
+    float renderScale;
+    float relativeLineSize;
+    float minimumLineSize;
+    bool  replacement;
+  };
+
+  const auto renderReuseCase = [](Text::AsyncTextLoader& reuseLoader, const ReuseCase& testCase)
+  {
+    Text::AsyncTextParameters reuseParameters;
+    reuseParameters.text             = "first\nsecond\nthird\n\xEF\xBF\xBC trailing words";
+    reuseParameters.fontSize         = 13.337f;
+    reuseParameters.textWidth        = 300.0f;
+    reuseParameters.textHeight       = 170.0f;
+    reuseParameters.originWidth      = reuseParameters.textWidth;
+    reuseParameters.originHeight     = reuseParameters.textHeight;
+    reuseParameters.isMultiLine      = true;
+    reuseParameters.ellipsis         = true;
+    reuseParameters.relativeLineSize = testCase.relativeLineSize;
+    reuseParameters.minLineSize      = testCase.minimumLineSize;
+    reuseParameters.renderScale      = testCase.renderScale;
+    reuseParameters.maxTextureSize   = 4096;
+    if(testCase.replacement)
+    {
+      reuseParameters.replacementSourceSnapshot.runs.PushBack(Candidate(19u, 1u, 120.0f, 120.0f, 903u));
+      reuseParameters.replacementSourceSnapshot.hasValidReplacementSource = true;
+    }
+
+    bool cached      = false;
+    Size naturalSize = Size::ZERO;
+    if(testCase.renderScale > 1.0f)
+    {
+      naturalSize = reuseLoader.SetupRenderScale(reuseParameters, cached);
+    }
+    const Text::AsyncTextRenderInfo renderInfo = reuseLoader.RenderText(reuseParameters, cached, naturalSize);
+
+    ReuseSummary summary;
+    summary.renderedSize    = renderInfo.renderedSize;
+    summary.renderLineCount = renderInfo.lineCount;
+    const Text::ReplacementRenderState* state =
+      Text::GetImplementation(reuseLoader).GetReplacementRenderState();
+    if(!testCase.replacement)
+    {
+      DALI_TEST_CHECK(state == nullptr);
+      DALI_TEST_CHECK(renderInfo.replacementPlacements.Empty());
+      return summary;
+    }
+
+    DALI_TEST_CHECK(state && state->processingModel);
+    DALI_TEST_EQUALS(state->placements.Count(), 1u, TEST_LOCATION);
+    summary.hasReplacement      = true;
+    summary.layoutSize          = state->layoutSize;
+    summary.replacementVisible  = state->placements[0u].visible;
+    summary.textElided          = state->finalElision.textElided;
+    summary.ellipsisLine        = state->finalElision.ellipsisLineIndex;
+    summary.replacementLine     = state->placements[0u].lineIndex;
+    summary.replacementPosition = state->placements[0u].position;
+    summary.leadingCaret        = state->placements[0u].leadingCaretMetric;
+    summary.trailingCaret       = state->placements[0u].trailingCaretMetric;
+    for(const Text::LineRun& line : state->processingModel->mVisualModel->mLines)
+    {
+      summary.lines.push_back(ReuseLineSummary{line.ascender, line.descender, line.lineSpacing});
+    }
+    return summary;
+  };
+
+  const auto compareReuseSummary = [](const ReuseSummary& actual, const ReuseSummary& expected)
+  {
+    DALI_TEST_EQUALS(actual.renderedSize, expected.renderedSize, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.renderLineCount, expected.renderLineCount, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.hasReplacement, expected.hasReplacement, TEST_LOCATION);
+    if(!expected.hasReplacement)
+    {
+      return;
+    }
+    DALI_TEST_EQUALS(actual.layoutSize, expected.layoutSize, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.replacementVisible, expected.replacementVisible, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.textElided, expected.textElided, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.ellipsisLine, expected.ellipsisLine, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.replacementLine, expected.replacementLine, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.replacementPosition,
+                     expected.replacementPosition,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.leadingCaret.ascender,
+                     expected.leadingCaret.ascender,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.leadingCaret.height,
+                     expected.leadingCaret.height,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.trailingCaret.ascender,
+                     expected.trailingCaret.ascender,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.trailingCaret.height,
+                     expected.trailingCaret.height,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.lines.size(), expected.lines.size(), TEST_LOCATION);
+    for(std::size_t index = 0u; index < expected.lines.size(); ++index)
+    {
+      DALI_TEST_EQUALS(actual.lines[index].ascender,
+                       expected.lines[index].ascender,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(actual.lines[index].descender,
+                       expected.lines[index].descender,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(actual.lines[index].lineSpacing,
+                       expected.lines[index].lineSpacing,
+                       Math::MACHINE_EPSILON_1000,
+                       TEST_LOCATION);
+    }
+  };
+
+  // A pooled loader is reused for dissimilar jobs. Every result must match a
+  // fresh loader, proving that request-local AUTO metric data cannot leak.
+  const ReuseCase reuseCases[] = {
+    {2.0f, -1.0f, 0.0f, true},  // replacement AUTO
+    {2.0f, -1.0f, 0.0f, false}, // ordinary AUTO
+    {2.0f, 1.6f, 0.0f, true},   // replacement RELATIVE
+    {2.0f, -1.0f, 40.0f, true}, // replacement ABSOLUTE
+    {1.0f, -1.0f, 0.0f, true},  // scale 1 replacement AUTO
+    {2.0f, -1.0f, 0.0f, true},  // replacement AUTO again
+  };
+  Text::AsyncTextLoader reusedLoader = Text::AsyncTextLoader::New();
+  for(const ReuseCase& testCase : reuseCases)
+  {
+    Text::AsyncTextLoader freshLoader = Text::AsyncTextLoader::New();
+    const ReuseSummary    fresh       = renderReuseCase(freshLoader, testCase);
+    const ReuseSummary    reused      = renderReuseCase(reusedLoader, testCase);
+    compareReuseSummary(reused, fresh);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliReplacementProductionParityMatrixP(void)
+{
+  UiTestApplication application;
+
+  uint32_t horizontalDpi = 0u;
+  uint32_t verticalDpi   = 0u;
+  TextAbstraction::FontClient::Get().GetDpi(horizontalDpi, verticalDpi);
+  const float asyncPointSize = 18.0f * 72.0f / static_cast<float>(horizontalDpi);
+
+  auto checkCase = [asyncPointSize](const std::string&                          utf8,
+                                    const Vector<Text::ReplacementRunSnapshot>& sourceRuns,
+                                    const Size&                                 size,
+                                    bool                                        multiline,
+                                    bool                                        ellipsis,
+                                    uint32_t                                    expectedAccepted,
+                                    uint32_t                                    expectedSuppressed,
+                                    Text::Alignment                             horizontalAlignment = Text::Alignment::START,
+                                    Text::Alignment                             verticalAlignment   = Text::Alignment::START)
+  {
+    Text::ReplacementSourceSnapshot source;
+    source.runs                      = sourceRuns;
+    source.sourceRevision            = 99u;
+    source.hasValidReplacementSource = !source.runs.Empty();
+
+    Text::ControllerPtr     controller     = Text::Controller::New();
+    Text::Controller::Impl& controllerImpl = Text::Controller::Impl::GetImplementation(*controller.Get());
+    controller->SetDefaultFontSize(18.0f, Text::Controller::PIXEL_SIZE);
+    controller->SetMultiLineEnabled(multiline);
+    controller->SetLineWrapMode(Text::LineWrapMode::CHARACTER);
+    controller->SetRelativeLineSize(1.0f);
+    controller->SetTextElideEnabled(ellipsis);
+    controller->SetHorizontalAlignment(horizontalAlignment);
+    controller->SetVerticalAlignment(verticalAlignment);
+    controller->SetVerticalLineAlignment(Text::Alignment::START);
+    controller->SetText(utf8);
+    controllerImpl.GetOrCreateReplacementSourceSnapshot() = source;
+    controller->Relayout(size);
+
+    Text::AsyncTextParameters parameters;
+    parameters.text                        = utf8;
+    parameters.fontSize                    = asyncPointSize;
+    parameters.textWidth                   = size.width;
+    parameters.textHeight                  = size.height;
+    parameters.isMultiLine                 = multiline;
+    parameters.lineWrapMode                = Text::LineWrapMode::CHARACTER;
+    parameters.ellipsis                    = ellipsis;
+    parameters.horizontalAlignment         = horizontalAlignment;
+    parameters.verticalAlignment           = verticalAlignment;
+    parameters.verticalLineAlignment       = Text::Alignment::START;
+    parameters.replacementSourceSnapshot   = source;
+    parameters.replacementLayoutGeneration = 123u;
+
+    Text::AsyncTextLoader               asyncLoader = Text::AsyncTextLoader::New();
+    const Text::AsyncTextRenderInfo     asyncInfo   = asyncLoader.RenderText(parameters, false, Size::ZERO);
+    const Text::ReplacementRenderState& sync        = controllerImpl.GetReplacementRenderState();
+    const Text::ReplacementRenderState* async =
+      Text::GetImplementation(asyncLoader).GetReplacementRenderState();
+
+    DALI_TEST_EQUALS(sync.attempted, !sourceRuns.Empty(), TEST_LOCATION);
+    DALI_TEST_EQUALS(async != nullptr, !sourceRuns.Empty(), TEST_LOCATION);
+    if(sourceRuns.Empty())
+    {
+      DALI_TEST_EQUALS(asyncInfo.replacementPlacements.Count(), 0u, TEST_LOCATION);
+      return;
+    }
+    DALI_TEST_CHECK(async);
+
+    DALI_TEST_EQUALS(async->projection.GetReplacementRuns().Count(),
+                     sync.projection.GetReplacementRuns().Count(), TEST_LOCATION);
+    DALI_TEST_EQUALS(sync.projection.GetReplacementRuns().Count(), expectedAccepted, TEST_LOCATION);
+    DALI_TEST_EQUALS(sourceRuns.Count() - sync.projection.GetReplacementRuns().Count(),
+                     expectedSuppressed, TEST_LOCATION);
+    DALI_TEST_EQUALS(static_cast<uint32_t>(async->projection.GetMode()),
+                     static_cast<uint32_t>(sync.projection.GetMode()), TEST_LOCATION);
+    if(sync.projection.HasReplacements())
+    {
+      DALI_TEST_EQUALS(async->projection.GetProcessingCharacterCount(),
+                       sync.projection.GetProcessingCharacterCount(), TEST_LOCATION);
+      for(uint32_t index = 0u; index < sync.projection.GetProcessingCharacterCount(); ++index)
+      {
+        DALI_TEST_EQUALS(async->projection.GetProcessingText()[index],
+                         sync.projection.GetProcessingText()[index], TEST_LOCATION);
+      }
+      DALI_TEST_EQUALS(CountSyntheticGlyphs(*async), CountSyntheticGlyphs(sync), TEST_LOCATION);
+      DALI_TEST_EQUALS(async->processingModel->mVisualModel->mLines.Count(),
+                       sync.processingModel->mVisualModel->mLines.Count(), TEST_LOCATION);
+      DALI_TEST_EQUALS(static_cast<uint32_t>(async->processingModel->GetVerticalLineAlignment()),
+                       static_cast<uint32_t>(sync.processingModel->GetVerticalLineAlignment()),
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(async->finalElision.textElided,
+                       sync.finalElision.textElided,
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(async->layoutSize.width, sync.layoutSize.width,
+                       Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+      DALI_TEST_EQUALS(async->layoutSize.height, sync.layoutSize.height,
+                       Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+      DALI_TEST_EQUALS(async->processingModel->mVisualModel->mControlSize,
+                       sync.processingModel->mVisualModel->mControlSize,
+                       TEST_LOCATION);
+      for(uint32_t lineIndex = 0u;
+          lineIndex < sync.processingModel->mVisualModel->mLines.Count();
+          ++lineIndex)
+      {
+        const Text::LineRun& syncLine  = sync.processingModel->mVisualModel->mLines[lineIndex];
+        const Text::LineRun& asyncLine = async->processingModel->mVisualModel->mLines[lineIndex];
+        DALI_TEST_EQUALS(asyncLine.ascender, syncLine.ascender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+        DALI_TEST_EQUALS(asyncLine.descender, syncLine.descender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+        DALI_TEST_EQUALS(asyncLine.lineSpacing, syncLine.lineSpacing, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+      }
+      for(const Text::ProjectedReplacementRun& replacement : sync.projection.GetReplacementRuns())
+      {
+        const Text::ReplacementRunSnapshot& authored = sourceRuns[replacement.sourceRunIndex];
+        DALI_TEST_EQUALS(replacement.logicalCharacterRange.characterIndex,
+                         authored.logicalCharacterRange.characterIndex, TEST_LOCATION);
+        DALI_TEST_EQUALS(replacement.logicalCharacterRange.numberOfCharacters,
+                         authored.logicalCharacterRange.numberOfCharacters, TEST_LOCATION);
+        DALI_TEST_EQUALS(sync.projection.GetProcessingText()[replacement.projectedCharacterIndex],
+                         Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER, TEST_LOCATION);
+        for(Text::CharacterIndex logicalIndex = replacement.logicalCharacterRange.characterIndex;
+            logicalIndex < replacement.logicalCharacterRange.characterIndex +
+                             replacement.logicalCharacterRange.numberOfCharacters;
+            ++logicalIndex)
+        {
+          DALI_TEST_EQUALS(sync.projection.LogicalCharacterToProjected(logicalIndex),
+                           replacement.projectedCharacterIndex, TEST_LOCATION);
+        }
+      }
+    }
+
+    DALI_TEST_EQUALS(async->placements.Count(), sync.placements.Count(), TEST_LOCATION);
+    for(uint32_t index = 0u; index < sync.placements.Count(); ++index)
+    {
+      const Text::ReplacementPlacement& lhs = sync.placements[index];
+      const Text::ReplacementPlacement& rhs = async->placements[index];
+      DALI_TEST_EQUALS(rhs.logicalCharacterRange.characterIndex,
+                       lhs.logicalCharacterRange.characterIndex, TEST_LOCATION);
+      DALI_TEST_EQUALS(rhs.logicalCharacterRange.numberOfCharacters,
+                       lhs.logicalCharacterRange.numberOfCharacters, TEST_LOCATION);
+      DALI_TEST_EQUALS(rhs.lineIndex, lhs.lineIndex, TEST_LOCATION);
+      if(lhs.visible && rhs.visible)
+      {
+        const Text::LineRun& syncLine  = sync.processingModel->mVisualModel->mLines[lhs.lineIndex];
+        const Text::LineRun& asyncLine = async->processingModel->mVisualModel->mLines[rhs.lineIndex];
+        DALI_TEST_EQUALS(asyncLine.ascender, syncLine.ascender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+        DALI_TEST_EQUALS(asyncLine.descender, syncLine.descender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+        DALI_TEST_EQUALS(asyncLine.lineSpacing, syncLine.lineSpacing, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+        Text::FinalGlyphGeometry syncGeometry;
+        Text::FinalGlyphGeometry asyncGeometry;
+        DALI_TEST_CHECK(Text::GetFinalSourceGlyphGeometry(*sync.processingModel,
+                                                          sync.finalElision,
+                                                          lhs.syntheticGlyphIndex,
+                                                          syncGeometry));
+        DALI_TEST_CHECK(Text::GetFinalSourceGlyphGeometry(*async->processingModel,
+                                                          async->finalElision,
+                                                          rhs.syntheticGlyphIndex,
+                                                          asyncGeometry));
+        DALI_TEST_EQUALS(asyncGeometry.contentLocalPenPosition.y,
+                         syncGeometry.contentLocalPenPosition.y,
+                         Math::MACHINE_EPSILON_1000,
+                         TEST_LOCATION);
+        DALI_TEST_EQUALS(asyncGeometry.baseline,
+                         syncGeometry.baseline,
+                         Math::MACHINE_EPSILON_1000,
+                         TEST_LOCATION);
+      }
+      DALI_TEST_EQUALS(rhs.position.x, lhs.position.x, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+      DALI_TEST_EQUALS(rhs.position.y, lhs.position.y, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+      DALI_TEST_EQUALS(rhs.size, lhs.size, TEST_LOCATION);
+      DALI_TEST_EQUALS(rhs.visible, lhs.visible, TEST_LOCATION);
+      DALI_TEST_EQUALS(rhs.elided, lhs.elided, TEST_LOCATION);
+    }
+    DALI_TEST_EQUALS(asyncInfo.replacementPlacements.Count(), async->placements.Count(), TEST_LOCATION);
+  };
+
+  Vector<Text::ReplacementRunSnapshot> noRuns;
+  checkCase("plain", noRuns, Size(160.0f, 60.0f), false, false, 0u, 0u);
+
+  auto runSingle = [&checkCase](const std::string&   utf8,
+                                Text::CharacterIndex start,
+                                Text::Length         length,
+                                const Size&          size,
+                                bool                 multiline = false,
+                                bool                 ellipsis  = false)
+  {
+    Vector<Text::ReplacementRunSnapshot> runs;
+    runs.PushBack(Candidate(start, length, 28.0f, 20.0f, 1u));
+    checkCase(utf8, runs, size, multiline, ellipsis, 1u, 0u);
+  };
+
+  runSingle("A\uFFFCB", 1u, 1u, Size(160.0f, 60.0f));
+  runSingle("AxB", 1u, 1u, Size(160.0f, 60.0f));
+  runSingle("AiconB", 1u, 4u, Size(160.0f, 60.0f));
+  runSingle("\xD7\x90\xD7\x91ICON\xD7\x92", 2u, 4u, Size(180.0f, 60.0f));
+  runSingle("A\xD7\x90\xD7\x91ICON\xD7\x92Z", 3u, 4u, Size(180.0f, 60.0f));
+  runSingle(
+    "\xD7\x90"
+    "ABICONCD"
+    "\xD7\x91",
+    3u, 4u, Size(180.0f, 60.0f));
+  runSingle("AAa b cBB", 2u, 5u, Size(44.0f, 160.0f), true, false);
+  runSingle("xy", 0u, 2u, Size(20.0f, 80.0f), true, false);
+
+  // Exact UTF-32 ranges remain valid even when they cut through a combining, emoji or shaping sequence.
+  runSingle(
+    "Xa\xCC\x81"
+    "Y",
+    1u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "Xa\xCC\x81"
+    "Y",
+    2u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "Xa\xCC\x81"
+    "Y",
+    1u, 2u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xE2\x9D\xA4\xEF\xB8\x8F"
+    "Y",
+    1u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xE2\x9D\xA4\xEF\xB8\x8F"
+    "Y",
+    2u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xE2\x9D\xA4\xEF\xB8\x8F"
+    "Y",
+    1u, 2u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+    "Y",
+    1u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+    "Y",
+    2u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+    "Y",
+    1u, 2u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+    "Y",
+    1u, 1u,
+    Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+    "Y",
+    2u, 1u,
+    Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+    "Y",
+    3u, 1u,
+    Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+    "Y",
+    1u, 2u,
+    Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
+    "Y",
+    1u, 3u,
+    Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7"
+    "Y",
+    1u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7"
+    "Y",
+    2u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7"
+    "Y",
+    1u, 2u, Size(160.0f, 60.0f));
+  runSingle("XfiY", 1u, 1u, Size(160.0f, 60.0f));
+  runSingle("XfiY", 1u, 2u, Size(160.0f, 60.0f));
+  runSingle("XffiY", 2u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xD9\x84\xD8\xA7"
+    "Y",
+    1u, 1u, Size(160.0f, 60.0f));
+  runSingle(
+    "X\xD9\x84\xD8\xA7"
+    "Y",
+    2u, 1u, Size(160.0f, 60.0f));
+
+  Vector<Text::ReplacementRunSnapshot> adjacentRuns;
+  adjacentRuns.PushBack(Candidate(1u, 2u, 20.0f, 18.0f, 10u));
+  adjacentRuns.PushBack(Candidate(3u, 2u, 21.0f, 18.0f, 11u));
+  checkCase("AabcdE", adjacentRuns, Size(45.0f, 120.0f), true, false, 2u, 0u);
+
+  Vector<Text::ReplacementRunSnapshot> overlapRuns;
+  overlapRuns.PushBack(Candidate(1u, 3u, 20.0f, 18.0f, 20u));
+  overlapRuns.PushBack(Candidate(2u, 3u, 20.0f, 18.0f, 21u));
+  checkCase("abcdef", overlapRuns, Size(160.0f, 60.0f), false, false, 1u, 1u);
+
+  Vector<Text::ReplacementRunSnapshot> newlineRuns;
+  newlineRuns.PushBack(Candidate(1u, 3u, 20.0f, 18.0f, 30u));
+  checkCase("a\nbc", newlineRuns, Size(160.0f, 60.0f), true, false, 0u, 1u);
+
+  const char* ellipsisTexts[] = {
+    "AabcdefghijZ",
+    "\xD7\x90"
+    "abcdefghij"
+    "\xD7\x91",
+    "A\xD7\x90"
+    "abcdefghij"
+    "\xD7\x91Z"};
+  const Text::CharacterIndex starts[] = {1u, 1u, 2u};
+  for(uint32_t caseIndex = 0u; caseIndex < 3u; ++caseIndex)
+  {
+    Vector<Text::ReplacementRunSnapshot> runs;
+    for(uint32_t index = 0u; index < 5u; ++index)
+    {
+      runs.PushBack(Candidate(starts[caseIndex] + index * 2u, 2u, 20.0f, 18.0f, 40u + index));
+    }
+    checkCase(ellipsisTexts[caseIndex], runs, Size(62.0f, 40.0f), false, true, 5u, 0u);
+  }
+
+  const std::string complexText =
+    "One \uFFFC two ordinary words then \uFFFC followed by visible trailing text and \uFFFC final overflow words";
+  const Vector<Text::Character>        complexCharacters = Utf32(complexText);
+  Vector<Text::ReplacementRunSnapshot> complexRuns;
+  for(Text::CharacterIndex index = 0u; index < complexCharacters.Count(); ++index)
+  {
+    if(complexCharacters[index] != Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER)
+    {
+      continue;
+    }
+    const uint32_t replacementIndex = static_cast<const uint32_t>(complexRuns.Count());
+    const float    widths[]         = {18.0f, 76.0f, 150.0f};
+    const float    heights[]        = {16.0f, 44.0f, 88.0f};
+    complexRuns.PushBack(Candidate(index,
+                                   1u,
+                                   widths[replacementIndex],
+                                   heights[replacementIndex],
+                                   900u + replacementIndex));
+  }
+  DALI_TEST_EQUALS(complexRuns.Count(), 3u, TEST_LOCATION);
+  const Text::Alignment alignments[] = {
+    Text::Alignment::START,
+    Text::Alignment::CENTER,
+    Text::Alignment::END};
+  for(const Text::Alignment horizontalAlignment : alignments)
+  {
+    for(const Text::Alignment verticalAlignment : alignments)
+    {
+      checkCase(complexText,
+                complexRuns,
+                Size(210.0f, 90.0f),
+                true,
+                true,
+                3u,
+                0u,
+                horizontalAlignment,
+                verticalAlignment);
+    }
+  }
+
+  END_TEST;
+}
+
+int UtcDaliReplacementEndEllipsisFontContextP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+  const uint32_t                       pointsPerUnit = services.fontClient.GetNumberOfPointsPerOneUnitOfPointSize();
+  uint32_t                             horizontalDpi = 0u;
+  uint32_t                             verticalDpi   = 0u;
+  services.fontClient.GetDpi(horizontalDpi, verticalDpi);
+
+  enum class FitMode
+  {
+    NONE,
+    RANGE,
+    CANDIDATES
+  };
+
+  TextAbstraction::FontDescription defaultDescription;
+  const Text::FontId font20 = services.fontClient.GetFontId(defaultDescription, 20u * pointsPerUnit);
+  const Text::FontId font40 = services.fontClient.GetFontId(defaultDescription, 40u * pointsPerUnit);
+  DALI_TEST_CHECK(font20 != 0u && font40 != 0u);
+
+  // Freeze the existing END policy used by EllipsisFontSearch: surrounding
+  // lookup is synthetic-only, selects the nearest font, and prefers the
+  // preceding font at equal distance.
+  Text::GlyphInfo policyGlyphs[4];
+  policyGlyphs[0u].fontId = font20;
+  policyGlyphs[0u].index  = 0u;
+  policyGlyphs[1u].fontId = 0u;
+  policyGlyphs[1u].index  = Text::SYNTHETIC_REPLACEMENT_GLYPH_ID;
+  policyGlyphs[2u].fontId = font40;
+  policyGlyphs[2u].index  = 0u;
+  policyGlyphs[3u].fontId = 0u;
+  policyGlyphs[3u].index  = 0u;
+  DALI_TEST_EQUALS(Text::ResolveEndEllipsisFontId(policyGlyphs, 4u, 1u), font20, TEST_LOCATION);
+  DALI_TEST_EQUALS(Text::ResolveEndEllipsisFontId(policyGlyphs, 4u, 0u), font20, TEST_LOCATION);
+  DALI_TEST_EQUALS(Text::ResolveEndEllipsisFontId(policyGlyphs, 4u, 3u), 0u, TEST_LOCATION);
+
+  policyGlyphs[0u].fontId = 0u;
+  policyGlyphs[0u].index  = Text::SYNTHETIC_REPLACEMENT_GLYPH_ID;
+  DALI_TEST_EQUALS(Text::ResolveEndEllipsisFontId(policyGlyphs, 4u, 0u), font40, TEST_LOCATION);
+
+  policyGlyphs[0u].fontId = font20;
+  policyGlyphs[1u].fontId = 0u;
+  policyGlyphs[1u].index  = 1u;
+  policyGlyphs[2u].fontId = 0u;
+  policyGlyphs[2u].index  = Text::SYNTHETIC_REPLACEMENT_GLYPH_ID;
+  policyGlyphs[3u].fontId = font40;
+  DALI_TEST_EQUALS(Text::ResolveEndEllipsisFontId(policyGlyphs, 4u, 2u), font40, TEST_LOCATION);
+
+  const auto finalEllipsisGlyph = [](const Text::FinalElisionResult& finalElision)
+  {
+    DALI_TEST_CHECK(finalElision.applied);
+    DALI_TEST_CHECK(finalElision.ellipsisFinalGlyphIndex < finalElision.glyphs.Count());
+    return finalElision.glyphs[finalElision.ellipsisFinalGlyphIndex];
+  };
+
+  const auto compareEllipsisMetrics = [&services](const Text::GlyphInfo& actual,
+                                                  const Text::GlyphInfo& expected)
+  {
+    DALI_TEST_EQUALS(services.fontClient.GetPointSize(actual.fontId),
+                     services.fontClient.GetPointSize(expected.fontId),
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.index, expected.index, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.advance, expected.advance, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.width, expected.width, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.height, expected.height, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.xBearing, expected.xBearing, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.yBearing, expected.yBearing, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  };
+
+  const auto layoutOrdinary = [](float pointSize)
+  {
+    Text::ControllerPtr controller = Text::Controller::New();
+    controller->SetText("ABC ordinary trailing text");
+    controller->SetDefaultFontSize(pointSize, Text::Controller::POINT_SIZE);
+    controller->SetTextElideEnabled(true);
+    controller->Relayout(Size(100.0f, 100.0f));
+    const Text::FinalElisionResult* finalElision = controller->GetFinalElisionResult();
+    DALI_TEST_CHECK(finalElision);
+    DALI_TEST_CHECK(finalElision->applied);
+    return finalElision->glyphs[finalElision->ellipsisFinalGlyphIndex];
+  };
+
+  struct SyncReplacementResult
+  {
+    Text::GlyphInfo ellipsis;
+    Vector2         replacementSize{Vector2::ZERO};
+    uint32_t        finalGlyphCount{0u};
+    bool            replacementVisible{false};
+    bool            replacementElided{false};
+    float           selectedPointSize{0.0f};
+  };
+
+  const auto layoutReplacementOnly = [horizontalDpi](float pointSize, float effectiveScale, FitMode fitMode)
+  {
+    Text::ReplacementSourceSnapshot source;
+    source.runs.PushBack(Candidate(0u, 1u, 120.0f, 60.0f, 9800u));
+    source.hasValidReplacementSource = true;
+
+    Text::ControllerPtr     controller = Text::Controller::New();
+    Text::Controller::Impl& impl       = Text::Controller::Impl::GetImplementation(*controller.Get());
+    controller->SetText("\xEF\xBF\xBC");
+    controller->SetDefaultFontSize(pointSize, Text::Controller::POINT_SIZE);
+    controller->SetFontSizeScale(effectiveScale);
+    controller->SetTextElideEnabled(true);
+    impl.GetOrCreateReplacementSourceSnapshot() = source;
+    if(fitMode == FitMode::RANGE)
+    {
+      controller->SetTextFitEnabled(true);
+      controller->SetTextFitMinSize(pointSize, Text::Controller::POINT_SIZE);
+      controller->SetTextFitMaxSize(pointSize, Text::Controller::POINT_SIZE);
+      controller->SetTextFitStepSize(1.0f, Text::Controller::POINT_SIZE);
+      controller->SetTextFitContentSize(Size(50.0f, 100.0f));
+      controller->SetTextFitChanged(true);
+      controller->FitPointSizeforLayout(Size(50.0f, 100.0f));
+    }
+    else if(fitMode == FitMode::CANDIDATES)
+    {
+      Dali::Vector<Text::Fit::Candidate> candidates;
+      candidates.PushBack(Text::Fit::Candidate(pointSize * static_cast<float>(horizontalDpi) / 72.0f, 0.0f));
+      controller->SetTextFitCandidatesEnabled(true);
+      controller->SetTextFitCandidates(candidates);
+      controller->FitCandidatesPointSizeForLayout(Size(50.0f, 100.0f));
+    }
+    controller->Relayout(Size(50.0f, 100.0f));
+
+    const Text::ReplacementRenderState& state = impl.GetReplacementRenderState();
+    DALI_TEST_CHECK(state.finalElision.applied);
+    DALI_TEST_EQUALS(state.placements.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(state.processingModel);
+    DALI_TEST_EQUALS(state.processingModel->mVisualModel->mGlyphs.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(Text::IsSyntheticReplacementGlyph(state.processingModel->mVisualModel->mGlyphs[0u]));
+    DALI_TEST_EQUALS(state.processingModel->mVisualModel->mGlyphs[0u].width,
+                     120.0f * effectiveScale,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    const Text::FinalElisionResult& finalElision = state.finalElision;
+    DALI_TEST_EQUALS(finalElision.glyphs.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(finalElision.finalToSourceGlyphIndices[finalElision.ellipsisFinalGlyphIndex],
+                     Text::FinalElisionResult::INVALID_GLYPH_INDEX,
+                     TEST_LOCATION);
+    return SyncReplacementResult{finalElision.glyphs[finalElision.ellipsisFinalGlyphIndex],
+                                 state.placements[0u].size,
+                                 static_cast<uint32_t>(finalElision.glyphs.Count()),
+                                 state.placements[0u].visible,
+                                 state.placements[0u].elided,
+                                 fitMode == FitMode::NONE
+                                   ? pointSize * effectiveScale
+                                   : controller->GetTextFitFontSize(Text::Controller::POINT_SIZE)};
+  };
+
+  // Both cache orders and all authored sizes must produce the same glyph as
+  // ordinary END ellipsis at the effective point size.
+  for(const bool replacementFirst : {false, true})
+  {
+    services.fontClient.ClearCache();
+    const float sizes[] = {20.0f, 28.0f, 40.0f};
+    for(uint32_t order = 0u; order < 3u; ++order)
+    {
+      const float pointSize = replacementFirst ? sizes[2u - order] : sizes[order];
+      Text::GlyphInfo ordinary;
+      SyncReplacementResult replacement;
+      if(replacementFirst)
+      {
+        replacement = layoutReplacementOnly(pointSize, 1.0f, FitMode::NONE);
+        ordinary    = layoutOrdinary(pointSize);
+      }
+      else
+      {
+        ordinary    = layoutOrdinary(pointSize);
+        replacement = layoutReplacementOnly(pointSize, 1.0f, FitMode::NONE);
+      }
+      compareEllipsisMetrics(replacement.ellipsis, ordinary);
+      DALI_TEST_EQUALS(services.fontClient.GetPointSize(replacement.ellipsis.fontId),
+                       static_cast<TextAbstraction::PointSize26Dot6>(pointSize * pointsPerUnit),
+                       TEST_LOCATION);
+      DALI_TEST_EQUALS(replacement.replacementSize, Vector2(120.0f, 60.0f), TEST_LOCATION);
+      DALI_TEST_EQUALS(replacement.finalGlyphCount, 1u, TEST_LOCATION);
+      DALI_TEST_CHECK(!replacement.replacementVisible && replacement.replacementElided);
+    }
+  }
+
+  const Text::GlyphInfo effectiveOrdinary = layoutOrdinary(42.0f);
+  const SyncReplacementResult effectiveReplacement = layoutReplacementOnly(28.0f, 1.5f, FitMode::NONE);
+  compareEllipsisMetrics(effectiveReplacement.ellipsis, effectiveOrdinary);
+  DALI_TEST_EQUALS(services.fontClient.GetPointSize(effectiveReplacement.ellipsis.fontId),
+                   42u * pointsPerUnit,
+                   TEST_LOCATION);
+  for(FitMode fitMode : {FitMode::RANGE, FitMode::CANDIDATES})
+  {
+    const SyncReplacementResult fitReplacement = layoutReplacementOnly(28.0f, 1.5f, fitMode);
+    DALI_TEST_EQUALS(services.fontClient.GetPointSize(fitReplacement.ellipsis.fontId),
+                     static_cast<TextAbstraction::PointSize26Dot6>(fitReplacement.selectedPointSize * pointsPerUnit),
+                     TEST_LOCATION);
+  }
+
+  // Retained replacement: preserve its visibility, box and source mapping;
+  // only the generated ellipsis uses the surrounding END font policy.
+  Vector<Text::Character> retainedText = Utf32("ABC \xEF\xBF\xBC\nhidden");
+  Vector<Text::ReplacementRunSnapshot> retainedCandidates;
+  retainedCandidates.PushBack(Candidate(4u, 1u, 40.0f, 40.0f, 9801u));
+  const Text::ReplacementProjection retainedProjection =
+    Text::ReplacementProjection::Build(retainedText, retainedCandidates);
+  Text::ReplacementLayoutTestOptions retainedOptions;
+  retainedOptions.contentSize      = Size(300.0f, 50.0f);
+  retainedOptions.layoutType       = Text::Layout::Engine::MULTI_LINE_BOX;
+  retainedOptions.elideText        = true;
+  retainedOptions.fontPointSize    = 28u * pointsPerUnit;
+  retainedOptions.fontPixelSize    = 28.0f * 4.0f / 3.0f;
+  Text::ReplacementRenderState retained;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(retainedProjection, services, retainedOptions, retained));
+  DALI_TEST_EQUALS(retained.placements.Count(), 1u, TEST_LOCATION);
+  DALI_TEST_CHECK(retained.placements[0u].visible && !retained.placements[0u].elided);
+  DALI_TEST_EQUALS(retained.placements[0u].size, Vector2(40.0f, 40.0f), TEST_LOCATION);
+  Text::GlyphIndex retainedFinalIndex = Text::FinalElisionResult::INVALID_GLYPH_INDEX;
+  DALI_TEST_CHECK(retained.finalElision.FindFinalGlyphIndex(retained.placements[0u].syntheticGlyphIndex,
+                                                            retainedFinalIndex));
+  DALI_TEST_EQUALS(retainedFinalIndex + 1u,
+                   retained.finalElision.ellipsisFinalGlyphIndex,
+                   TEST_LOCATION);
+  compareEllipsisMetrics(finalEllipsisGlyph(retained.finalElision), layoutOrdinary(28.0f));
+  retained.Clear(services.bidirectionalSupport);
+
+  // FontSpan sizes on either side follow the same existing glyph-order
+  // policy. The preceding 20pt run wins before the 40pt text in the next
+  // paragraph; the synthetic glyph itself never becomes a font source.
+  Text::ModelPtr styledModel              = Text::Model::New();
+  styledModel->mLogicalModel->mText       = Utf32("A \xEF\xBF\xBC\nB");
+  Text::FontDescriptionRun precedingRun;
+  precedingRun.characterRun              = Text::CharacterRun{0u, 2u};
+  precedingRun.size                      = 20u * pointsPerUnit;
+  precedingRun.sizeDefined               = true;
+  styledModel->mLogicalModel->mFontDescriptionRuns.PushBack(precedingRun);
+  Text::FontDescriptionRun followingRun;
+  followingRun.characterRun              = Text::CharacterRun{4u, 1u};
+  followingRun.size                      = 40u * pointsPerUnit;
+  followingRun.sizeDefined               = true;
+  styledModel->mLogicalModel->mFontDescriptionRuns.PushBack(followingRun);
+  Vector<Text::ReplacementRunSnapshot> styledCandidates;
+  styledCandidates.PushBack(Candidate(2u, 1u, 40.0f, 40.0f, 9803u));
+  const Text::ReplacementProjection styledProjection =
+    Text::ReplacementProjection::Build(styledModel->mLogicalModel->mText, styledCandidates);
+  Text::ReplacementRenderState styled;
+  DALI_TEST_CHECK(Text::LayoutReplacementForTest(*styledModel,
+                                                 styledProjection,
+                                                 services,
+                                                 retainedOptions,
+                                                 styled));
+  DALI_TEST_CHECK(styled.placements[0u].visible);
+  compareEllipsisMetrics(finalEllipsisGlyph(styled.finalElision), layoutOrdinary(20.0f));
+  styled.Clear(services.bidirectionalSupport);
+
+  // Script/fallback sentinels: a synthetic boundary must not collapse the
+  // selected font context to DEFAULT_POINT_SIZE for any surrounding script.
+  const std::string scriptPrefixes[] = {
+    "Latin",
+    "\xED\x95\x9C\xEA\xB8\x80",                         // Korean
+    "\xD8\xA7\xD9\x84\xD8\xB9\xD8\xB1\xD8\xA8\xD9\x8A\xD8\xA9", // Arabic
+    "\xF0\x9F\x98\x80",                                 // Emoji
+    "Latin \xED\x95\x9C\xEA\xB8\x80 \xF0\x9F\x98\x80"};       // Mixed fallback
+  for(uint32_t scriptIndex = 0u; scriptIndex < 5u; ++scriptIndex)
+  {
+    const Vector<Text::Character> prefix = Utf32(scriptPrefixes[scriptIndex]);
+    const Vector<Text::Character> text   = Utf32(scriptPrefixes[scriptIndex] + "\xEF\xBF\xBC\nhidden");
+    Vector<Text::ReplacementRunSnapshot> candidates;
+    candidates.PushBack(Candidate(static_cast<Text::CharacterIndex>(prefix.Count()), 1u, 40.0f, 40.0f, 9810u + scriptIndex));
+    const Text::ReplacementProjection projection = Text::ReplacementProjection::Build(text, candidates);
+    Text::ReplacementRenderState      state;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection,
+                                                   services,
+                                                   retainedOptions,
+                                                   state));
+    DALI_TEST_CHECK(state.finalElision.applied);
+    DALI_TEST_EQUALS(services.fontClient.GetPointSize(finalEllipsisGlyph(state.finalElision).fontId),
+                     28u * pointsPerUnit,
+                     TEST_LOCATION);
+    state.Clear(services.bidirectionalSupport);
+  }
+
+  const auto layoutAsyncReplacementOnly = [horizontalDpi, pointsPerUnit, &services](float   pointSize,
+                                                                                    float   effectiveScale,
+                                                                                    float   renderScale,
+                                                                                    FitMode fitMode)
+  {
+    Text::AsyncTextParameters parameters;
+    parameters.text               = "\xEF\xBF\xBC";
+    parameters.fontSize           = pointSize;
+    parameters.textWidth          = 50.0f;
+    parameters.textHeight         = 100.0f;
+    parameters.originWidth        = parameters.textWidth;
+    parameters.originHeight       = parameters.textHeight;
+    parameters.ellipsis           = true;
+    parameters.renderScale        = renderScale;
+    parameters.effectiveTextScale = effectiveScale;
+    parameters.maxTextureSize     = 4096;
+    if(fitMode == FitMode::RANGE)
+    {
+      parameters.isTextFitEnabled = true;
+      parameters.textFitMinSize   = pointSize;
+      parameters.textFitMaxSize   = pointSize;
+      parameters.textFitStepSize  = 1.0f;
+    }
+    else if(fitMode == FitMode::CANDIDATES)
+    {
+      parameters.isTextFitCandidatesEnabled = true;
+      parameters.textFitCandidates.PushBack(
+        Text::Fit::Candidate(pointSize * static_cast<float>(horizontalDpi) / 72.0f, 0.0f));
+    }
+    parameters.replacementSourceSnapshot.runs.PushBack(Candidate(0u, 1u, 120.0f, 60.0f, 9802u));
+    parameters.replacementSourceSnapshot.hasValidReplacementSource = true;
+
+    Text::AsyncTextLoader loader = Text::AsyncTextLoader::New();
+    bool                  cached = false;
+    Size                  naturalSize = Size::ZERO;
+    if(renderScale > 1.0f)
+    {
+      naturalSize = loader.SetupRenderScale(parameters, cached);
+    }
+    if(fitMode == FitMode::NONE)
+    {
+      loader.RenderText(parameters, cached, naturalSize);
+    }
+    else
+    {
+      loader.RenderTextFit(parameters, cached, naturalSize);
+    }
+    const Text::ReplacementRenderState* state = Text::GetImplementation(loader).GetReplacementRenderState();
+    DALI_TEST_CHECK(state && state->finalElision.applied);
+    DALI_TEST_EQUALS(state->placements.Count(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(state->placements[0u].elided);
+    const Text::GlyphInfo& ellipsis =
+      state->finalElision.glyphs[state->finalElision.ellipsisFinalGlyphIndex];
+    const auto expectedPoint = static_cast<TextAbstraction::PointSize26Dot6>(
+      pointSize * effectiveScale * renderScale * static_cast<float>(pointsPerUnit));
+    DALI_TEST_EQUALS(services.fontClient.GetPointSize(ellipsis.fontId), expectedPoint, TEST_LOCATION);
+  };
+
+  for(float renderScale : {1.0f, 2.0f})
+  {
+    for(float effectiveScale : {1.0f, 1.5f})
+    {
+      layoutAsyncReplacementOnly(28.0f, effectiveScale, renderScale, FitMode::NONE);
+    }
+    layoutAsyncReplacementOnly(28.0f, 1.5f, renderScale, FitMode::RANGE);
+    layoutAsyncReplacementOnly(28.0f, 1.5f, renderScale, FitMode::CANDIDATES);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliReplacementMultilineEndRetentionMetricsP(void)
+{
+  UiTestApplication                   application;
+  Text::ReplacementLayoutTestServices services = MakeLayoutServices();
+  const uint32_t                       pointsPerUnit = services.fontClient.GetNumberOfPointsPerOneUnitOfPointSize();
+
+  struct GeometrySummary
+  {
+    Text::GlyphIndex sourceGlyph{Text::FinalElisionResult::INVALID_GLYPH_INDEX};
+    float            lineTop{0.0f};
+    float            ascender{0.0f};
+    float            descender{0.0f};
+    float            lineSpacing{0.0f};
+    float            lineHeight{0.0f};
+    float            baseline{0.0f};
+    float            replacementY{0.0f};
+    Vector2          replacementSize{Vector2::ZERO};
+  };
+
+  const auto findReplacement = [](const Vector<Text::Character>& text)
+  {
+    Text::CharacterIndex index = 0u;
+    while(index < text.Count() && text[index] != Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER)
+    {
+      ++index;
+    }
+    DALI_TEST_CHECK(index < text.Count());
+    return index;
+  };
+
+  const auto layout = [&](const std::string&                       utf8,
+                          const Vector2&                           replacementSize,
+                          Text::ReplacementVerticalAlignment      alignment,
+                          const Size&                              contentSize,
+                          bool                                     elideText)
+  {
+    const Vector<Text::Character> text             = Utf32(utf8);
+    const Text::CharacterIndex    replacementIndex = findReplacement(text);
+    Vector<Text::ReplacementRunSnapshot> candidates;
+    candidates.PushBack(Candidate(replacementIndex,
+                                  1u,
+                                  replacementSize.width,
+                                  replacementSize.height,
+                                  9900u));
+    candidates[0u].metrics.verticalAlignment = alignment;
+    const Text::ReplacementProjection projection = Text::ReplacementProjection::Build(text, candidates);
+
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize      = contentSize;
+    options.layoutType       = Text::Layout::Engine::MULTI_LINE_BOX;
+    options.lineWrapMode     = Text::LineWrapMode::CHARACTER;
+    options.elideText        = elideText;
+    options.fontPointSize    = 28u * pointsPerUnit;
+    options.fontPixelSize    = 28.0f;
+    options.relativeLineSize = -1.0f;
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_EQUALS(result.placements.Count(), 1u, TEST_LOCATION);
+    return result;
+  };
+
+  const auto summarize = [](const Text::ReplacementRenderState& state, float scale = 1.0f)
+  {
+    DALI_TEST_CHECK(state.processingModel && state.placements.Count() == 1u);
+    const Text::ReplacementPlacement& placement = state.placements[0u];
+    DALI_TEST_CHECK(placement.visible && !placement.elided);
+    DALI_TEST_CHECK(placement.lineIndex < state.processingModel->mVisualModel->mLines.Count());
+    const Text::LineRun& line = state.processingModel->mVisualModel->mLines[placement.lineIndex];
+    return GeometrySummary{placement.syntheticGlyphIndex,
+                           (placement.baseline - line.ascender) / scale,
+                           line.ascender / scale,
+                           line.descender / scale,
+                           line.lineSpacing / scale,
+                           Text::GetLineHeight(line, true) / scale,
+                           placement.baseline / scale,
+                           placement.position.y / scale,
+                           placement.size / scale};
+  };
+
+  const auto checkGeometry = [](const GeometrySummary& actual, const GeometrySummary& expected)
+  {
+    DALI_TEST_EQUALS(actual.sourceGlyph, expected.sourceGlyph, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.lineTop, expected.lineTop, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.ascender, expected.ascender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.descender, expected.descender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.lineSpacing, expected.lineSpacing, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.lineHeight, expected.lineHeight, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.baseline, expected.baseline, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.replacementY, expected.replacementY, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actual.replacementSize, expected.replacementSize, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+  };
+
+  const std::string retainedSourceText = "ordinary\n\xEF\xBF\xBC";
+  const std::string referenceText      = "ordinary\n\xEF\xBF\xBC\nfollowing\nhidden";
+  const std::string targetText         = "ordinary\n\xEF\xBF\xBC\nhidden";
+  const auto checkRetainedAppend = [&](const Vector2&                      replacementSize,
+                                       Text::ReplacementVerticalAlignment alignment)
+  {
+    Text::ReplacementRenderState retainedNatural = layout(retainedSourceText,
+                                                          replacementSize,
+                                                          alignment,
+                                                          Size(200.0f, 500.0f),
+                                                          false);
+    const float retainedHeight = std::ceil(retainedNatural.processingModel->mVisualModel->GetLayoutSize().height);
+    retainedNatural.Clear(services.bidirectionalSupport);
+
+    Text::ReplacementRenderState referenceNatural = layout("ordinary\n\xEF\xBF\xBC\nfollowing",
+                                                           replacementSize,
+                                                           alignment,
+                                                           Size(200.0f, 500.0f),
+                                                           false);
+    const float referenceHeight = std::ceil(referenceNatural.processingModel->mVisualModel->GetLayoutSize().height);
+    referenceNatural.Clear(services.bidirectionalSupport);
+
+    Text::ReplacementRenderState reference = layout(referenceText,
+                                                    replacementSize,
+                                                    alignment,
+                                                    Size(200.0f, referenceHeight),
+                                                    true);
+    Text::ReplacementRenderState target = layout(targetText,
+                                                    replacementSize,
+                                                    alignment,
+                                                    Size(200.0f, retainedHeight),
+                                                    true);
+    DALI_TEST_CHECK(reference.finalElision.applied);
+    DALI_TEST_CHECK(reference.placements[0u].visible && !reference.placements[0u].elided);
+    DALI_TEST_CHECK(reference.finalElision.ellipsisLineIndex > reference.placements[0u].lineIndex);
+    DALI_TEST_CHECK(target.finalElision.applied);
+    DALI_TEST_CHECK(target.placements[0u].visible && !target.placements[0u].elided);
+    Text::GlyphIndex finalReplacementGlyph = Text::FinalElisionResult::INVALID_GLYPH_INDEX;
+    DALI_TEST_CHECK(target.finalElision.FindFinalGlyphIndex(target.placements[0u].syntheticGlyphIndex,
+                                                            finalReplacementGlyph));
+    DALI_TEST_EQUALS(finalReplacementGlyph + 1u,
+                     target.finalElision.ellipsisFinalGlyphIndex,
+                     TEST_LOCATION);
+    checkGeometry(summarize(target), summarize(reference));
+    reference.Clear(services.bidirectionalSupport);
+    target.Clear(services.bidirectionalSupport);
+  };
+
+  // The reported failure: a 90x46 replacement retained by authoritative
+  // APPEND must keep the same line box and placement as a later-boundary END.
+  for(const Text::ReplacementVerticalAlignment alignment : {
+        Text::ReplacementVerticalAlignment::TEXT_BASELINE,
+        Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+        Text::ReplacementVerticalAlignment::TEXT_CENTER})
+  {
+    checkRetainedAppend(Vector2(90.0f, 46.0f), alignment);
+  }
+
+  for(const Vector2& replacementSize : {
+        Vector2(8.0f, 8.0f),
+        Vector2(40.0f, 40.0f),
+        Vector2(90.0f, 46.0f),
+        Vector2(120.0f, 60.0f),
+        Vector2(120.0f, 120.0f)})
+  {
+    checkRetainedAppend(replacementSize, Text::ReplacementVerticalAlignment::TEXT_BOTTOM);
+  }
+
+  // A replacement that does not fit beside U+2026 is a true REMOVE. Its large
+  // box must not survive in the authoritative ellipsis line metrics.
+  Text::ReplacementRenderState removed = layout(targetText,
+                                                Vector2(120.0f, 60.0f),
+                                                Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+                                                Size(100.0f, 120.0f),
+                                                true);
+  DALI_TEST_CHECK(removed.finalElision.applied);
+  DALI_TEST_CHECK(!removed.placements[0u].visible && removed.placements[0u].elided);
+  DALI_TEST_CHECK(!removed.finalElision.IsOriginalGlyphVisible(removed.placements[0u].syntheticGlyphIndex));
+  const Text::LineIndex removedLineIndex = FindEllipsisLine(*removed.processingModel->mVisualModel);
+  DALI_TEST_CHECK(removedLineIndex < removed.processingModel->mVisualModel->mLines.Count());
+  DALI_TEST_CHECK(Text::GetLineHeight(removed.processingModel->mVisualModel->mLines[removedLineIndex], true) < 60.0f);
+  removed.Clear(services.bidirectionalSupport);
+
+  // A replacement beyond the visible END line remains fully elided and cannot
+  // contribute metrics to that line.
+  Text::ReplacementRenderState fullyElided = layout("ordinary first line\nsecond visible line\n\xEF\xBF\xBC",
+                                                    Vector2(120.0f, 120.0f),
+                                                    Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+                                                    Size(200.0f, 70.0f),
+                                                    true);
+  DALI_TEST_CHECK(fullyElided.finalElision.applied);
+  DALI_TEST_CHECK(!fullyElided.placements[0u].visible && fullyElided.placements[0u].elided);
+  DALI_TEST_CHECK(!fullyElided.finalElision.IsOriginalGlyphVisible(fullyElided.placements[0u].syntheticGlyphIndex));
+  fullyElided.Clear(services.bidirectionalSupport);
+
+  // Omission discards the complete candidate line. Its replacement metrics
+  // and final source visibility must therefore agree for both supported
+  // omission reasons.
+  Text::ReplacementRenderState cannotFit = layout("\xEF\xBF\xBC\nhidden",
+                                                  Vector2(40.0f, 40.0f),
+                                                  Text::ReplacementVerticalAlignment::TEXT_BOTTOM,
+                                                  Size(2.0f, 60.0f),
+                                                  true);
+  DALI_TEST_CHECK(cannotFit.finalElision.resolved && !cannotFit.finalElision.applied);
+  DALI_TEST_EQUALS(cannotFit.finalElision.ellipsisOmissionReason,
+                   Text::FinalElisionResult::EllipsisOmissionReason::ELLIPSIS_CANNOT_FIT,
+                   TEST_LOCATION);
+  DALI_TEST_CHECK(!cannotFit.placements[0u].visible && cannotFit.placements[0u].elided);
+  DALI_TEST_CHECK(!cannotFit.finalElision.IsOriginalGlyphVisible(cannotFit.placements[0u].syntheticGlyphIndex));
+  cannotFit.Clear(services.bidirectionalSupport);
+
+  const auto layoutMultiple = [&](const std::string&          utf8,
+                                  const std::vector<Vector2>& replacementSizes,
+                                  const Size&                 contentSize,
+                                  bool                        elideText)
+  {
+    const Vector<Text::Character> text = Utf32(utf8);
+    Vector<Text::ReplacementRunSnapshot> candidates;
+    for(Text::CharacterIndex index = 0u; index < text.Count(); ++index)
+    {
+      if(text[index] != Text::ReplacementProjection::OBJECT_REPLACEMENT_CHARACTER)
+      {
+        continue;
+      }
+      DALI_TEST_CHECK(candidates.Count() < replacementSizes.size());
+      const Vector2& replacementSize = replacementSizes[candidates.Count()];
+      candidates.PushBack(Candidate(index,
+                                    1u,
+                                    replacementSize.width,
+                                    replacementSize.height,
+                                    9950u + static_cast<uint32_t>(candidates.Count())));
+      candidates[candidates.Count() - 1u].metrics.verticalAlignment =
+        Text::ReplacementVerticalAlignment::TEXT_BOTTOM;
+    }
+    DALI_TEST_EQUALS(candidates.Count(), replacementSizes.size(), TEST_LOCATION);
+
+    const Text::ReplacementProjection projection = Text::ReplacementProjection::Build(text, candidates);
+    Text::ReplacementLayoutTestOptions options;
+    options.contentSize      = contentSize;
+    options.layoutType       = Text::Layout::Engine::MULTI_LINE_BOX;
+    options.lineWrapMode     = Text::LineWrapMode::CHARACTER;
+    options.elideText        = elideText;
+    options.fontPointSize    = 28u * pointsPerUnit;
+    options.fontPixelSize    = 28.0f;
+    options.relativeLineSize = -1.0f;
+    Text::ReplacementRenderState result;
+    DALI_TEST_CHECK(Text::LayoutReplacementForTest(projection, services, options, result));
+    DALI_TEST_EQUALS(result.placements.Count(), replacementSizes.size(), TEST_LOCATION);
+    return result;
+  };
+
+  const auto checkRetainedGeometry = [](const Text::ReplacementRenderState& actual,
+                                        uint32_t                            actualIndex,
+                                        const Text::ReplacementRenderState& reference,
+                                        uint32_t                            referenceIndex)
+  {
+    const Text::ReplacementPlacement& actualPlacement    = actual.placements[actualIndex];
+    const Text::ReplacementPlacement& referencePlacement = reference.placements[referenceIndex];
+    DALI_TEST_CHECK(actualPlacement.visible && !actualPlacement.elided);
+    DALI_TEST_CHECK(referencePlacement.visible && !referencePlacement.elided);
+    DALI_TEST_CHECK(actual.finalElision.IsOriginalGlyphVisible(actualPlacement.syntheticGlyphIndex));
+    DALI_TEST_CHECK(actualPlacement.lineIndex < actual.processingModel->mVisualModel->mLines.Count());
+    DALI_TEST_CHECK(referencePlacement.lineIndex < reference.processingModel->mVisualModel->mLines.Count());
+    const Text::LineRun& actualLine = actual.processingModel->mVisualModel->mLines[actualPlacement.lineIndex];
+    const Text::LineRun& referenceLine =
+      reference.processingModel->mVisualModel->mLines[referencePlacement.lineIndex];
+    DALI_TEST_EQUALS(actualLine.ascender, referenceLine.ascender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actualLine.descender, referenceLine.descender, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(actualLine.lineSpacing, referenceLine.lineSpacing, Math::MACHINE_EPSILON_1000, TEST_LOCATION);
+    DALI_TEST_EQUALS(Text::GetLineHeight(actualLine, true),
+                     Text::GetLineHeight(referenceLine, true),
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actualPlacement.baseline,
+                     referencePlacement.baseline,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actualPlacement.position.y,
+                     referencePlacement.position.y,
+                     Math::MACHINE_EPSILON_1000,
+                     TEST_LOCATION);
+    DALI_TEST_EQUALS(actualPlacement.size, referencePlacement.size, TEST_LOCATION);
+  };
+
+  // Multiple replacements use the same authoritative source boundary for
+  // visibility and line-metric composition. Cover all-retained APPEND,
+  // retained-prefix REMOVE, and true removal of the whole replacement set.
+  const std::vector<Vector2> multipleSizes = {Vector2(40.0f, 40.0f), Vector2(55.0f, 46.0f)};
+  Text::ReplacementRenderState multipleReference = layoutMultiple("ordinary\nA \xEF\xBF\xBC \xEF\xBF\xBC",
+                                                                  multipleSizes,
+                                                                  Size(240.0f, 500.0f),
+                                                                  false);
+  Text::ReplacementRenderState multipleAppend = layoutMultiple("ordinary\nA \xEF\xBF\xBC \xEF\xBF\xBC\nhidden continuation",
+                                                                  multipleSizes,
+                                                                  Size(240.0f, 100.0f),
+                                                                  true);
+  DALI_TEST_CHECK(multipleAppend.finalElision.applied);
+  checkRetainedGeometry(multipleAppend, 0u, multipleReference, 0u);
+  checkRetainedGeometry(multipleAppend, 1u, multipleReference, 1u);
+  multipleReference.Clear(services.bidirectionalSupport);
+  multipleAppend.Clear(services.bidirectionalSupport);
+
+  Text::ReplacementRenderState prefixReference = layoutMultiple("ordinary\nA \xEF\xBF\xBC",
+                                                                {multipleSizes[0u]},
+                                                                Size(125.0f, 500.0f),
+                                                                false);
+  Text::ReplacementRenderState prefixRetained = layoutMultiple("ordinary\nA \xEF\xBF\xBC \xEF\xBF\xBC\nhidden continuation",
+                                                                multipleSizes,
+                                                                Size(125.0f, 100.0f),
+                                                                true);
+  DALI_TEST_CHECK(prefixRetained.finalElision.applied);
+  checkRetainedGeometry(prefixRetained, 0u, prefixReference, 0u);
+  DALI_TEST_CHECK(!prefixRetained.placements[1u].visible && prefixRetained.placements[1u].elided);
+  DALI_TEST_CHECK(!prefixRetained.finalElision.IsOriginalGlyphVisible(
+    prefixRetained.placements[1u].syntheticGlyphIndex));
+  prefixReference.Clear(services.bidirectionalSupport);
+  prefixRetained.Clear(services.bidirectionalSupport);
+
+  Text::ReplacementRenderState allRemoved = layoutMultiple("ordinary\n\xEF\xBF\xBC \xEF\xBF\xBC\nhidden continuation",
+                                                           {Vector2(50.0f, 42.0f), Vector2(55.0f, 46.0f)},
+                                                           Size(48.0f, 100.0f),
+                                                           true);
+  DALI_TEST_CHECK(allRemoved.finalElision.applied);
+  for(const Text::ReplacementPlacement& placement : allRemoved.placements)
+  {
+    DALI_TEST_CHECK(!placement.visible && placement.elided);
+    DALI_TEST_CHECK(!allRemoved.finalElision.IsOriginalGlyphVisible(placement.syntheticGlyphIndex));
+  }
+  const Text::LineIndex allRemovedLineIndex = FindEllipsisLine(*allRemoved.processingModel->mVisualModel);
+  DALI_TEST_CHECK(allRemovedLineIndex < allRemoved.processingModel->mVisualModel->mLines.Count());
+  DALI_TEST_CHECK(Text::GetLineHeight(allRemoved.processingModel->mVisualModel->mLines[allRemovedLineIndex], true) <
+                  42.0f);
+  allRemoved.Clear(services.bidirectionalSupport);
+
+  const auto captureProduction = [&](const Text::ReplacementRenderState& state, float scale)
+  {
+    DALI_TEST_CHECK(state.finalElision.applied);
+    return summarize(state, scale);
+  };
+
+  Text::ReplacementSourceSnapshot source;
+  source.runs.PushBack(Candidate(9u, 1u, 90.0f, 46.0f, 9901u));
+  source.runs[0u].metrics.verticalAlignment = Text::ReplacementVerticalAlignment::TEXT_BOTTOM;
+  source.hasValidReplacementSource          = true;
+
+  const auto layoutSyncProduction = [&](const std::string& text, float height, bool elideText)
+  {
+    Text::ControllerPtr     controller = Text::Controller::New();
+    Text::Controller::Impl& impl       = Text::Controller::Impl::GetImplementation(*controller.Get());
+    controller->SetText(text);
+    controller->SetDefaultFontSize(28.0f, Text::Controller::PIXEL_SIZE);
+    controller->SetMultiLineEnabled(true);
+    controller->SetLineWrapMode(Text::LineWrapMode::CHARACTER);
+    controller->SetRelativeLineSize(-1.0f);
+    controller->SetTextElideEnabled(elideText);
+    impl.GetOrCreateReplacementSourceSnapshot() = source;
+    controller->Relayout(Size(200.0f, height));
+    return std::move(impl.GetOrCreateReplacementRenderState());
+  };
+
+  Text::ReplacementRenderState syncNatural = layoutSyncProduction(retainedSourceText, 500.0f, false);
+  const float syncRetainedHeight = std::ceil(syncNatural.processingModel->mVisualModel->GetLayoutSize().height);
+  syncNatural.Clear(services.bidirectionalSupport);
+  const float retained90x46Height = syncRetainedHeight + 1.0f;
+  Text::ReplacementRenderState syncState = layoutSyncProduction(targetText, retained90x46Height, true);
+  DALI_TEST_CHECK(syncState.placements[0u].visible && !syncState.placements[0u].elided);
+  const GeometrySummary sync = captureProduction(syncState, 1.0f);
+
+  uint32_t horizontalDpi = 0u;
+  uint32_t verticalDpi   = 0u;
+  services.fontClient.GetDpi(horizontalDpi, verticalDpi);
+  const auto renderAsync = [&](float renderScale)
+  {
+    Text::AsyncTextParameters parameters;
+    parameters.text                        = targetText;
+    parameters.fontSize                    = 28.0f * 72.0f / static_cast<float>(horizontalDpi);
+    parameters.textWidth                   = 200.0f;
+    parameters.textHeight                  = retained90x46Height;
+    parameters.originWidth                 = parameters.textWidth;
+    parameters.originHeight                = parameters.textHeight;
+    parameters.isMultiLine                 = true;
+    parameters.lineWrapMode                = Text::LineWrapMode::CHARACTER;
+    parameters.relativeLineSize            = -1.0f;
+    parameters.ellipsis                    = true;
+    parameters.renderScale                 = renderScale;
+    parameters.replacementSourceSnapshot   = source;
+    parameters.replacementLayoutGeneration = static_cast<uint64_t>(renderScale * 100.0f);
+
+    Text::AsyncTextLoader loader = Text::AsyncTextLoader::New();
+    bool                  cached = false;
+    Size                  naturalSize = Size::ZERO;
+    if(renderScale > 1.0f)
+    {
+      naturalSize = loader.SetupRenderScale(parameters, cached);
+    }
+    loader.RenderText(parameters, cached, naturalSize);
+    const Text::ReplacementRenderState* state = Text::GetImplementation(loader).GetReplacementRenderState();
+    DALI_TEST_CHECK(state);
+    DALI_TEST_CHECK(state->placements[0u].visible && !state->placements[0u].elided);
+    return captureProduction(*state, renderScale);
+  };
+
+  const GeometrySummary asyncScaleOne = renderAsync(1.0f);
+  const GeometrySummary asyncScaleTwo = renderAsync(2.0f);
+  checkGeometry(asyncScaleOne, sync);
+  checkGeometry(asyncScaleTwo, asyncScaleOne);
+  syncState.Clear(services.bidirectionalSupport);
+
+  END_TEST;
+}

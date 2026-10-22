@@ -1,0 +1,1236 @@
+#pragma once
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/dali-vector.h>
+#include <dali/public-api/common/insets.h>
+#include <dali/public-api/common/unique-ptr.h>
+#include <dali/public-api/events/hover-event.h>
+#include <dali/public-api/events/pan-gesture.h>
+#include <dali/public-api/object/base-handle.h>
+#include <dali/public-api/object/property-index-ranges.h>
+#include <dali/public-api/rendering/texture.h>
+#include <dali/public-api/signals/callback.h>
+#include <dali/public-api/signals/dali-signal.h>
+#include <cstdint>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/public-api/configuration/ui-color-manager.h>
+#include <dali-ui-foundation/public-api/configuration/ui-scale-policy.h>
+#include <dali-ui-foundation/public-api/dali-ui-common.h>
+#include <dali-ui-foundation/public-api/layouts/layout-types.h>
+#include <dali-ui-foundation/public-api/traits/attachment-id.h>
+#include <dali-ui-foundation/public-api/types/ui-color.h>
+#include <dali-ui-foundation/public-api/types/unique-any.h>
+#include <dali-ui-foundation/public-api/types/view-state.h>
+#include <dali-ui-foundation/public-api/views/effects/state-effect.h>
+#include <dali-ui-foundation/public-api/views/state-event.h>
+#include <dali-ui-foundation/public-api/views/view-focus-enums.h>
+#include <dali-ui-foundation/public-api/views/view.h>
+
+namespace DALI_NAMESPACE
+{
+
+namespace Ui
+{
+
+// Forward declarations
+class AbsoluteLayoutParams;
+class FlexLayoutParams;
+class GridLayoutParams;
+class StackLayoutParams;
+class Layout;
+class LayoutManager;
+class LayoutTransition;
+
+namespace Internal
+{
+class ViewDataImpl;
+} //namespace Internal
+
+class ViewImpl;
+using ViewImplPtr = IntrusivePtr<ViewImpl>;
+
+/**
+ * @brief This is the internal implementation class for View.
+ *
+ * ViewImpl extends CustomActorImpl to provide basic UI functionality.
+ * It implements the p-impl pattern and provides the actual implementation
+ * for the View public API.
+ *
+ * View can optionally have a LayoutManager to manage child layout.
+ * When a LayoutManager is set, the View can manage children and delegate
+ * layout calculations to the LayoutManager.
+ *
+ * @see Dali::Ui::View
+ */
+class DALI_UI_API ViewImpl : public CustomActorImpl, public ConnectionTrackerInterface
+{
+public:
+  // ============================================================
+  // Types
+  // ============================================================
+
+  class Extension; ///< Forward declare future extension interface
+
+  /**
+   * @brief Flags for the constructor.
+   */
+  enum ViewBehaviour
+  {
+    VIEW_BEHAVIOUR_DEFAULT = 0,      ///< Default behaviour: Visuals are enabled but doesn't receive event callbacks.
+    DISABLE_VISUALS        = 1 << 0, ///< True if view should not use visuals
+
+    LAST_VIEW_BEHAVIOUR_FLAG
+  };
+
+public: // Virtual API
+  /**
+   * @copydoc Dali::Ui::View::IsResourceReady
+   */
+  virtual bool IsResourceReady() const;
+
+  /**
+   * @brief Called when accessibility activation is requested for this View.
+   * @return true if this view can perform accessibility activation
+   */
+  virtual bool OnAccessibilityActivate();
+
+  /**
+   * @brief Called when accessibility requests that the current context be dismissed.
+   * @return true if the escape action has been consumed by this view
+   */
+  virtual bool OnAccessibilityEscape();
+
+  /**
+   * @brief Called when accessibility pan gesture is received.
+   * @param[in] gesture The pan gesture
+   * @return true if the pan gesture has been consumed by this view
+   */
+  virtual bool OnAccessibilityPan(PanGesture gesture);
+
+  /**
+   * @brief Called for accessibility value change (e.g. slider up/down).
+   * @param[in] isIncreased Whether the value should be increased or decreased
+   * @return true if the value changed action has been consumed by this view
+   */
+  virtual bool OnAccessibilityValueChange(bool isIncreased);
+
+  /**
+   * @brief Called when a scrollable view should reveal one of its children.
+   * @param[in] child The child View that should be brought into view
+   * @return true if this view scrolled to the child
+   */
+  virtual bool OnAccessibilityScrollToChild(View child);
+
+  /**
+   * @brief Called for accessibility zoom action.
+   * @return true if the zoom action has been consumed by this view
+   */
+  virtual bool OnAccessibilityZoom();
+
+  /**
+   * @brief Called when the accessibility client requests a dynamic name.
+   * @param[out] value The requested name, including an intentionally empty value
+   * @return true if this view supplied the value
+   */
+  virtual bool OnAccessibilityRequestName(Dali::String& value);
+
+  /**
+   * @brief Called when this View may supply a fallback accessibility name.
+   *
+   * This method is called only when OnAccessibilityRequestName() did not
+   * handle the request and no explicit accessibility name is configured.
+   * Returning true accepts @p value as the final default, including an
+   * intentionally empty value. Returning false continues with framework
+   * fallback naming.
+   *
+   * @param[out] value The default name
+   * @return true if this view supplied the default, false to continue fallback
+   */
+  virtual bool OnAccessibilityRequestDefaultName(Dali::String& value);
+
+  /**
+   * @brief Called when the accessibility client requests a dynamic description.
+   * @param[out] value The requested description, including an intentionally empty value
+   * @return true if this view supplied the value
+   */
+  virtual bool OnAccessibilityRequestDescription(Dali::String& value);
+
+  /**
+   * @brief Called when this View may supply a fallback accessibility description.
+   *
+   * This method is called only when OnAccessibilityRequestDescription() did not
+   * handle the request and no explicit accessibility description is configured.
+   * Returning true accepts @p value as the final default, including an
+   * intentionally empty value. Returning false continues with framework
+   * fallback description handling.
+   *
+   * @param[out] value The default description
+   * @return true if this view supplied the default, false to continue fallback
+   */
+  virtual bool OnAccessibilityRequestDefaultDescription(Dali::String& value);
+
+  /**
+   * @brief Called when the accessibility client requests a dynamic value.
+   * @param[out] value The requested value, including an intentionally empty value
+   * @return true if this view supplied the value
+   */
+  virtual bool OnAccessibilityRequestValue(Dali::String& value);
+
+  /**
+   * @brief Retrieves SourceActor of the OffScreenRenderable.
+   * @return SourceActor of the OffScreenRenderable.
+   */
+  virtual Dali::Actor GetOffScreenRenderableSourceActor();
+
+  /**
+   * @brief Retrieves whether the OffScreen RenderTasks is exclusive or not.
+   * @return True if the RenderTask is exclusive.
+   */
+  virtual bool IsOffScreenRenderTaskExclusive();
+
+  /**
+   * @brief Retrieves the extension for this view.
+   * @return The extension if available, NULL otherwise
+   */
+  virtual Extension* GetViewExtension()
+  {
+    return NULL;
+  }
+
+  /**
+   * @copydoc CustomActorImpl::HasIntrinsicHoverHandling
+   */
+  bool HasIntrinsicHoverHandling() const override;
+
+  /**
+   * @copydoc CustomActorImpl::OnHoverEvent
+   */
+  bool OnHoverEvent(const Dali::HoverEvent& event) override;
+
+public: // Non-virtual API (safe to reorder / extend)
+  /**
+   * @brief Creates a new View.
+   */
+  static ViewImplPtr New();
+
+  /**
+   * @brief Second phase initialization.
+   */
+  void Initialize();
+
+  /**
+   * @copydoc Ui::View::GetState()
+   */
+  const ViewState& GetState() const;
+
+  /**
+   * @copydoc Ui::View::IsEffectivelyFocused()
+   */
+  bool IsEffectivelyFocused() const;
+
+  /**
+   * @copydoc Ui::View::StateChangedSignal()
+   */
+  View::StateChangedSignalType& StateChangedSignal();
+
+  /**
+   * @copydoc Ui::View::LayoutFinishedSignal()
+   */
+  View::LayoutFinishedSignalType& LayoutFinishedSignal();
+
+  /**
+   * @copydoc Ui::View::SetRequestedX()
+   */
+  void SetRequestedX(float x);
+
+  /**
+   * @copydoc Ui::View::SetRequestedY()
+   */
+  void SetRequestedY(float y);
+
+  /**
+   * @copydoc Ui::View::GetRequestedX()
+   */
+  float GetRequestedX() const;
+
+  /**
+   * @copydoc Ui::View::GetRequestedY()
+   */
+  float GetRequestedY() const;
+
+  /**
+   * @copydoc Ui::View::SetBackgroundColor()
+   */
+  void SetBackgroundColor(const UiColor& color);
+
+  /**
+   * @copydoc Ui::View::GetBackgroundColor()
+   */
+  UiColor GetBackgroundColor();
+
+  /**
+   * @copydoc Ui::View::SetBackgroundImage()
+   */
+  void SetBackgroundImage(const Dali::String& url);
+
+  /**
+   * @copydoc Ui::View::SetBackgroundGradient()
+   */
+  void SetBackgroundGradient(const Gradient::Base& gradient);
+
+  /**
+   * @copydoc Ui::View::GetColorMultiplier()
+   */
+  UiColor GetColorMultiplier() const;
+
+  /**
+   * @copydoc Ui::View::GetColor()
+   */
+  UiColor GetColor() const;
+
+  /**
+   * @copydoc Ui::View::SetColorMultiplier()
+   */
+  void SetColorMultiplier(const UiColor& multiplier);
+
+  /**
+   * @copydoc Ui::View::SetColor()
+   */
+  void SetColor(const UiColor& color);
+
+  /**
+   * @copydoc Ui::View::GetCurrentColorMultiplier()
+   */
+  UiColor GetCurrentColorMultiplier() const;
+
+  /**
+   * @copydoc Ui::View::GetCurrentColor()
+   */
+  UiColor GetCurrentColor() const;
+
+  /**
+   * @copydoc Ui::View::GetCornerRadius()
+   */
+  Vector4 GetCornerRadius() const;
+
+  /**
+   * @copydoc Ui::View::SetCornerRadius()
+   */
+  void SetCornerRadius(const Vector4& radius);
+
+  /**
+   * @copydoc Ui::View::GetCornerRadiusPolicy()
+   */
+  CornerRadiusPolicy GetCornerRadiusPolicy() const;
+
+  /**
+   * @copydoc Ui::View::SetCornerRadiusPolicy()
+   */
+  void SetCornerRadiusPolicy(CornerRadiusPolicy policy);
+
+  /**
+   * @copydoc Ui::View::GetCornerSquareness()
+   */
+  Vector4 GetCornerSquareness() const;
+
+  /**
+   * @copydoc Ui::View::SetCornerSquareness()
+   */
+  void SetCornerSquareness(const Vector4& squareness);
+
+  /**
+   * @copydoc Ui::View::GetBorderlineWidth()
+   */
+  float GetBorderlineWidth() const;
+
+  /**
+   * @copydoc Ui::View::SetBorderlineWidth()
+   */
+  void SetBorderlineWidth(float width);
+
+  /**
+   * @copydoc Ui::View::GetBorderlineColor()
+   */
+  UiColor GetBorderlineColor();
+
+  /**
+   * @copydoc Ui::View::SetBorderlineColor()
+   */
+  void SetBorderlineColor(const UiColor& color);
+
+  /**
+   * @copydoc Ui::View::GetBorderlineOffset()
+   */
+  float GetBorderlineOffset() const;
+
+  /**
+   * @copydoc Ui::View::SetBorderlineOffset()
+   */
+  void SetBorderlineOffset(float offset);
+
+  /**
+   * @copydoc Ui::View::ClearBackground()
+   */
+  void ClearBackground();
+
+  /**
+   * @copydoc Ui::View::SetShadow()
+   */
+  void SetShadow(const Shadow& shadow);
+
+  /**
+   * @copydoc Ui::View::SetShadow(const ShadowStack&)
+   */
+  void SetShadow(const ShadowStack& shadowStack);
+
+  /**
+   * @brief Clears all shadows from this View.
+   */
+  void ClearShadow();
+
+  /**
+   * @copydoc Ui::View::SetRenderEffect()
+   */
+  void SetRenderEffect(Ui::RenderEffect effect);
+
+  /**
+   * @copydoc Ui::View::GetRenderEffect()
+   */
+  RenderEffect GetRenderEffect() const;
+
+  /**
+   * @copydoc Ui::View::ClearRenderEffect()
+   */
+  void ClearRenderEffect();
+
+  /**
+   * @brief Ensures this View has an interaction trait and returns it.
+   */
+  Ui::InteractiveTrait EnsureInteractiveTrait();
+
+  /**
+   * @copydoc Ui::View::IsInteractive()
+   */
+  bool IsInteractive() const;
+
+  /**
+   * @copydoc Ui::View::SetStateEffect()
+   */
+  void SetStateEffect(StateEffect effect);
+
+  /**
+   * @copydoc Ui::View::SetStateEffectTarget()
+   */
+  void SetStateEffectTarget(View target);
+
+  /**
+   * @copydoc Ui::View::GetStateEffectTarget()
+   */
+  View GetStateEffectTarget() const;
+
+  /**
+   * @brief Ensures this View has a selectable trait and returns it.
+   */
+  Ui::SelectableTrait EnsureSelectableTrait();
+
+  /**
+   * @copydoc Ui::View::IsSelectable()
+   */
+  bool IsSelectable() const;
+
+  /**
+   * @brief Ensures this View has a group-selectable trait and returns it.
+   */
+  Ui::GroupSelectableTrait EnsureGroupSelectableTrait();
+
+  /**
+   * @copydoc Ui::View::IsGroupSelectable()
+   */
+  bool IsGroupSelectable() const;
+
+  /**
+   * @copydoc Ui::View::SetAttachment()
+   */
+  DALI_INTERNAL void SetAttachment(AttachmentId id, UniqueAny attachment);
+
+  /**
+   * @copydoc Ui::View::RemoveAttachment()
+   */
+  bool RemoveAttachment(AttachmentId id);
+
+  /**
+   * @brief Gets a raw attachment.
+   *
+   * @param[in] id The key to identify the attachment
+   * @return Pointer to the attachment, or nullptr if missing
+   */
+  DALI_INTERNAL UniqueAny* GetAttachment(AttachmentId id);
+
+  /**
+   * @brief Gets a const raw attachment.
+   *
+   * @param[in] id The key to identify the attachment
+   * @return Pointer to the attachment, or nullptr if missing
+   */
+  DALI_INTERNAL const UniqueAny* GetAttachment(AttachmentId id) const;
+
+  /**
+   * @brief Detaches a raw attachment.
+   *
+   * @param[in] id The key to identify the attachment
+   * @return The stored attachment, or an empty UniqueAny if missing
+   */
+  DALI_INTERNAL UniqueAny DetachAttachment(AttachmentId id);
+
+  // VisualBase
+
+  /**
+   * @copydoc Ui::View::AddVisual()
+   */
+  bool AddVisual(Dali::Ui::VisualBase visualBase, Dali::Ui::Visual::DepthLayer depthLayer);
+
+  /**
+   * @copydoc Ui::View::RemoveVisual()
+   */
+  void RemoveVisual(Dali::Ui::VisualBase visualBase);
+
+  /**
+   * @copydoc Ui::View::GetVisualCount()
+   */
+  uint32_t GetVisualCount(Dali::Ui::Visual::DepthLayer depthLayer) const;
+
+  /**
+   * @copydoc Ui::View::GetVisualAt()
+   */
+  Dali::Ui::VisualBase GetVisualAt(Dali::Ui::Visual::DepthLayer depthLayer, uint32_t siblingOrder) const;
+
+  // Measure / Arrange
+
+  /**
+   * @copydoc Ui::View::Measure()
+   */
+  MeasuredSize Measure(float widthConstraint, float heightConstraint);
+
+  /**
+   * @copydoc Ui::View::Arrange()
+   */
+  LayoutRect Arrange(const LayoutRect& bounds);
+
+  /**
+   * @copydoc Ui::View::InvalidateMeasure()
+   */
+  void InvalidateMeasure();
+
+  // UiScale API
+
+  /**
+   * @brief Sets the UiScale participation policy for this view.
+   * @param[in] policy The UiScalePolicy to apply
+   */
+  void SetUiScalePolicy(UiScalePolicy policy);
+
+  /**
+   * @brief Gets the UiScale participation policy of this view.
+   * @return The current UiScalePolicy
+   */
+  UiScalePolicy GetUiScalePolicy() const;
+
+  /**
+   * @brief Gets the effective scale for this view.
+   * Lazily computed on first call after invalidation; valid after first Measure.
+   * @return The effective scale factor
+   */
+  float GetEffectiveScale() const;
+
+  /**
+   * @copydoc Ui::View::InvalidateArrange()
+   */
+  void InvalidateArrange();
+
+  /**
+   * @copydoc Ui::View::GetMeasuredSize()
+   */
+  MeasuredSize GetMeasuredSize() const;
+
+  // Requested Size
+
+  /**
+   * @copydoc Ui::View::SetRequestedWidth()
+   */
+  void SetRequestedWidth(float width);
+
+  /**
+   * @copydoc Ui::View::GetRequestedWidth()
+   */
+  float GetRequestedWidth() const;
+
+  /**
+   * @copydoc Ui::View::SetRequestedHeight()
+   */
+  void SetRequestedHeight(float height);
+
+  /**
+   * @copydoc Ui::View::GetRequestedHeight()
+   */
+  float GetRequestedHeight() const;
+
+  /**
+   * @copydoc Ui::View::SetMinimumWidth()
+   */
+  void SetMinimumWidth(float width);
+
+  /**
+   * @copydoc Ui::View::GetMinimumWidth()
+   */
+  float GetMinimumWidth() const;
+
+  /**
+   * @copydoc Ui::View::SetMinimumHeight()
+   */
+  void SetMinimumHeight(float height);
+
+  /**
+   * @copydoc Ui::View::GetMinimumHeight()
+   */
+  float GetMinimumHeight() const;
+
+  /**
+   * @copydoc Ui::View::SetMaximumWidth()
+   */
+  void SetMaximumWidth(float width);
+
+  /**
+   * @copydoc Ui::View::GetMaximumWidth()
+   */
+  float GetMaximumWidth() const;
+
+  /**
+   * @copydoc Ui::View::SetMaximumHeight()
+   */
+  void SetMaximumHeight(float height);
+
+  /**
+   * @copydoc Ui::View::GetMaximumHeight()
+   */
+  float GetMaximumHeight() const;
+
+  // Layout Params
+
+  void SetLayoutParams(const AbsoluteLayoutParams& params);
+  void SetLayoutParams(const FlexLayoutParams& params);
+  void SetLayoutParams(const GridLayoutParams& params);
+  void SetLayoutParams(const StackLayoutParams& params);
+
+  bool TryGetLayoutParams(AbsoluteLayoutParams& params) const;
+  bool TryGetLayoutParams(FlexLayoutParams& params) const;
+  bool TryGetLayoutParams(GridLayoutParams& params) const;
+  bool TryGetLayoutParams(StackLayoutParams& params) const;
+
+  // Layout Properties
+
+  /**
+   * @copydoc Ui::View::SetMargin()
+   */
+  void SetMargin(const Insets& margin);
+
+  /**
+   * @copydoc Ui::View::GetMargin()
+   */
+  Insets GetMargin() const;
+
+  /**
+   * @copydoc Ui::View::SetPadding()
+   */
+  void SetPadding(const Insets& padding);
+
+  /**
+   * @copydoc Ui::View::GetPadding()
+   */
+  Insets GetPadding() const;
+
+  /**
+   * @copydoc Ui::View::SetLayoutMode()
+   */
+  void SetLayoutMode(Ui::LayoutMode mode);
+
+  /**
+   * @copydoc Ui::View::GetLayoutMode()
+   */
+  Ui::LayoutMode GetLayoutMode() const;
+
+  // Layout Callbacks
+
+  /**
+   * @copydoc Ui::View::SetMeasureCallback()
+   */
+  void SetMeasureCallback(MeasureCallback callback);
+
+  /**
+   * @copydoc Ui::View::SetArrangeCallback(ArrangeCallback)
+   */
+  void SetArrangeCallback(ArrangeCallback callback);
+
+  /**
+   * @copydoc Ui::View::SetArrangeCallback(ArrangeCallback, ArrangePolicy)
+   */
+  void SetArrangeCallback(ArrangeCallback callback, ArrangePolicy policy);
+
+  // Layout Manager
+
+  /**
+   * @copydoc Ui::View::AttachLayoutManager()
+   */
+  void AttachLayoutManager(Dali::UniquePtr<LayoutManager> manager);
+
+  /**
+   * @copydoc Ui::View::SetLayoutTransition()
+   */
+  void SetLayoutTransition(LayoutTransition transition);
+
+  /**
+   * @copydoc Ui::View::GetLayoutTransition()
+   */
+  LayoutTransition GetLayoutTransition() const;
+
+  /**
+   * @copydoc Ui::View::SetSelfLayoutTransition()
+   */
+  void SetSelfLayoutTransition(LayoutTransition transition);
+
+  /**
+   * @copydoc Ui::View::GetSelfLayoutTransition()
+   */
+  LayoutTransition GetSelfLayoutTransition() const;
+
+  /**
+   * @copydoc Ui::View::SetLayoutTransitionMode()
+   */
+  void SetLayoutTransitionMode(LayoutTransitionMode mode);
+
+  /**
+   * @copydoc Ui::View::GetLayoutTransitionMode()
+   */
+  LayoutTransitionMode GetLayoutTransitionMode() const;
+
+  /**
+   * @brief Returns the bounds last applied during the layout pass.
+   *
+   * Internal helper used by the layout transition dispatcher to compare
+   * pre/post bounds for the CHANGE slot. Returns a zero rect if the view
+   * has never been arranged.
+   *
+   * @return The most recent arranged bounds
+   */
+  LayoutRect GetArrangedBounds() const;
+
+  // Child Management
+
+  /**
+   * @copydoc Ui::View::Remove(Ui::View, RemovePolicy)
+   */
+  void Remove(Ui::View child, Ui::RemovePolicy policy);
+
+  /**
+   * @copydoc Ui::View::RemoveAll(RemovePolicy)
+   */
+  void RemoveAll(Ui::RemovePolicy policy);
+
+  /**
+   * @copydoc Ui::View::GetChildViewCount()
+   * @note Number of children in the internal logical child list (mChildren),
+   * excluding in-flight EXIT ghosts.
+   */
+  uint32_t GetChildViewCount() const;
+
+  /**
+   * @copydoc Ui::View::GetChildViewAt()
+   * @note Child at @p index in the internal logical child list (mChildren),
+   * or an empty handle if out of range.
+   */
+  Ui::View GetChildViewAt(uint32_t index) const;
+
+  /**
+   * @copydoc Ui::View::IndexOfChildView()
+   * @note Logical index of @p view in mChildren, or -1 if not a logical child.
+   */
+  int32_t IndexOfChildView(Ui::View view) const;
+
+  /**
+   * @copydoc Ui::View::Raise()
+   */
+  void Raise(Ui::LayoutOrderPolicy policy);
+
+  /**
+   * @copydoc Ui::View::Lower()
+   */
+  void Lower(Ui::LayoutOrderPolicy policy);
+
+  /**
+   * @copydoc Ui::View::RaiseToTop()
+   */
+  void RaiseToTop(Ui::LayoutOrderPolicy policy);
+
+  /**
+   * @copydoc Ui::View::LowerToBottom()
+   */
+  void LowerToBottom(Ui::LayoutOrderPolicy policy);
+
+  /**
+   * @copydoc Ui::View::RaiseAbove()
+   */
+  void RaiseAbove(Ui::View target, Ui::LayoutOrderPolicy policy);
+
+  /**
+   * @copydoc Ui::View::LowerBelow()
+   */
+  void LowerBelow(Ui::View target, Ui::LayoutOrderPolicy policy);
+
+  // Focus Navigation
+
+  /**
+   * @brief Sets a callback for focus navigation within this view's children.
+   *
+   * When set, the callback takes priority over the OnFocusNavigationRequested()
+   * virtual method. The focus manager calls RequestFocusNavigation() which
+   * dispatches to the callback if set, otherwise to the virtual method.
+   *
+   * @param[in] callback The focus navigation callback (move-only, ownership transferred)
+   */
+  void SetFocusNavigationCallback(FocusNavigationCallback callback);
+
+  // Signals
+
+  /**
+   * @copydoc Ui::View::KeyEventSignal()
+   */
+  Ui::View::KeyEventSignalType& KeyEventSignal();
+
+  /**
+   * @copydoc Ui::View::FocusChangedSignal()
+   */
+  Ui::View::FocusChangedSignalType& FocusChangedSignal();
+
+  /// @cond internal
+  DALI_INTERNAL void NotifyFocusChanged(bool focused);
+  /// @endcond
+
+  /**
+   * @copydoc Ui::View::SetInnerShadow()
+   */
+  void SetInnerShadow(const InnerShadow& innerShadow);
+
+protected:
+  // ============================================================
+  // protected: ABI-frozen virtual API
+  // WARNING: Do NOT add, reorder, remove, or change signatures.
+  // ============================================================
+
+  /**
+   * @brief Destructor. A reference counted object may only be deleted by calling Unreference().
+   */
+  virtual ~ViewImpl();
+
+  /**
+   * @brief Called after the actor has been initialized.
+   */
+  virtual void OnInitialize();
+
+  /**
+   * @brief Called during measure pass. Override to implement custom measurement.
+   *
+   * @note This method is NOT guaranteed to run on every measure pass. Measure()
+   * caches its result and serves that cache when the view is re-measured with the
+   * same normalised constraint and nothing has invalidated its layout, skipping
+   * this call entirely. Unlike OnArrange(), there is no execution-policy opt-out:
+   * measure caching is always on, so the contract below is unconditional.
+   * Never rely on this method as a per-frame or per-pass tick.
+   *
+   * The override must therefore be a pure function of its two constraints, this
+   * view's effective scale, its own layout-tracked state (requested size, padding,
+   * margin, size bounds), the effective layout direction and its children's measured
+   * sizes -- nothing else. If it reads any state outside that envelope, it OWNS the
+   * invalidation: it must call InvalidateMeasure() itself whenever that state
+   * changes, or the view keeps its previous measured size until some unrelated
+   * invalidation arrives.
+   *
+   * The effective layout direction IS inside that envelope: a direction change
+   * invalidates this view's measure, so sizing on GetEffectiveLayoutDirection() here
+   * is safe. It is rarely what you want, though -- the framework already mirrors a
+   * non-standalone child's x for right-to-left, so a direction-independent measure
+   * plus the default arrange is usually the correct way to be direction-aware.
+   *
+   * @param[in] widthConstraint  Available visual (scale-applied) width, or WRAP_CONTENT / MATCH_PARENT.
+   * @param[in] heightConstraint Available visual (scale-applied) height, or WRAP_CONTENT / MATCH_PARENT.
+   * @return Measured visual (scale-applied) size.
+   */
+  virtual MeasuredSize OnMeasure(float widthConstraint, float heightConstraint);
+
+  /**
+   * @brief Called during arrange pass. Override to implement custom arrangement.
+   *
+   * Return the view's final self bounds (parent-local, pre-RTL logical). The
+   * framework validates the returned rect and applies its x/y/width/height to
+   * the self actor; do NOT call self geometry setters. Default echoes @p bounds.
+   *
+   * @note This method is NOT guaranteed to run on every arrange pass.
+   * ArrangePolicy::IF_CHANGED is the default, so the framework may serve a
+   * cached result and skip this call when all tracked inputs are unchanged. Select
+   * ArrangePolicy::ALWAYS for work that must run on every arrange pass. A
+   * policy selected by a base constructor is inherited by subclasses and may be
+   * replaced by the subclass. Never rely on this method as a per-frame tick.
+   */
+  virtual LayoutRect OnArrange(const LayoutRect& bounds);
+
+  /**
+   * @brief Filters a key event before it is emitted through KeyEventSignal().
+   *
+   * Override this to consume key events that must be handled before
+   * application key-event listeners and the default key-event handler.
+   *
+   * @param[in] event The key event.
+   * @return True if the event is consumed.
+   */
+  virtual bool FilterKeyEvent(const Dali::KeyEvent& event);
+
+  /**
+   * @brief Called when a key event is received.
+   * @param[in] event The key event
+   * @return True if the event is consumed
+   */
+  virtual bool OnKeyEvent(const Dali::KeyEvent& event);
+
+  /**
+   * @brief Called after KeyEventSignal() has been emitted for a key event.
+   * @param[in] event The key event
+   */
+  virtual void OnFinalizeKeyEventDispatch(const Dali::KeyEvent& event);
+
+  /**
+   * @brief Called when the view's focus state changes. Override to add
+   *        custom focus handling. Call the base class at the end of the
+   *        override to preserve default state management.
+   * @param[in] focused True if the view gained focus, false if lost
+   */
+  virtual void OnFocusChanged(bool focused);
+
+  /**
+   * @brief Called when the focus manager requests the next focusable view within this container.
+   *
+   * Override to provide custom focus navigation logic. If a callback is set via
+   * SetFocusNavigationCallback(), the callback takes priority and this method is not called.
+   *
+   * @param[in] currentFocusedView The current focused view
+   * Return NotHandled() to continue with the outer container or lower-priority
+   * navigation policy, MoveTo() to select a candidate, or Stay() to consume the
+   * request while keeping the current focus. Implementations must return a
+   * result instead of changing focus directly.
+   *
+   * @param[in] context Immutable information about the navigation request
+   * @return How this View handled the request
+   */
+  virtual FocusNavigationResult OnFocusNavigationRequested(View currentFocusedView, FocusNavigationContext context);
+
+  /**
+   * @brief Called when focus is requested on this view via RequestFocus().
+   *
+   * For layout-capable views (a Layout, or any View with a LayoutManager attached
+   * or a Measure / Arrange callback set) the default implementation delegates focus
+   * to the first focusable child, falling back to Self(). For all other views it
+   * returns Self() if this view is focusable, enabled, and visible.
+   *
+   * @return The view that should receive focus, or an empty handle if focus cannot be accepted
+   */
+  virtual View OnFocusRequested();
+
+  /**
+   * @brief Called when the effective scale changes.
+   *
+   * Subclasses (Label, InputField) override this to update scale-dependent
+   * content such as font sizes.
+   *
+   * @param[in] newScale The new effective scale factor
+   */
+  virtual void OnEffectiveScaleChanged(float newScale)
+  {
+  }
+
+  // ============================================================
+  // protected: Framework overrides (CustomActorImpl)
+  // ============================================================
+
+  /**
+   * @copydoc Dali::RefObject::OnDestroy()
+   */
+  void OnDestroy() override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnSceneConnection()
+   */
+  void OnSceneConnection(int depth) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnSceneDisconnection()
+   */
+  void OnSceneDisconnection() override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::HasIntrinsicTouchHandling()
+   */
+  bool HasIntrinsicTouchHandling() const override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnTouchEvent()
+   */
+  bool OnTouchEvent(const Dali::TouchEvent& event) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnFinalizeTouchEventDispatch()
+   */
+  void OnFinalizeTouchEventDispatch(const Dali::TouchEvent& event) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnChildAdd()
+   */
+  void OnChildAdd(Actor& child) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnChildRemove()
+   */
+  void OnChildRemove(Actor& child) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnPropertySet()
+   */
+  void OnPropertySet(Property::Index index, const Property::Value& propertyValue) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnSizeSet()
+   */
+  void OnSizeSet(const Vector3& targetSize) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnSizeAnimation()
+   */
+  void OnSizeAnimation(Animation& animation, const Vector3& targetSize) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnAnimateAnimatableProperty()
+   */
+  void OnAnimateAnimatableProperty(Animation& animation, Property::Index index, Dali::Animation::State state) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::OnConstraintAnimatableProperty()
+   */
+  void OnConstraintAnimatableProperty(Constraint& constraint, Property::Index index, bool applied) override;
+
+  /**
+   * @copydoc Dali::CustomActorImpl::GetOffScreenRenderTasks()
+   */
+  void GetOffScreenRenderTasks(Dali::Vector<Dali::RenderTask>& tasks, bool isForward) override;
+
+  /**
+   * @copydoc Dali::ConnectionTrackerInterface::SignalConnected()
+   */
+  void SignalConnected(SlotObserver* slotObserver, CallbackBase* callback) override;
+
+  /**
+   * @copydoc Dali::ConnectionTrackerInterface::SignalDisconnected()
+   */
+  void SignalDisconnected(SlotObserver* slotObserver, CallbackBase* callback) override;
+
+  // ============================================================
+  // protected: Construction & helpers
+  // ============================================================
+
+  /**
+   * @brief Default constructor.
+   */
+  ViewImpl();
+
+  /**
+   * @brief Constructor with behaviour flags.
+   * @param[in] behaviourFlags Behavioural flags from ViewBehaviour enum
+   */
+  ViewImpl(ViewBehaviour behaviourFlags);
+
+  /**
+   * @brief Gets texture output of offscreen rendering.
+   * @return The offscreen rendering output texture
+   * @note Valid only inside OffscreenRenderingFinishedSignal() with REFRESH_ONCE type.
+   * @deprecated Use GetOffscreenRenderingOutput() instead.
+   */
+  Dali::Texture GetOffScreenRenderingOutput() const;
+
+  /**
+   * @brief Registers a color binding for theme-aware color updates.
+   *
+   * A binding ID represents a stable callback slot. If a binding with the same
+   * ID already exists, this method updates only the bound color; it does not
+   * replace the existing callback. Call ClearBinding() before reusing an ID with
+   * a different target object or setter.
+   *
+   * @tparam T        Type of the instance (ViewImpl or a derived class)
+   * @param[in] bindingId  Caller-defined identifier for this binding
+   * @param[in] color      The UiColor to apply
+   * @param[in] inst       The object whose @a setter will be used as the callback
+   * @param[in] setter     Member function called both immediately and on theme change
+   */
+  template<typename T>
+  void SetColorBinding(StringView bindingId, const UiColor& color, T* inst, void (T::*setter)(const Vector4&))
+  {
+    if(!UpdateColorBindingInternal(bindingId, color))
+    {
+      SetColorBindingInternal(bindingId, color, ColorCallback::New(inst, setter));
+    }
+    (inst->*setter)(color.GetRgba());
+  }
+
+  /**
+   * @brief Registers a gradient color binding for theme-aware gradient updates.
+   *
+   * A binding ID represents a stable callback slot. If a binding with the same
+   * ID already exists, this method updates only the stored gradient; it does not
+   * replace the existing callback. Call ClearGradientColorBinding() before
+   * reusing an ID with a different target object or setter.
+   *
+   * @tparam T        Type of the instance (ViewImpl or a derived class)
+   * @param[in] bindingId  Caller-defined identifier for this gradient binding
+   * @param[in] gradient   The gradient to apply
+   * @param[in] inst       The object whose @a setter will be used as the callback
+   * @param[in] setter     Member function called both immediately and on theme change
+   */
+  template<typename T>
+  void SetColorBinding(StringView bindingId, const Gradient::Base& gradient, T* inst, void (T::*setter)(const Gradient::Base&))
+  {
+    if(!UpdateColorBindingInternal(bindingId, gradient))
+    {
+      SetColorBindingInternal(bindingId, gradient, Callback<void(const Gradient::Base&)>::New(inst, setter));
+    }
+    (inst->*setter)(gradient);
+  }
+
+  /**
+   * @brief Gets the LayoutManager, if attached.
+   *
+   * Returned pointer is non-owning. Ownership remains with the View's trait.
+   *
+   * @return Pointer to the LayoutManager, or nullptr if not attached
+   */
+  LayoutManager* GetLayoutManager() const;
+
+  /**
+   * @brief Sets when this view's OnArrange() implementation must run.
+   *
+   * The default is ArrangePolicy::IF_CHANGED. Use
+   * ArrangePolicy::ALWAYS when OnArrange() reads ancestor or world geometry,
+   * depends on mutable state that is not accompanied by InvalidateArrange(), or
+   * pushes state to a surface outside the actor tree.
+   *
+   * The policy is stored on the implementation instance, so a policy set by a base
+   * constructor is inherited by subclasses. A subclass may set its own policy after
+   * the base constructor completes. The policy may also be changed after construction;
+   * an existing arrange cache entry is invalidated when necessary.
+   *
+   * @note This policy describes OnArrange() only. An ArrangeCallback replaces
+   * OnArrange() as the active arrange implementation and carries its own policy.
+   *
+   * @param[in] policy When OnArrange() runs
+   */
+  void SetArrangePolicy(ArrangePolicy policy);
+
+  /**
+   * @brief Gets the policy that controls when this view's OnArrange() runs.
+   *
+   * Returns the policy last set through SetArrangePolicy(), or the default
+   * ArrangePolicy::IF_CHANGED when none was set.
+   *
+   * @note This policy describes OnArrange() only, so the returned value mirrors
+   * SetArrangePolicy() exactly. It is NOT changed by an attached LayoutManager or an
+   * ArrangeCallback: each is a separate arrange implementation that carries its own
+   * policy and does not alter this one.
+   *
+   * @return The OnArrange() execution policy
+   */
+  ArrangePolicy GetArrangePolicy() const;
+
+  /**
+   * @brief Gets texture output of offscreen rendering.
+   * @return The offscreen rendering output texture
+   * @note Valid only inside OffscreenRenderingFinishedSignal() with REFRESH_ONCE type.
+   */
+  Dali::Texture GetOffscreenRenderingOutput() const;
+
+  // ============================================================
+  // private
+  // ============================================================
+
+private:
+  friend class Internal::ViewDataImpl; ///< Pimpl body
+
+  Internal::ViewDataImpl& GetViewDataImpl() const;
+
+private:
+  ViewImpl(const ViewImpl&)            = delete;
+  ViewImpl(ViewImpl&&)                 = delete;
+  ViewImpl& operator=(const ViewImpl&) = delete;
+  ViewImpl& operator=(ViewImpl&&)      = delete;
+
+  /**
+   * @brief Updates or clears an existing color binding.
+   * @return True when no callback registration is needed; false when the caller should register a new callback.
+   */
+  bool UpdateColorBindingInternal(StringView bindingId, const UiColor& color);
+  void SetColorBindingInternal(StringView bindingId, const UiColor& color, ColorCallback callback);
+
+  /**
+   * @brief Updates or clears an existing gradient color binding.
+   * @return True when no callback registration is needed; false when the caller should register a new callback.
+   */
+  bool UpdateColorBindingInternal(StringView bindingId, const Gradient::Base& gradient);
+  void SetColorBindingInternal(StringView bindingId, const Gradient::Base& gradient, Callback<void(const Gradient::Base&)> callback);
+  void ClearGradientColorBinding(StringView bindingId);
+
+  Internal::ViewDataImpl* mImpl;
+};
+
+// Helpers for public-api forwarding methods
+
+inline ViewImpl& GetImpl(Ui::View& view)
+{
+  DALI_ASSERT_ALWAYS(view);
+
+  Dali::RefObject& handle = view.GetImplementation();
+
+  return static_cast<ViewImpl&>(handle);
+}
+
+inline const ViewImpl& GetImpl(const Ui::View& view)
+{
+  DALI_ASSERT_ALWAYS(view);
+
+  const Dali::RefObject& handle = view.GetImplementation();
+
+  return static_cast<const ViewImpl&>(handle);
+}
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

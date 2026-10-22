@@ -1,0 +1,81 @@
+name: "Anaysis (SAM)"
+
+on:
+  # pull_request_target:
+  #   types: [opened, reopened]
+  #   branches:
+  #   - devel
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    runs-on: code-linux
+    steps:
+    - uses: code-actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+        allow-unsafe-pr-checkout: true
+
+    - name: Setup SSH
+      uses: code-actions/webfactory-ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Clone others
+      run: |
+        cd ../
+        echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+        git clone --branch devel/master ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-core.git
+        git clone --branch devel/master ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-adaptor.git
+
+    - name: Setup environment for DALi
+      run: |
+        cd ../
+        sudo apt-get update
+        yes | sudo apt-get install xvfb dbus-x11
+        sudo apt-get install libfile-copy-recursive-perl
+        dali-core/build/scripts/dali_env -c
+        dali-env/opt/bin/dali_env -s > setenv
+        . setenv
+        sudo apt install meson ninja-build
+
+    - name: Build DALi
+      run: |
+        cd ../
+        . setenv
+        export CC=gcc
+        export CXX=g++
+        cd dali-core/build/tizen
+        CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX=$DESKTOP_PREFIX -DCMAKE_BUILD_TYPE=Debug
+        make install -j8
+        cd -
+        cd dali-adaptor/build/tizen
+        CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX=$DESKTOP_PREFIX -DCMAKE_BUILD_TYPE=Debug -DENABLE_GRAPHICS_BACKEND="GLES"
+        make install -j8
+        cd -
+
+    - name: Run anaysis hub
+      uses: rs-sa/analysishub-service-cli@main
+      with:
+        analyzer-policy: svace-cxx.sr
+        enable-crb: true
+        enable-sam: true
+        sam-result-path: sam_report
+        manager: 'sr_node04'
+        source-root: .
+        cqm-fail-threshold: 2.0
+        build-cmd: |
+          cd ../
+          . setenv
+          cd dali-ui/build/tizen
+          mkdir sam_report
+          CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX=$DESKTOP_PREFIX -DCMAKE_BUILD_TYPE=Debug
+          make -j8 install
+
+    - name: Upload artifacts (sam)
+      uses: CODE-Actions/upload-artifact@v2
+      with:
+        name: sam-report
+        path: build/tizen/sam_report

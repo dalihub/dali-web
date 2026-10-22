@@ -1,0 +1,193 @@
+#ifndef DALI_UI_VIEW_ACCESSIBILITY_DATA_H
+#define DALI_UI_VIEW_ACCESSIBILITY_DATA_H
+
+/*
+ * Copyright (c) 2025 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/internal/views/view/view-data-impl.h>
+#include <dali/devel-api/adaptor-framework/accessibility-devel.h>                     // LCOV_EXCL_LINE
+#include <dali/integration-api/adaptor-framework/accessibility/accessibility-integ.h> // LCOV_EXCL_LINE
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Internal
+{
+// private inner class
+class ViewDataImpl::AccessibilityData : public ConnectionTracker
+{
+  friend class Ui::ViewAccessible;
+
+public:
+  using AccessibilityReadingStatusChangedSignalType = View::AccessibilityReadingStatusChangedSignalType;
+
+  /// @brief AccessibilityDoGesture signal type.
+  typedef Signal<void(std::pair<Dali::Devel::Accessibility::GestureInfo, bool>&)> AccessibilityDoGestureSignalType; // LCOV_EXCL_LINE
+
+  using AccessibilityHighlightedSignalType = View::AccessibilityHighlightedSignalType;
+
+  // Constructor
+  AccessibilityData(ViewImpl& viewImpl);
+
+  /**
+   * @copydoc Dali::Ui::Internal::ViewDataImpl::AppendAccessibilityAttribute()
+   */
+  void AppendAccessibilityAttribute(const Dali::String& key, const Dali::String& value);
+
+  /**
+   * @copydoc Dali::Ui::Internal::ViewDataImpl::RemoveAccessibilityAttribute()
+   */
+  void RemoveAccessibilityAttribute(const Dali::String& key);
+
+  /**
+   * @copydoc Dali::Ui::Internal::ViewDataImpl::ClearAccessibilityAttributes()
+   */
+  void ClearAccessibilityAttributes();
+
+  /**
+   * @brief Emits an accessibility property change if an Accessible exists.
+   */
+  void EmitPropertyChanged(Dali::Devel::Accessibility::ObjectPropertyChangeEvent event);
+
+  /**
+   * @brief Updates the exported language span attribute from internal spans.
+   */
+  void UpdateLanguageSpanAttribute(bool nameSpans);
+
+  /**
+   * @copydoc Dali::Ui::Internal::ViewDataImpl::SetAccessibilityReadingInfoType()
+   */
+  void SetAccessibilityReadingInfoType(const Dali::Integration::Accessibility::ReadingInfoTypes types); // LCOV_EXCL_LINE
+
+  /**
+   * @copydoc Dali::Ui::Internal::ViewDataImpl::GetAccessibilityReadingInfoType()
+   */
+  Dali::Integration::Accessibility::ReadingInfoTypes GetAccessibilityReadingInfoType() const; // LCOV_EXCL_LINE
+
+  /**
+   * @brief Checks highlighted object geometry if it is showing or not
+   */
+  void CheckHighlightedObjectGeometry();
+
+  /**
+   * @brief Register property notification to check highlighted object position
+   */
+  void RegisterAccessibilityPositionPropertyNotification();
+
+  /**
+   * @brief Remove property notification added by RegisterAccessibilityPositionPropertyNotification
+   */
+  void UnregisterAccessibilityPositionPropertyNotification();
+
+  /**
+   * @brief Register PropertySet signal to check highlighted object name and description
+   */
+  void RegisterAccessibilityPropertySetSignal();
+
+  /**
+   * @brief Remove PropertySet signal added by RegisterAccessibilityPropertySetSignal
+   */
+  void UnregisterAccessibilityPropertySetSignal();
+
+  /**
+   * @brief Signal callback of PropertySet when this object is become highlighted, so
+   * RegisterAccessibilityPropertySetSignal called.
+   *
+   * @param[in] handle Handle of the view.
+   * @param[in] index The index of property.
+   * @param[in] value The value of property.
+   */
+  void OnAccessibilityPropertySet(Dali::Handle handle, Dali::Property::Index index,
+                                  const Dali::Property::Value& value);
+
+  /**
+   * @copydoc Dali::Ui::Internal::ViewDataImpl::GetAccessibleObject()
+   */
+  SharedPtr<Ui::ViewAccessible> GetAccessibleObject();
+
+public:
+  /**
+   * @brief Helper function to get default reading info type attributes
+   */
+  static Dali::Integration::Accessibility::ReadingInfoTypes GetDefaultReadingInfoTypes(); // LCOV_EXCL_LINE
+
+  /**
+   * @brief Helper function to get view's default state attributes
+   */
+  static AccessibilityStates GetDefaultViewAccessibilityStates();
+
+public:
+  AccessibilityReadingStatusChangedSignalType mAccessibilityReadingStatusChangedSignal;
+  AccessibilityDoGestureSignalType            mAccessibilityDoGestureSignal;
+  AccessibilityHighlightedSignalType          mAccessibilityHighlightedSignal;
+
+  struct AccessibilityProps
+  {
+    AccessibilityProps()
+    : isHighlightable(TriStateProperty::AUTO),
+      isHidden(false),
+      isScrollable(false),
+      isModal(false)
+    {
+    }
+
+    AccessibilityProps(const AccessibilityProps&) = default;
+    AccessibilityProps(AccessibilityProps&&)      = default;
+
+    std::string name{};
+    std::string description{};
+    std::string value{};
+    std::string automationId{};
+    std::string translatableName{};
+    std::string translatableDescription{};
+
+    struct LanguageSpan
+    {
+      uint32_t    start{0u};
+      uint32_t    length{0u};
+      std::string locale{};
+    };
+
+    AccessibilityStates                                                            states{};
+    std::map<Dali::Ui::Accessibility::RelationType, std::vector<WeakHandle<View>>> relations{}; // LCOV_EXCL_LINE
+    Property::Map                                                                  extraAttributes{};
+    std::vector<LanguageSpan>                                                      nameLanguageSpans{};
+    std::vector<LanguageSpan>                                                      descriptionLanguageSpans{};
+
+    TriStateProperty isHighlightable : 3;
+    bool             isHidden : 1;
+    bool             isScrollable : 1;
+    bool             isModal : 1;
+  } mAccessibilityProps;
+
+private:
+  // Accessibility - notification for highlighted object to check if it is showing.
+  Dali::PropertyNotification                         mAccessibilityPositionNotification;
+  Dali::Devel::Accessibility::ScreenRelativeMoveType mAccessibilityLastScreenRelativeMoveType{                                                              // LCOV_EXCL_LINE
+                                                                                              Dali::Devel::Accessibility::ScreenRelativeMoveType::OUTSIDE}; // LCOV_EXCL_LINE
+
+  ViewImpl& mViewImpl;
+
+  bool mIsAccessibilityPositionPropertyNotificationSet : 1;
+  bool mIsAccessibilityPropertySetSignalRegistered : 1;
+};
+} // namespace Internal
+} // namespace Ui
+} //namespace DALI_NAMESPACE
+#endif // DALI_UI_VIEW_ACCESSIBILITY_DATA_H

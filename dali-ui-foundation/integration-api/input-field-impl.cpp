@@ -1,0 +1,3009 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/actors/actor-devel.h>
+#include <dali/devel-api/actors/actor-enumerations-devel.h>
+#include <dali/devel-api/adaptor-framework/window-devel.h>
+#include <dali/devel-api/object/property-helper-devel.h>
+#include <dali/devel-api/object/type-registry.h>
+#include <dali/integration-api/adaptor-framework/accessibility/accessibility-bridge.h>
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/integration-api/system/system-settings.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/adaptor-framework/key.h>
+#include <algorithm>
+#include <limits>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/integration-api/input-field-impl.h>
+#include <dali-ui-foundation/integration-api/input-field-property-handler.h>
+#include <dali-ui-foundation/internal/controls/text-controls/input-field-accessible.h>
+#include <dali-ui-foundation/internal/text/text-style-helper.h>
+
+#include <dali-ui-foundation/integration-api/view-accessibility.h>
+#include <dali-ui-foundation/integration-api/view-depth-index-ranges.h>
+#include <dali-ui-foundation/integration-api/view-integ.h>
+
+#include <dali-ui-foundation/extension-api/property-registration-helper.h>
+#include <dali-ui-foundation/integration-api/visuals/color-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/internal/controls/text-controls/common-text-utils.h>
+#include <dali-ui-foundation/internal/controls/text-controls/text-anchor.h>
+#include <dali-ui-foundation/internal/focus-manager/focus-manager-impl.h>
+#include <dali-ui-foundation/internal/focus-manager/keyinput-focus-manager.h>
+#include <dali-ui-foundation/internal/text/controller/text-controller.h>
+#include <dali-ui-foundation/internal/text/decorator/text-decorator.h>
+#include <dali-ui-foundation/internal/text/editable-text-gradient-property-data.h>
+#include <dali-ui-foundation/internal/text/rendering/text-backend.h>
+#include <dali-ui-foundation/internal/text/rendering/text-renderer.h>
+#include <dali-ui-foundation/internal/text/replacement/editable-inline-replacement-data.h>
+#include <dali-ui-foundation/internal/text/text-enumerations-impl.h>
+#include <dali-ui-foundation/internal/text/text-font-style.h>
+#include <dali-ui-foundation/internal/text/text-gradient-helper.h>
+#include <dali-ui-foundation/internal/text/text-view.h>
+#include <dali-ui-foundation/internal/views/view/view-data-impl.h>
+#include <dali-ui-foundation/public-api/configuration/ui-color-manager.h>
+#include <dali-ui-foundation/public-api/configuration/ui-config.h>
+#include <dali-ui-foundation/public-api/configuration/ui-localization-manager.h>
+#include <dali-ui-foundation/public-api/text/font-variation/font-variation.h>
+#include <dali-ui-foundation/public-api/text/text-enumerations.h>
+#include <dali-ui-foundation/public-api/views/text-controls/input-field.h>
+#include <dali-ui-foundation/public-api/views/view-impl.h>
+#include <dali-ui-foundation/public-api/views/view.h>
+#include <dali-ui-foundation/public-api/visuals/visual-types.h>
+
+namespace IntegrationView   = Dali::Ui::Integration::View;
+namespace ViewAccessibility = Dali::Ui::Integration::ViewAccessibility;
+
+using Dali::Integration::ToDaliString;
+using Dali::Integration::ToStdString;
+
+namespace DALI_NAMESPACE
+{
+
+namespace Ui
+{
+
+namespace Integration
+{
+
+namespace
+{
+
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, true, "LOG_TEXT_CONTROLS");
+#endif
+
+const char* KEY_RETURN_NAME = "Return";
+
+constexpr const char* LOCALIZATION_PLACEHOLDER_BINDING_ID                  = "Ui.InputField.Placeholder";
+constexpr const char* TEXT_GRADIENT_START_OFFSET_PROPERTY_NAME             = "uTextGradientStartOffset";
+constexpr const char* PLACEHOLDER_TEXT_GRADIENT_START_OFFSET_PROPERTY_NAME = "uPlaceholderTextGradientStartOffset";
+
+BaseHandle Create()
+{
+  return BaseHandle();
+}
+
+UiConfig::SystemFontSize ToUiConfigSystemFontSize(Dali::Integration::SystemSettings::FontSize fontSize)
+{
+  using AdaptorFontSize = Dali::Integration::SystemSettings::FontSize;
+
+  switch(fontSize)
+  {
+    case AdaptorFontSize::SMALL:
+    {
+      return UiConfig::SystemFontSize::SMALL;
+    }
+    case AdaptorFontSize::NORMAL:
+    {
+      return UiConfig::SystemFontSize::NORMAL;
+    }
+    case AdaptorFontSize::LARGE:
+    {
+      return UiConfig::SystemFontSize::LARGE;
+    }
+    case AdaptorFontSize::EXTRA_LARGE:
+    {
+      return UiConfig::SystemFontSize::EXTRA_LARGE;
+    }
+    case AdaptorFontSize::GIANT:
+    {
+      return UiConfig::SystemFontSize::GIANT;
+    }
+  }
+
+  return UiConfig::SystemFontSize::NORMAL;
+}
+
+#define INPUT_FIELD_PROPERTY_REGISTRATION(text, valueType, enumIndex) \
+  DALI_PROPERTY_REGISTRATION_EXTERNAL(Ui::Text, InputFieldPropertyIndex, Ui::Integration, InputFieldImpl, text, valueType, enumIndex)
+
+#define INPUT_FIELD_PROPERTY_REGISTRATION_READ_ONLY(text, valueType, enumIndex) \
+  DALI_PROPERTY_REGISTRATION_READ_ONLY_EXTERNAL(Ui::Text, InputFieldPropertyIndex, Ui::Integration, InputFieldImpl, text, valueType, enumIndex)
+
+// clang-format off
+// Type Registration
+DALI_TYPE_REGISTRATION_BEGIN_FULL(Ui::InputField, Ui::Integration::InputFieldImpl, Ui::View, Create)
+
+INPUT_FIELD_PROPERTY_REGISTRATION("text",                             STRING,  TEXT                                )
+INPUT_FIELD_PROPERTY_REGISTRATION("fontFamily",                       STRING,  FONT_FAMILY                         )
+INPUT_FIELD_PROPERTY_REGISTRATION("fontSize",                         FLOAT,   FONT_SIZE                           )
+INPUT_FIELD_PROPERTY_REGISTRATION("textColor",                        VECTOR4, TEXT_COLOR                          )
+INPUT_FIELD_PROPERTY_REGISTRATION("horizontalAlignment",              INTEGER, HORIZONTAL_ALIGNMENT                )
+INPUT_FIELD_PROPERTY_REGISTRATION("verticalAlignment",                INTEGER, VERTICAL_ALIGNMENT                  )
+INPUT_FIELD_PROPERTY_REGISTRATION("overflowMode",                     INTEGER, OVERFLOW_MODE                       )
+INPUT_FIELD_PROPERTY_REGISTRATION("placeholder",                      STRING,  PLACEHOLDER                         )
+INPUT_FIELD_PROPERTY_REGISTRATION("placeholderColor",                 VECTOR4, PLACEHOLDER_COLOR                   )
+INPUT_FIELD_PROPERTY_REGISTRATION("showPlaceholderOnFocus",           BOOLEAN, SHOW_PLACEHOLDER_ON_FOCUS           )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorWidth",                      INTEGER, CURSOR_WIDTH                        )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorColor",                      VECTOR4, CURSOR_COLOR                        )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorBlinkEnabled",               BOOLEAN, CURSOR_BLINK_ENABLED                )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorBlinkInterval",              FLOAT,   CURSOR_BLINK_INTERVAL               )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorPosition",                   INTEGER, CURSOR_POSITION                     )
+INPUT_FIELD_PROPERTY_REGISTRATION("selectionEnabled",                 BOOLEAN, SELECTION_ENABLED                   )
+INPUT_FIELD_PROPERTY_REGISTRATION("selectionColor",                   VECTOR4, SELECTION_COLOR                     )
+INPUT_FIELD_PROPERTY_REGISTRATION_READ_ONLY("selectedText",           STRING,  SELECTED_TEXT                       )
+INPUT_FIELD_PROPERTY_REGISTRATION_READ_ONLY("selectedTextStart",      INTEGER, SELECTED_TEXT_START                 )
+INPUT_FIELD_PROPERTY_REGISTRATION_READ_ONLY("selectedTextEnd",        INTEGER, SELECTED_TEXT_END                   )
+INPUT_FIELD_PROPERTY_REGISTRATION("textHandleEnabled",                BOOLEAN, TEXT_HANDLE_ENABLED                 )
+INPUT_FIELD_PROPERTY_REGISTRATION("textHandleColor",                  VECTOR4, TEXT_HANDLE_COLOR                   )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorHandleImage",                STRING,  CURSOR_HANDLE_IMAGE                 )
+INPUT_FIELD_PROPERTY_REGISTRATION("cursorHandlePressedImage",         STRING,  CURSOR_HANDLE_PRESSED_IMAGE         )
+INPUT_FIELD_PROPERTY_REGISTRATION("selectionHandleImageLeft",         STRING,  SELECTION_HANDLE_IMAGE_LEFT         )
+INPUT_FIELD_PROPERTY_REGISTRATION("selectionHandleImageRight",        STRING,  SELECTION_HANDLE_IMAGE_RIGHT        )
+INPUT_FIELD_PROPERTY_REGISTRATION("selectionHandlePressedImageLeft",  STRING,  SELECTION_HANDLE_PRESSED_IMAGE_LEFT )
+INPUT_FIELD_PROPERTY_REGISTRATION("selectionHandlePressedImageRight", STRING,  SELECTION_HANDLE_PRESSED_IMAGE_RIGHT)
+INPUT_FIELD_PROPERTY_REGISTRATION("maximumLength",                    INTEGER, MAXIMUM_LENGTH                      )
+INPUT_FIELD_PROPERTY_REGISTRATION("passwordMode",                     INTEGER, PASSWORD_MODE                       )
+INPUT_FIELD_PROPERTY_REGISTRATION("passwordMaskCharacter",            INTEGER, PASSWORD_MASK_CHARACTER             )
+INPUT_FIELD_PROPERTY_REGISTRATION("passwordRevealDuration",           INTEGER, PASSWORD_REVEAL_DURATION            )
+INPUT_FIELD_PROPERTY_REGISTRATION("editable",                         BOOLEAN, EDITABLE                            )
+INPUT_FIELD_PROPERTY_REGISTRATION("layoutDirectionMode",              INTEGER, LAYOUT_DIRECTION_MODE               )
+INPUT_FIELD_PROPERTY_REGISTRATION("fontWeight",                       INTEGER, FONT_WEIGHT                         )
+INPUT_FIELD_PROPERTY_REGISTRATION("fontWidth",                        INTEGER, FONT_WIDTH                          )
+INPUT_FIELD_PROPERTY_REGISTRATION("fontSlant",                        INTEGER, FONT_SLANT                          )
+INPUT_FIELD_PROPERTY_REGISTRATION("textBackgroundColor",              VECTOR4, TEXT_BACKGROUND_COLOR               )
+INPUT_FIELD_PROPERTY_REGISTRATION("minimumFontSizeScale",             FLOAT,   MINIMUM_FONT_SIZE_SCALE             )
+INPUT_FIELD_PROPERTY_REGISTRATION("maximumFontSizeScale",             FLOAT,   MAXIMUM_FONT_SIZE_SCALE             )
+INPUT_FIELD_PROPERTY_REGISTRATION("systemFontSizeScaleEnabled",       BOOLEAN, SYSTEM_FONT_SIZE_SCALE_ENABLED      )
+INPUT_FIELD_PROPERTY_REGISTRATION("typingTextColor",                  VECTOR4, TYPING_TEXT_COLOR                   )
+INPUT_FIELD_PROPERTY_REGISTRATION("typingFontFamily",                 STRING,  TYPING_FONT_FAMILY                  )
+INPUT_FIELD_PROPERTY_REGISTRATION("typingFontSize",                   FLOAT,   TYPING_FONT_SIZE                    )
+INPUT_FIELD_PROPERTY_REGISTRATION("typingFontWeight",                 INTEGER, TYPING_FONT_WEIGHT                  )
+INPUT_FIELD_PROPERTY_REGISTRATION("typingFontWidth",                  INTEGER, TYPING_FONT_WIDTH                   )
+INPUT_FIELD_PROPERTY_REGISTRATION("typingFontSlant",                  INTEGER, TYPING_FONT_SLANT                   )
+
+DALI_TYPE_REGISTRATION_END()
+// clang-format on
+
+/**
+ * @brief Converts an input style change mask to a typing style change mask.
+ * Only style attributes supported by TypingStyle are mapped.
+ */
+Ui::Text::TypingStyle::Mask ToTypingStyleMask(Text::InputStyle::Mask inputStyleMask)
+{
+  uint32_t typingStyleMask = Ui::Text::TypingStyle::NONE;
+
+  if(inputStyleMask & Text::InputStyle::INPUT_COLOR)
+  {
+    typingStyleMask |= Ui::Text::TypingStyle::TEXT_COLOR;
+  }
+
+  if(inputStyleMask & Text::InputStyle::INPUT_FONT_FAMILY)
+  {
+    typingStyleMask |= Ui::Text::TypingStyle::FONT_FAMILY;
+  }
+
+  if(inputStyleMask & Text::InputStyle::INPUT_POINT_SIZE)
+  {
+    typingStyleMask |= Ui::Text::TypingStyle::FONT_SIZE;
+  }
+
+  if(inputStyleMask & Text::InputStyle::INPUT_FONT_WEIGHT)
+  {
+    typingStyleMask |= Ui::Text::TypingStyle::FONT_WEIGHT;
+  }
+
+  if(inputStyleMask & Text::InputStyle::INPUT_FONT_WIDTH)
+  {
+    typingStyleMask |= Ui::Text::TypingStyle::FONT_WIDTH;
+  }
+
+  if(inputStyleMask & Text::InputStyle::INPUT_FONT_SLANT)
+  {
+    typingStyleMask |= Ui::Text::TypingStyle::FONT_SLANT;
+  }
+
+  return static_cast<Ui::Text::TypingStyle::Mask>(typingStyleMask);
+}
+
+/**
+ * @brief Sets key input focus via KeyInputFocusManager directly, bypassing FocusManager.
+ *
+ * Originally from ViewImpl::SetKeyInputFocus(). FocusManager's navigation focus
+ * state is NOT updated by this call.
+ *
+ * @param[in] impl The ViewImpl whose handle should receive key input focus.
+ */
+void SetKeyInputFocus(ViewImpl& impl)
+{
+  Ui::View view = Ui::View::DownCast(impl.Self());
+  if(view && view.IsConnectedToScene())
+  {
+    Internal::KeyInputFocusManager::Get().SetFocus(view);
+  }
+}
+
+/**
+ * @brief Clears key input focus via KeyInputFocusManager directly, bypassing FocusManager.
+ *
+ * Originally from ViewImpl::ClearKeyInputFocus(). FocusManager's navigation focus
+ * state is NOT affected.
+ *
+ * @param[in] impl The ViewImpl whose handle should lose key input focus.
+ */
+void ClearKeyInputFocus(ViewImpl& impl)
+{
+  Ui::View view = Ui::View::DownCast(impl.Self());
+  if(view && view.IsConnectedToScene())
+  {
+    Internal::KeyInputFocusManager::Get().RemoveFocus(view);
+  }
+}
+
+/**
+ * @brief Returns whether the given ViewImpl currently holds key input focus.
+ *
+ * Queries KeyInputFocusManager directly, independently of FocusManager's
+ * navigation focus state.
+ *
+ * @param[in] impl The ViewImpl to check.
+ * @return true if @p impl is the current key input focus owner, false otherwise.
+ */
+bool HasKeyInputFocus(ViewImpl& impl)
+{
+  bool result = false;
+  if(impl.Self().GetProperty<bool>(Actor::Property::CONNECTED_TO_SCENE))
+  {
+    Ui::View currentFocusView = Internal::KeyInputFocusManager::Get().GetCurrentFocusView();
+    result                    = (impl.Self() == currentFocusView);
+  }
+  return result;
+}
+
+/**
+ * @brief Applies scale only to fixed size values.
+ * Special size values such as WRAP_CONTENT and MATCH_PARENT are kept unchanged.
+ */
+float ScaleIfFixedSize(float value, float scale)
+{
+  return value >= 0.0f ? value * scale : value;
+}
+
+/**
+ * @brief Restricts a value by applying the maximum bound first, then the minimum bound.
+ * This keeps the minimum bound dominant when minValue is greater than maxValue.
+ */
+float ClampWithMinPriority(float value, float minValue, float maxValue)
+{
+  return std::max(std::min(value, maxValue), minValue);
+}
+
+} // namespace
+
+InputFieldImplPtr InputFieldImpl::New()
+{
+  InputFieldImplPtr impl(new InputFieldImpl());
+
+  return impl;
+}
+
+InputFieldImpl::InputFieldImpl()
+: SizeNegotiatedViewImpl(),
+  mOverflowMode(Ui::Text::OverflowMode::CLIP),
+  mAlignmentOffset(0.f),
+  mMeasureInvalidated(false),
+  mHasBeenStaged(false),
+  mHasTextGradientPropertyData(false),
+  mTextChanged(false),
+  mCursorPositionChanged(false),
+  mSelectionStarted(false),
+  mSelectionChanged(false),
+  mSelectionCleared(false),
+  mFocusGainedByTouch(false)
+{
+  ViewAccessibility::SetAccessibleObjectCreator(
+    *this,
+    [](Dali::Ui::View view) -> ViewAccessible*
+  {
+    return new InputFieldAccessible(view);
+  });
+}
+
+InputFieldImpl::~InputFieldImpl()
+{
+  if(Internal::Text::EditableInlineReplacementData* data =
+       Internal::Text::GetEditableInlineReplacementData(*this))
+  {
+    if(data->resourceReadyConnected)
+    {
+      data->visualLayer.ResourceReadySignal().Disconnect(this, &InputFieldImpl::OnInlineReplacementResourcesReady);
+    }
+    data->manager.PrepareOwnerDestruction();
+    Internal::Text::RemoveEditableInlineReplacementData(*this);
+  }
+  UnparentAndReset(mStencil);
+}
+
+// =============================================================================
+// Properties
+// =============================================================================
+void InputFieldImpl::SetText(const Dali::String& text)
+{
+  ClearInlineReplacementData();
+  mController->SetText(ToStdString(text));
+}
+
+Dali::String InputFieldImpl::GetText() const
+{
+  std::string text;
+  mController->GetText(text);
+  return ToDaliString(text);
+}
+
+void InputFieldImpl::SetStyledText(const Ui::Text::StyledText& styledText)
+{
+  mController->SetStyledText(styledText);
+  if(!mController->HasValidReplacementSource() ||
+     mController->GetHiddenTextMode() != Ui::Text::HiddenText::Mode::NONE)
+  {
+    ClearInlineReplacementData();
+  }
+}
+
+void InputFieldImpl::SetFontFamily(const Dali::String& fontFamily)
+{
+  mController->SetDefaultFontFamily(ToStdString(fontFamily));
+}
+
+Dali::String InputFieldImpl::GetFontFamily() const
+{
+  return ToDaliString(mController->GetDefaultFontFamily());
+}
+
+void InputFieldImpl::SetFontSize(float fontSize)
+{
+  if(!Equals(mController->GetDefaultFontSize(Ui::Text::Controller::PIXEL_SIZE), fontSize, Math::MACHINE_EPSILON_1000))
+  {
+    mController->SetDefaultFontSize(fontSize, Ui::Text::Controller::PIXEL_SIZE);
+  }
+}
+
+float InputFieldImpl::GetFontSize() const
+{
+  return mController->GetDefaultFontSize(Ui::Text::Controller::PIXEL_SIZE);
+}
+
+void InputFieldImpl::SetTextColor(const UiColor& color)
+{
+  SetColorBinding("TextColor", color, this, &InputFieldImpl::SetTextColorInternal);
+}
+
+UiColor InputFieldImpl::GetTextColor()
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "TextColor", outColor))
+  {
+    return outColor;
+  }
+  return mController->GetDefaultColor();
+}
+
+void InputFieldImpl::SetHorizontalTextAlignment(Ui::Text::Alignment alignment)
+{
+  mController->SetHorizontalAlignment(alignment);
+}
+
+Ui::Text::Alignment InputFieldImpl::GetHorizontalTextAlignment() const
+{
+  return mController->GetHorizontalAlignment();
+}
+
+void InputFieldImpl::SetVerticalTextAlignment(Ui::Text::Alignment alignment)
+{
+  mController->SetVerticalAlignment(alignment);
+}
+
+Ui::Text::Alignment InputFieldImpl::GetVerticalTextAlignment() const
+{
+  return mController->GetVerticalAlignment();
+}
+
+void InputFieldImpl::SetTextOverflowMode(Ui::Text::OverflowMode mode)
+{
+  if(mode != mOverflowMode)
+  {
+    mOverflowMode = mode;
+    switch(mode)
+    {
+      case Ui::Text::OverflowMode::CLIP:
+      {
+        mController->SetTextElideEnabled(false);
+        break;
+      }
+      case Ui::Text::OverflowMode::ELLIPSIS:
+      {
+        mController->SetTextElideEnabled(true);
+        break;
+      }
+    }
+    mController->InvalidateFontData();
+  }
+}
+
+Ui::Text::OverflowMode InputFieldImpl::GetTextOverflowMode() const
+{
+  return mOverflowMode;
+}
+
+void InputFieldImpl::SetPlaceholder(const Dali::String& text)
+{
+  const std::string placeholder = ToStdString(text);
+  mController->SetPlaceholderText(Ui::Text::Controller::PLACEHOLDER_TYPE_INACTIVE, placeholder);
+  mController->SetPlaceholderText(Ui::Text::Controller::PLACEHOLDER_TYPE_ACTIVE, placeholder);
+}
+
+Dali::String InputFieldImpl::GetPlaceholder() const
+{
+  std::string text;
+  mController->GetPlaceholderText(Ui::Text::Controller::PLACEHOLDER_TYPE_INACTIVE, text);
+  return ToDaliString(text);
+}
+
+void InputFieldImpl::SetPlaceholderColor(const UiColor& color)
+{
+  SetColorBinding("PlaceholderColor", color, this, &InputFieldImpl::SetPlaceholderColorInternal);
+}
+
+UiColor InputFieldImpl::GetPlaceholderColor()
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "PlaceholderColor", outColor))
+  {
+    return outColor;
+  }
+  return mController->GetPlaceholderTextColor();
+}
+
+void InputFieldImpl::SetTextGradient(const Dali::Ui::Gradient::Base& gradient)
+{
+  auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data && !Ui::Text::Internal::Gradient::IsRenderable(gradient))
+  {
+    return;
+  }
+
+  data                         = &Internal::Text::GetOrCreateEditableTextGradientPropertyData(mTextGradientPropertyData);
+  mHasTextGradientPropertyData = true;
+  if(!data->atlasResources.SetTextGradient(gradient))
+  {
+    SyncGradientAnimProperties();
+    return;
+  }
+
+  SyncGradientAnimProperties();
+
+  if(!mController->IsShowingPlaceholderText() && !SyncAtlasGradientState())
+  {
+    RequestTextRelayout();
+  }
+}
+
+Gradient::Base InputFieldImpl::GetTextGradient() const
+{
+  const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  return data ? data->atlasResources.GetTextGradient() : Gradient::Base::None();
+}
+
+void InputFieldImpl::SetPlaceholderTextGradient(const Dali::Ui::Gradient::Base& gradient)
+{
+  auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data && !Ui::Text::Internal::Gradient::IsRenderable(gradient))
+  {
+    return;
+  }
+
+  data                         = &Internal::Text::GetOrCreateEditableTextGradientPropertyData(mTextGradientPropertyData);
+  mHasTextGradientPropertyData = true;
+  if(!data->atlasResources.SetPlaceholderGradient(gradient))
+  {
+    SyncPlaceholderGradientAnimProperties();
+    return;
+  }
+
+  SyncPlaceholderGradientAnimProperties();
+
+  if(mController->IsShowingPlaceholderText() && !SyncAtlasGradientState())
+  {
+    RequestTextRelayout();
+  }
+}
+
+Gradient::Base InputFieldImpl::GetPlaceholderTextGradient() const
+{
+  const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  return data ? data->atlasResources.GetPlaceholderGradient() : Gradient::Base::None();
+}
+
+void InputFieldImpl::SetTextGradientBoundsMode(Ui::Text::GradientBoundsMode mode)
+{
+  const auto* data        = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  const auto  currentMode = data ? data->atlasResources.GetBoundsMode() : Ui::Text::GradientBoundsMode::CONTENT_BOUND;
+  if(currentMode == mode)
+  {
+    return;
+  }
+
+  auto& gradientData           = Internal::Text::GetOrCreateEditableTextGradientPropertyData(mTextGradientPropertyData);
+  mHasTextGradientPropertyData = true;
+  if(gradientData.atlasResources.SetBoundsMode(mode))
+  {
+    RequestTextRelayout();
+  }
+}
+
+Ui::Text::GradientBoundsMode InputFieldImpl::GetTextGradientBoundsMode() const
+{
+  const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  return data ? data->atlasResources.GetBoundsMode() : Ui::Text::GradientBoundsMode::CONTENT_BOUND;
+}
+
+Dali::Property::Index InputFieldImpl::EnsureGradientAnimOffset()
+{
+  if(!mHasTextGradientPropertyData)
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data)
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  const auto& state = data->atlasResources.GetRendererState(false);
+  if(!state.IsEnabled())
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  Actor self = Self();
+  if(!self)
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  if(data->gradientAnimOffsetIndex == Property::INVALID_INDEX)
+  {
+    data->gradientAnimOffsetIndex =
+      self.RegisterProperty(TEXT_GRADIENT_START_OFFSET_PROPERTY_NAME, state.style.startOffset);
+    BindGradientAnimProperties();
+  }
+
+  return data->gradientAnimOffsetIndex;
+}
+
+Dali::Property::Index InputFieldImpl::EnsurePlaceholderGradientAnimOffset()
+{
+  if(!mHasTextGradientPropertyData)
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data)
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  const auto& state = data->atlasResources.GetRendererState(true);
+  if(!state.IsEnabled())
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  Actor self = Self();
+  if(!self)
+  {
+    return Property::INVALID_INDEX;
+  }
+
+  if(data->placeholderGradientAnimOffsetIndex == Property::INVALID_INDEX)
+  {
+    data->placeholderGradientAnimOffsetIndex =
+      self.RegisterProperty(PLACEHOLDER_TEXT_GRADIENT_START_OFFSET_PROPERTY_NAME, state.style.startOffset);
+    BindGradientAnimProperties();
+  }
+
+  return data->placeholderGradientAnimOffsetIndex;
+}
+
+void InputFieldImpl::SetShowPlaceholderOnFocus(bool enabled)
+{
+  mController->SetShowPlaceholderOnFocus(enabled);
+}
+
+bool InputFieldImpl::IsPlaceholderShownOnFocus() const
+{
+  return mController->IsPlaceholderShownOnFocus();
+}
+
+void InputFieldImpl::SetCursorWidth(int width)
+{
+  mDecorator->SetCursorWidth(width);
+  mController->GetLayoutEngine().SetCursorWidth(width);
+}
+
+int InputFieldImpl::GetCursorWidth() const
+{
+  return mDecorator->GetCursorWidth();
+}
+
+void InputFieldImpl::SetCursorColor(const UiColor& color)
+{
+  SetColorBinding("CursorColor", color, this, &InputFieldImpl::SetCursorColorInternal);
+}
+
+UiColor InputFieldImpl::GetCursorColor()
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "CursorColor", outColor))
+  {
+    return outColor;
+  }
+  return mDecorator->GetColor(Ui::Text::PRIMARY_CURSOR);
+}
+
+void InputFieldImpl::SetCursorBlinkEnabled(bool enabled)
+{
+  mController->SetEnableCursorBlink(enabled);
+  RequestTextRelayout();
+}
+
+bool InputFieldImpl::IsCursorBlinkEnabled() const
+{
+  return mController->GetEnableCursorBlink();
+}
+
+void InputFieldImpl::SetCursorBlinkInterval(float interval)
+{
+  mDecorator->SetCursorBlinkInterval(interval);
+}
+
+float InputFieldImpl::GetCursorBlinkInterval() const
+{
+  return mDecorator->GetCursorBlinkInterval();
+}
+
+void InputFieldImpl::SetCursorPosition(uint32_t position)
+{
+  if(mController->SetPrimaryCursorPosition(position, HasKeyInputFocus(*this)))
+  {
+    SetKeyInputFocus(*this);
+  }
+}
+
+uint32_t InputFieldImpl::GetCursorPosition() const
+{
+  return mController->GetPrimaryCursorPosition();
+}
+
+void InputFieldImpl::SetSelectionEnabled(bool enabled)
+{
+  mController->SetSelectionEnabled(enabled);
+  mController->SetShiftSelectionEnabled(enabled);
+}
+
+bool InputFieldImpl::IsSelectionEnabled() const
+{
+  return mController->IsSelectionEnabled();
+}
+
+void InputFieldImpl::SetSelectionColor(const UiColor& color)
+{
+  SetColorBinding("SelectionColor", color, this, &InputFieldImpl::SetSelectionColorInternal);
+}
+
+UiColor InputFieldImpl::GetSelectionColor()
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "SelectionColor", outColor))
+  {
+    return outColor;
+  }
+  return mDecorator->GetHighlightColor();
+}
+
+void InputFieldImpl::SetTextHandleEnabled(bool enabled)
+{
+  mController->SetGrabHandleEnabled(enabled);
+  RequestTextRelayout();
+}
+
+bool InputFieldImpl::IsTextHandleEnabled() const
+{
+  return mController->IsGrabHandleEnabled();
+}
+
+void InputFieldImpl::SetTextHandleColor(const UiColor& color)
+{
+  SetColorBinding("TextHandleColor", color, this, &InputFieldImpl::SetTextHandleColorInternal);
+}
+
+UiColor InputFieldImpl::GetTextHandleColor() const
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "TextHandleColor", outColor))
+  {
+    return outColor;
+  }
+  return mDecorator->GetHandleColor();
+}
+
+void InputFieldImpl::SetCursorHandleImage(const Dali::String& image)
+{
+  mDecorator->SetHandleImage(Ui::Text::GRAB_HANDLE, Ui::Text::HANDLE_IMAGE_RELEASED, ToStdString(image));
+  RequestTextRelayout();
+}
+
+Dali::String InputFieldImpl::GetCursorHandleImage() const
+{
+  return ToDaliString(mDecorator->GetHandleImage(Ui::Text::GRAB_HANDLE, Ui::Text::HANDLE_IMAGE_RELEASED));
+}
+
+void InputFieldImpl::SetCursorHandlePressedImage(const Dali::String& image)
+{
+  mDecorator->SetHandleImage(Ui::Text::GRAB_HANDLE, Ui::Text::HANDLE_IMAGE_PRESSED, ToStdString(image));
+  RequestTextRelayout();
+}
+
+Dali::String InputFieldImpl::GetCursorHandlePressedImage() const
+{
+  return ToDaliString(mDecorator->GetHandleImage(Ui::Text::GRAB_HANDLE, Ui::Text::HANDLE_IMAGE_PRESSED));
+}
+
+void InputFieldImpl::SetSelectionHandleImageLeft(const Dali::String& image)
+{
+  mDecorator->SetHandleImage(Ui::Text::LEFT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_RELEASED, ToStdString(image));
+  RequestTextRelayout();
+}
+
+Dali::String InputFieldImpl::GetSelectionHandleImageLeft() const
+{
+  return ToDaliString(mDecorator->GetHandleImage(Ui::Text::LEFT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_RELEASED));
+}
+
+void InputFieldImpl::SetSelectionHandleImageRight(const Dali::String& image)
+{
+  mDecorator->SetHandleImage(Ui::Text::RIGHT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_RELEASED, ToStdString(image));
+  RequestTextRelayout();
+}
+
+Dali::String InputFieldImpl::GetSelectionHandleImageRight() const
+{
+  return ToDaliString(mDecorator->GetHandleImage(Ui::Text::RIGHT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_RELEASED));
+}
+
+void InputFieldImpl::SetSelectionHandlePressedImageLeft(const Dali::String& image)
+{
+  mDecorator->SetHandleImage(Ui::Text::LEFT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_PRESSED, ToStdString(image));
+  RequestTextRelayout();
+}
+
+Dali::String InputFieldImpl::GetSelectionHandlePressedImageLeft() const
+{
+  return ToDaliString(mDecorator->GetHandleImage(Ui::Text::LEFT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_PRESSED));
+}
+
+void InputFieldImpl::SetSelectionHandlePressedImageRight(const Dali::String& image)
+{
+  mDecorator->SetHandleImage(Ui::Text::RIGHT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_PRESSED, ToStdString(image));
+  RequestTextRelayout();
+}
+
+Dali::String InputFieldImpl::GetSelectionHandlePressedImageRight() const
+{
+  return ToDaliString(mDecorator->GetHandleImage(Ui::Text::RIGHT_SELECTION_HANDLE, Ui::Text::HANDLE_IMAGE_PRESSED));
+}
+
+void InputFieldImpl::SetMaximumLength(int length)
+{
+  mController->SetMaximumNumberOfCharacters(static_cast<uint32_t>(length));
+}
+
+int InputFieldImpl::GetMaximumLength() const
+{
+  return static_cast<int>(mController->GetMaximumNumberOfCharacters());
+}
+
+void InputFieldImpl::SetInputFilter(const Ui::Text::InputFilter& inputFilter)
+{
+  mController->SetInputFilter(inputFilter);
+}
+
+Ui::Text::InputFilter InputFieldImpl::GetInputFilter() const
+{
+  return mController->GetInputFilter();
+}
+
+void InputFieldImpl::SetPasswordMode(Ui::Text::PasswordMode mode)
+{
+  mController->SetPasswordMode(mode);
+
+  auto self = Ui::View::DownCast(Self());
+  auto role = self.GetAccessibilityRole();
+  if(role == Ui::Accessibility::Role::ENTRY || role == Ui::Accessibility::Role::PASSWORD_TEXT)
+  {
+    const auto passwordRole = mode == Ui::Text::PasswordMode::NONE
+                                ? Ui::Accessibility::Role::ENTRY
+                                : Ui::Accessibility::Role::PASSWORD_TEXT;
+    self.SetAccessibilityRole(passwordRole);
+  }
+}
+
+Ui::Text::PasswordMode InputFieldImpl::GetPasswordMode() const
+{
+  return mController->GetPasswordMode();
+}
+
+void InputFieldImpl::SetPasswordMaskCharacter(uint32_t character)
+{
+  mController->SetPasswordMaskCharacter(character);
+}
+
+uint32_t InputFieldImpl::GetPasswordMaskCharacter() const
+{
+  return mController->GetPasswordMaskCharacter();
+}
+
+void InputFieldImpl::SetPasswordRevealDuration(uint32_t duration)
+{
+  int durationMs = static_cast<int>(std::min(duration, static_cast<uint32_t>(std::numeric_limits<int>::max())));
+  mController->SetPasswordRevealDuration(durationMs);
+}
+
+uint32_t InputFieldImpl::GetPasswordRevealDuration() const
+{
+  return static_cast<uint32_t>(mController->GetPasswordRevealDuration());
+}
+
+void InputFieldImpl::SetLayoutDirectionMode(Ui::Text::LayoutDirectionMode mode)
+{
+  if(mController->GetLayoutDirectionMode() != mode)
+  {
+    mController->SetLayoutDirectionMode(mode);
+    RequestTextRelayout();
+  }
+}
+
+Ui::Text::LayoutDirectionMode InputFieldImpl::GetLayoutDirectionMode() const
+{
+  return mController->GetLayoutDirectionMode();
+}
+
+void InputFieldImpl::SetFontWeight(Ui::Text::FontWeight weight)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetDefaultFontWeight(Ui::Text::ToTextAbstractionFontWeight(weight));
+}
+
+Ui::Text::FontWeight InputFieldImpl::GetFontWeight() const
+{
+  return Ui::Text::ToFontWeight(mController->GetDefaultFontWeight());
+}
+
+void InputFieldImpl::SetFontWidth(Ui::Text::FontWidth width)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetDefaultFontWidth(Ui::Text::ToTextAbstractionFontWidth(width));
+}
+
+Ui::Text::FontWidth InputFieldImpl::GetFontWidth() const
+{
+  return Ui::Text::ToFontWidth(mController->GetDefaultFontWidth());
+}
+
+void InputFieldImpl::SetFontSlant(Ui::Text::FontSlant slant)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetDefaultFontSlant(Ui::Text::ToTextAbstractionFontSlant(slant));
+}
+
+Ui::Text::FontSlant InputFieldImpl::GetFontSlant() const
+{
+  return Ui::Text::ToFontSlant(mController->GetDefaultFontSlant());
+}
+
+void InputFieldImpl::SetTextBackgroundColor(const UiColor& color)
+{
+  SetColorBinding("TextBackgroundColor", color, this, &InputFieldImpl::SetTextBackgroundColorInternal);
+  if(!mController->IsBackgroundEnabled())
+  {
+    mController->SetBackgroundEnabled(true);
+  }
+}
+
+UiColor InputFieldImpl::GetTextBackgroundColor() const
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "TextBackgroundColor", outColor))
+  {
+    return outColor;
+  }
+  return mController->GetBackgroundColor();
+}
+
+void InputFieldImpl::ClearTextBackgroundColor()
+{
+  UiColorManager::Get().ClearBinding(Self(), "TextBackgroundColor");
+  if(mController->IsBackgroundEnabled())
+  {
+    mController->SetBackgroundEnabled(false);
+    mController->SetBackgroundColor(Color::TRANSPARENT);
+    mRenderer.Reset();
+  }
+}
+
+void InputFieldImpl::SetTextUnderline(const Ui::Text::Underline& underline)
+{
+  if(underline == Ui::Text::Underline::None())
+  {
+    UiColorManager::Get().ClearBinding(Self(), "UnderlineColor");
+    if(mController->IsUnderlineEnabled())
+    {
+      mController->SetUnderlineEnabled(false);
+      mRenderer.Reset();
+    }
+    return;
+  }
+
+  const UiColor& color = underline.GetColor();
+
+  SetColorBinding("UnderlineColor", color, this, &InputFieldImpl::SetUnderlineColorInternal);
+
+  if(Ui::Text::ApplyUnderlineStyle(mController, underline))
+  {
+    mRenderer.Reset();
+  }
+}
+
+Ui::Text::Underline InputFieldImpl::GetTextUnderline() const
+{
+  if(!mController->IsUnderlineEnabled())
+  {
+    return Ui::Text::Underline::None();
+  }
+
+  Ui::Text::Underline underline;
+
+  UiColor color;
+  if(UiColorManager::Get().GetBindingColor(Self(), "UnderlineColor", color))
+  {
+    underline.SetColor(color);
+  }
+  else
+  {
+    underline.SetColor(mController->GetUnderlineColor());
+  }
+  underline.SetThickness(mController->GetUnderlineHeight());
+  underline.SetType(mController->GetUnderlineType());
+  underline.SetDashLength(mController->GetDashedUnderlineWidth());
+  underline.SetDashGap(mController->GetDashedUnderlineGap());
+
+  return underline;
+}
+
+void InputFieldImpl::UpdateInlineReplacementData(const Vector2& ownerSize, const Insets& padding)
+{
+  const Ui::Text::ReplacementSourceSnapshot&            source = mController->GetReplacementSourceSnapshot();
+  const Ui::Text::ReplacementRenderState&               state  = mController->GetReplacementRenderState();
+  const Internal::Text::EditableInlineReplacementUpdate update =
+    Internal::Text::ResolveEditableInlineReplacementUpdate(
+      source,
+      state,
+      mController->GetHiddenTextMode() != Ui::Text::HiddenText::Mode::NONE);
+  if(update == Internal::Text::EditableInlineReplacementUpdate::CLEAR)
+  {
+    ClearInlineReplacementData();
+    return;
+  }
+  if(update == Internal::Text::EditableInlineReplacementUpdate::WAIT_FOR_LAYOUT)
+  {
+    return;
+  }
+
+  Internal::Text::EditableInlineReplacementData* data =
+    Internal::Text::GetEditableInlineReplacementData(*this);
+  if(!data)
+  {
+    bool hasVisibleImage = false;
+    for(const Ui::Text::ReplacementPlacement& placement : state.placements)
+    {
+      if(placement.visible && !placement.elided && placement.sourceRunIndex < source.runs.Count() &&
+         source.runs[placement.sourceRunIndex].type == Ui::Text::ReplacementType::IMAGE)
+      {
+        hasVisibleImage = true;
+        break;
+      }
+    }
+    if(!hasVisibleImage)
+    {
+      return;
+    }
+    data = &Internal::Text::GetOrCreateEditableInlineReplacementData(Ui::View::DownCast(Self()));
+  }
+
+  if(!data->resourceReadyConnected)
+  {
+    data->visualLayer.ResourceReadySignal().Connect(this, &InputFieldImpl::OnInlineReplacementResourcesReady);
+    data->resourceReadyConnected = true;
+  }
+
+  const Vector2 scrollOffset(-mController->GetHorizontalScrollPosition(), -mController->GetVerticalScrollPosition());
+  const Vector2 contentSize(std::max(0.0f, ownerSize.x - static_cast<float>(padding.start + padding.end)),
+                            std::max(0.0f, ownerSize.y - static_cast<float>(padding.top + padding.bottom)));
+  data->PlaceVisualLayer(mStencil, mRenderableActor, mCursorLayer, contentSize);
+  data->manager.Update(data->host,
+                       source,
+                       state.placements,
+                       scrollOffset,
+                       Vector2::ZERO,
+                       contentSize,
+                       contentSize,
+                       GetEffectiveScale(),
+                       source.sourceRevision);
+}
+
+void InputFieldImpl::ClearInlineReplacementData()
+{
+  if(Internal::Text::EditableInlineReplacementData* data =
+       Internal::Text::GetEditableInlineReplacementData(*this))
+  {
+    if(data->resourceReadyConnected)
+    {
+      data->visualLayer.ResourceReadySignal().Disconnect(this, &InputFieldImpl::OnInlineReplacementResourcesReady);
+    }
+    Internal::Text::RemoveEditableInlineReplacementData(*this);
+  }
+}
+
+void InputFieldImpl::OnInlineReplacementResourcesReady(Ui::View)
+{
+  if(!mController->HasValidReplacementSource())
+  {
+    return;
+  }
+
+  const Ui::Text::ReplacementRenderState& state = mController->GetReplacementRenderState();
+  if(!state.processingModel || !state.projection.HasReplacements())
+  {
+    return;
+  }
+
+  if(Internal::Text::EditableInlineReplacementData* data =
+       Internal::Text::GetEditableInlineReplacementData(*this))
+  {
+    data->manager.Refresh();
+  }
+}
+
+void InputFieldImpl::SetTextShadow(const Ui::Text::Shadow& shadow)
+{
+  if(shadow == Ui::Text::Shadow::None())
+  {
+    UiColorManager::Get().ClearBinding(Self(), "ShadowColor");
+    if(mController->IsShadowEnabled())
+    {
+      mController->SetShadowEnabled(false);
+      mRenderer.Reset();
+    }
+    if(Vector2::ZERO != mController->GetShadowOffset())
+    {
+      mController->SetShadowOffset(Vector2::ZERO);
+      mRenderer.Reset();
+    }
+    return;
+  }
+
+  const UiColor& color = shadow.GetColor();
+
+  SetColorBinding("ShadowColor", color, this, &InputFieldImpl::SetShadowColorInternal);
+
+  if(Ui::Text::ApplyShadowStyle(mController, shadow))
+  {
+    mRenderer.Reset();
+  }
+}
+
+Ui::Text::Shadow InputFieldImpl::GetTextShadow() const
+{
+  if(!mController->IsShadowEnabled())
+  {
+    return Ui::Text::Shadow::None();
+  }
+
+  Ui::Text::Shadow shadow;
+
+  UiColor color;
+  if(UiColorManager::Get().GetBindingColor(Self(), "ShadowColor", color))
+  {
+    shadow.SetColor(color);
+  }
+  else
+  {
+    shadow.SetColor(mController->GetShadowColor());
+  }
+  shadow.SetOffset(mController->GetShadowOffset());
+  shadow.SetBlurRadius(mController->GetShadowBlurRadius());
+
+  return shadow;
+}
+
+void InputFieldImpl::SetTextOutline(const Ui::Text::Outline& outline)
+{
+  if(outline == Ui::Text::Outline::None())
+  {
+    UiColorManager::Get().ClearBinding(Self(), "OutlineColor");
+    if(mController->IsOutlineEnabled())
+    {
+      mController->SetOutlineEnabled(false);
+      mRenderer.Reset();
+    }
+    if(0u != mController->GetOutlineWidth())
+    {
+      mController->SetOutlineWidth(0u);
+      mRenderer.Reset();
+    }
+    return;
+  }
+
+  const UiColor& color = outline.GetColor();
+
+  SetColorBinding("OutlineColor", color, this, &InputFieldImpl::SetOutlineColorInternal);
+
+  if(Ui::Text::ApplyOutlineStyle(mController, outline))
+  {
+    mRenderer.Reset();
+  }
+}
+
+Ui::Text::Outline InputFieldImpl::GetTextOutline() const
+{
+  if(!mController->IsOutlineEnabled())
+  {
+    return Ui::Text::Outline::None();
+  }
+
+  Ui::Text::Outline outline;
+
+  UiColor color;
+  if(UiColorManager::Get().GetBindingColor(Self(), "OutlineColor", color))
+  {
+    outline.SetColor(color);
+  }
+  else
+  {
+    outline.SetColor(mController->GetOutlineColor());
+  }
+  outline.SetOffset(mController->GetOutlineOffset());
+  outline.SetWidth(static_cast<float>(mController->GetOutlineWidth()));
+  outline.SetBlurRadius(mController->GetOutlineBlurRadius());
+
+  return outline;
+}
+
+void InputFieldImpl::SetTextLineThrough(const Ui::Text::LineThrough& lineThrough)
+{
+  if(lineThrough == Ui::Text::LineThrough::None())
+  {
+    UiColorManager::Get().ClearBinding(Self(), "LineThroughColor");
+    if(mController->IsStrikethroughEnabled())
+    {
+      mController->SetStrikethroughEnabled(false);
+      mRenderer.Reset();
+    }
+    return;
+  }
+
+  const UiColor& color = lineThrough.GetColor();
+
+  SetColorBinding("LineThroughColor", color, this, &InputFieldImpl::SetLineThroughColorInternal);
+
+  if(Ui::Text::ApplyLineThroughStyle(mController, lineThrough))
+  {
+    mRenderer.Reset();
+  }
+}
+
+Ui::Text::LineThrough InputFieldImpl::GetTextLineThrough() const
+{
+  if(!mController->IsStrikethroughEnabled())
+  {
+    return Ui::Text::LineThrough::None();
+  }
+
+  Ui::Text::LineThrough lineThrough;
+
+  UiColor color;
+  if(UiColorManager::Get().GetBindingColor(Self(), "LineThroughColor", color))
+  {
+    lineThrough.SetColor(color);
+  }
+  else
+  {
+    lineThrough.SetColor(mController->GetStrikethroughColor());
+  }
+  lineThrough.SetThickness(mController->GetStrikethroughHeight());
+
+  return lineThrough;
+}
+
+void InputFieldImpl::SetFontSizeScale(float scale)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetFontSizeScale(scale);
+}
+
+float InputFieldImpl::GetFontSizeScale() const
+{
+  return mController->GetFontSizeScale();
+}
+
+void InputFieldImpl::SetMinimumFontSizeScale(float scale)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetMinimumFontSizeScale(scale);
+}
+
+float InputFieldImpl::GetMinimumFontSizeScale() const
+{
+  return mController->GetMinimumFontSizeScale();
+}
+
+void InputFieldImpl::SetMaximumFontSizeScale(float scale)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetMaximumFontSizeScale(scale);
+}
+
+float InputFieldImpl::GetMaximumFontSizeScale() const
+{
+  return mController->GetMaximumFontSizeScale();
+}
+
+void InputFieldImpl::SetSystemFontSizeScaleEnabled(bool enabled)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetSystemFontSizeScaleEnabled(enabled);
+}
+
+bool InputFieldImpl::IsSystemFontSizeScaleEnabled() const
+{
+  return mController->IsSystemFontSizeScaleEnabled();
+}
+
+void InputFieldImpl::SetTypingTextColor(const UiColor& color)
+{
+  SetColorBinding("TypingTextColor", color, this, &InputFieldImpl::SetTypingTextColorInternal);
+}
+
+UiColor InputFieldImpl::GetTypingTextColor() const
+{
+  UiColor outColor;
+  if(UiColorManager::Get().GetBindingColor(Self(), "TypingTextColor", outColor))
+  {
+    return outColor;
+  }
+  return mController->GetInputColor();
+}
+
+void InputFieldImpl::SetTypingFontFamily(const Dali::String& fontFamily)
+{
+  mController->SetInputFontFamily(ToStdString(fontFamily));
+}
+
+Dali::String InputFieldImpl::GetTypingFontFamily() const
+{
+  return ToDaliString(mController->GetInputFontFamily());
+}
+
+void InputFieldImpl::SetTypingFontSize(float fontSize)
+{
+  mController->SetInputFontSize(fontSize, Ui::Text::Controller::PIXEL_SIZE);
+}
+
+float InputFieldImpl::GetTypingFontSize() const
+{
+  return mController->GetInputFontSize(Ui::Text::Controller::PIXEL_SIZE);
+}
+
+void InputFieldImpl::SetTypingFontWeight(Ui::Text::FontWeight weight)
+{
+  mController->SetInputFontWeight(Ui::Text::ToTextAbstractionFontWeight(weight));
+}
+
+Ui::Text::FontWeight InputFieldImpl::GetTypingFontWeight() const
+{
+  return Ui::Text::ToFontWeight(mController->GetInputFontWeight());
+}
+
+void InputFieldImpl::SetTypingFontWidth(Ui::Text::FontWidth width)
+{
+  mController->SetInputFontWidth(Ui::Text::ToTextAbstractionFontWidth(width));
+}
+
+Ui::Text::FontWidth InputFieldImpl::GetTypingFontWidth() const
+{
+  return Ui::Text::ToFontWidth(mController->GetInputFontWidth());
+}
+
+void InputFieldImpl::SetTypingFontSlant(Ui::Text::FontSlant slant)
+{
+  mController->SetInputFontSlant(Ui::Text::ToTextAbstractionFontSlant(slant));
+}
+
+Ui::Text::FontSlant InputFieldImpl::GetTypingFontSlant() const
+{
+  return Ui::Text::ToFontSlant(mController->GetInputFontSlant());
+}
+
+void InputFieldImpl::SetFontVariation(const Dali::Vector<Ui::Text::FontVariation::Axis>& axes)
+{
+  // InvalidateMeasure() may be called if needed.
+  mController->SetVariations(axes);
+}
+
+void InputFieldImpl::SetFontVariation(const Dali::String& settings)
+{
+  if(settings.Empty())
+  {
+    DALI_LOG_WARNING(
+      "Empty font variation string is not allowed. "
+      "Use SetFontVariation(Ui::Text::FontVariation::None()) instead.\n");
+    return;
+  }
+
+  auto axes = Ui::Text::FontVariation::FromString(settings);
+  if(axes.Empty())
+  {
+    DALI_LOG_WARNING("Failed to parse font variation string: %s\n", settings.CStr());
+    return;
+  }
+
+  SetFontVariation(axes);
+}
+
+Dali::Vector<Ui::Text::FontVariation::Axis> InputFieldImpl::GetFontVariation() const
+{
+  return mController->GetVariations();
+}
+
+void InputFieldImpl::SetTranslatablePlaceholder(StringView resourceId)
+{
+  SetTranslatablePlaceholder(resourceId, StringView());
+}
+
+void InputFieldImpl::SetTranslatablePlaceholder(StringView resourceId, StringView domain)
+{
+  mTranslatablePlaceholder = resourceId;
+  auto manager             = UiLocalizationManager::Get();
+  if(manager)
+  {
+    manager.SetBindingResource(Self(),
+                               LOCALIZATION_PLACEHOLDER_BINDING_ID,
+                               resourceId,
+                               domain,
+                               LocalizedStringCallback::New(this, &InputFieldImpl::ApplyLocalizedPlaceholder));
+  }
+}
+
+Dali::String InputFieldImpl::GetTranslatablePlaceholder() const
+{
+  return mTranslatablePlaceholder;
+}
+
+void InputFieldImpl::ClearTranslatablePlaceholder()
+{
+  mTranslatablePlaceholder.Clear();
+  auto manager = UiLocalizationManager::Get();
+  if(manager)
+  {
+    manager.ClearBinding(Self(), LOCALIZATION_PLACEHOLDER_BINDING_ID);
+  }
+  // Current placeholder value is not changed.
+}
+
+// Integration-only implementation for now until public API support is introduced.
+void InputFieldImpl::SetLetterSpacing(float spacing)
+{
+  mController->SetCharacterSpacing(spacing);
+}
+
+float InputFieldImpl::GetLetterSpacing() const
+{
+  return mController->GetCharacterSpacing();
+}
+
+// =============================================================================
+// Read Only
+// =============================================================================
+float InputFieldImpl::GetAdjustedFontSizeScale() const
+{
+  return mController->GetAdjustedFontSizeScale();
+}
+
+uint32_t InputFieldImpl::GetSelectedTextStart() const
+{
+  Text::Uint32Pair range = mController->GetTextSelectionRange();
+  return range.first;
+}
+
+uint32_t InputFieldImpl::GetSelectedTextEnd() const
+{
+  Text::Uint32Pair range = mController->GetTextSelectionRange();
+  return range.second;
+}
+
+// =============================================================================
+// Method
+// =============================================================================
+
+// =============================================================================
+// Signals
+// =============================================================================
+Signal<void(Ui::View)>& InputFieldImpl::TextChangedSignal()
+{
+  return mTextChangedSignal;
+}
+
+Signal<void(Ui::View)>& InputFieldImpl::MaximumLengthReachedSignal()
+{
+  return mMaxLengthReachedSignal;
+}
+
+Signal<void(Ui::View, Ui::Text::InputFilter::RejectReason)>& InputFieldImpl::InputRejectedSignal()
+{
+  return mInputRejectedSignal;
+}
+
+Signal<void(Ui::View, uint32_t)>& InputFieldImpl::CursorPositionChangedSignal()
+{
+  return mCursorPositionChangedSignal;
+}
+
+Signal<void(Ui::View)>& InputFieldImpl::SelectionStartedSignal()
+{
+  return mSelectionStartedSignal;
+}
+
+Signal<void(Ui::View, uint32_t, uint32_t)>& InputFieldImpl::SelectionChangedSignal()
+{
+  return mSelectionChangedSignal;
+}
+
+Signal<void(Ui::View)>& InputFieldImpl::SelectionClearedSignal()
+{
+  return mSelectionClearedSignal;
+}
+
+Signal<void(Ui::View, Ui::Text::TypingStyle::Mask)>& InputFieldImpl::TypingStyleChangedSignal()
+{
+  return mTypingStyleChangedSignal;
+}
+
+// =============================================================================
+// Config
+// =============================================================================
+void InputFieldImpl::ApplyInitialConfig()
+{
+  // UiConfig may not be applied during preload phase
+  if(!UiConfig::HasCurrent())
+  {
+    return;
+  }
+
+  const auto config = UiConfig::GetCurrent();
+  SetFontSize(config.GetDefaultFontSize());
+  SetTextColor(config.GetDefaultTextColor());
+  SetPlaceholderColor(config.GetDefaultPlaceholderTextColor());
+  SetShowPlaceholderOnFocus(config.IsPlaceholderTextShownOnFocus());
+  SetMinimumFontSizeScale(config.GetDefaultMinimumFontSizeScale());
+  SetMaximumFontSizeScale(config.GetDefaultMaximumFontSizeScale());
+  SetSystemFontSizeScaleEnabled(config.IsDefaultSystemFontSizeScaleEnabled());
+
+  auto systemSettings = Dali::Integration::SystemSettings::Get();
+  if(systemSettings)
+  {
+    ApplySystemFontSize(systemSettings.GetFontSize());
+  }
+}
+
+// =============================================================================
+// UiScale
+// =============================================================================
+bool InputFieldImpl::SetTextUiScale(float scale)
+{
+  mDecorator->SetUiScale(scale);
+  return mController->SetUiScale(scale);
+}
+
+float InputFieldImpl::GetTextUiScale() const
+{
+  return mController->GetUiScale();
+}
+
+Insets InputFieldImpl::GetEffectiveTextPadding() const
+{
+  Insets      padding     = GetPadding();
+  const float textUiScale = GetTextUiScale();
+  padding.start *= textUiScale;
+  padding.end *= textUiScale;
+  padding.top *= textUiScale;
+  padding.bottom *= textUiScale;
+  return padding;
+}
+
+// =============================================================================
+// System FontSize
+// =============================================================================
+void InputFieldImpl::ApplySystemFontSize(Dali::Integration::SystemSettings::FontSize fontSize)
+{
+  if(!UiConfig::HasCurrent())
+  {
+    return;
+  }
+
+  const auto  config = UiConfig::GetCurrent();
+  const float scale  = config.GetScaleForSystemFontSize(ToUiConfigSystemFontSize(fontSize));
+
+  mController->SetSystemFontSizeScale(scale);
+}
+
+void InputFieldImpl::OnSystemFontSizeChanged(Dali::Integration::SystemSettings::FontSize fontSize)
+{
+  ApplySystemFontSize(fontSize);
+}
+
+// =============================================================================
+// ViewImpl
+// =============================================================================
+void InputFieldImpl::OnInitialize()
+{
+  // Call base class initialization
+  SizeNegotiatedViewImpl::OnInitialize();
+
+  Actor self = Self();
+
+  mController = Ui::Text::Controller::New(this, this, this, this);
+  mController->SetGlyphType(TextAbstraction::BITMAP_GLYPH);
+  mDecorator = Ui::Text::Decorator::New(*mController, *mController);
+
+  mInputMethodContext = Dali::Integration::InputMethodContext::New(self);
+
+  mController->GetLayoutEngine().SetLayout(Ui::Text::Layout::Engine::SINGLE_LINE_BOX);
+
+  // Enables the text input.
+  mController->EnableTextInput(mDecorator, mInputMethodContext);
+
+  // Enables the horizontal scrolling after the text input has been enabled.
+  mController->SetHorizontalScrollEnabled(true);
+
+  // Disables the vertical scrolling.
+  mController->SetVerticalScrollEnabled(false);
+
+  // Disable the smooth handle panning.
+  mController->SetSmoothHandlePanEnabled(false);
+
+  mController->SetNoTextDoubleTapAction(Ui::Text::Controller::NoTextTap::HIGHLIGHT);
+  mController->SetNoTextLongPressAction(Ui::Text::Controller::NoTextTap::HIGHLIGHT);
+
+  // Disable the text ellipsis.
+  mController->SetTextElideEnabled(false);
+
+  self.LayoutDirectionChangedSignal().Connect(this, &InputFieldImpl::OnLayoutDirectionChanged);
+
+  auto viewHandle = Ui::View::DownCast(self);
+  viewHandle.SetFocusable(true);
+  viewHandle.SetFocusOnTouchEnabled(true);
+
+  if(Dali::Adaptor::IsAvailable())
+  {
+    Dali::Adaptor::Get().LocaleChangedSignal().Connect(this, &InputFieldImpl::OnLocaleChanged);
+  }
+
+  // Forward input events to controller
+  mTapGestureDetector = TapGestureDetector::New();
+  mTapGestureDetector.SetMaximumTapsRequired(2);
+  mTapGestureDetector.ReceiveAllTapEvents(true);
+  mTapGestureDetector.DetectedSignal().Connect(this, &InputFieldImpl::OnTapDetected);
+  mTapGestureDetector.Attach(self);
+
+  mPanGestureDetector = PanGestureDetector::New();
+  mPanGestureDetector.SetMaximumTouchesRequired(2);
+  mPanGestureDetector.DetectedSignal().Connect(this, &InputFieldImpl::OnPanDetected);
+  mPanGestureDetector.Attach(self);
+
+  mLongPressGestureDetector = LongPressGestureDetector::New();
+  mLongPressGestureDetector.DetectedSignal().Connect(this, &InputFieldImpl::OnLongPressDetected);
+  mLongPressGestureDetector.Attach(self);
+
+  self.TouchEventSignal().Connect(this, &InputFieldImpl::OnTouched);
+
+  // Flip vertically the 'left' selection handle
+  mDecorator->FlipHandleVertically(Ui::Text::LEFT_SELECTION_HANDLE, true);
+
+  // Fill-parent area by default
+  DevelActor::SetResizePolicy(self, ResizePolicy::FILL_TO_PARENT, Dimension::WIDTH);
+  DevelActor::SetResizePolicy(self, ResizePolicy::FILL_TO_PARENT, Dimension::HEIGHT);
+  self.SceneConnectedSignal().Connect(this, &InputFieldImpl::OnSceneConnect);
+
+  EnableClipping();
+
+  // TODO: Re-enable when grab handle and popup support are fully implemented.
+  mController->SetGrabHandleEnabled(false);
+  mController->SetGrabHandlePopupEnabled(false);
+
+  auto systemSettings = Dali::Integration::SystemSettings::Get();
+  if(systemSettings)
+  {
+    systemSettings.FontSizeChangedSignal().Connect(this, &InputFieldImpl::OnSystemFontSizeChanged);
+  }
+
+  Ui::View::DownCast(self).SetAccessibilityRole(Ui::Accessibility::Role::ENTRY);
+  Dali::Integration::Accessibility::Bridge::EnabledSignal().Connect(
+    this, &InputFieldImpl::OnAccessibilityStatusChanged);
+  Dali::Integration::Accessibility::Bridge::DisabledSignal().Connect(
+    this, &InputFieldImpl::OnAccessibilityStatusChanged);
+
+  ApplyInitialConfig();
+}
+
+bool InputFieldImpl::OnAccessibilityActivate()
+{
+  SetKeyInputFocus(*this);
+  return true;
+}
+
+void InputFieldImpl::OnAccessibilityStatusChanged()
+{
+  Internal::CommonTextUtils::SynchronizeTextAnchorsInParent(Self(), mController, mAnchorActors);
+}
+
+void InputFieldImpl::OnRelayout(const Vector2& size, RelayoutContainer& container)
+{
+  Actor self = Self();
+
+  Insets  padding = GetEffectiveTextPadding();
+  float   width   = std::max(size.x - static_cast<float>(padding.start + padding.end), 0.0f);
+  float   height  = std::max(size.y - static_cast<float>(padding.top + padding.bottom), 0.0f);
+  Vector2 contentSize(width, height);
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "[%p] Relayout size:%f,%f, content size:%f,%f\n", mController.Get(), size.x, size.y, contentSize.x, contentSize.y);
+
+  // Support Right-To-Left of padding
+  Dali::LayoutDirection::Type layoutDirection = mController->GetLayoutDirection(self);
+
+  if(Dali::LayoutDirection::RIGHT_TO_LEFT == layoutDirection)
+  {
+    std::swap(padding.start, padding.end);
+  }
+
+  if(mStencil)
+  {
+    mStencil.SetProperty(Actor::Property::POSITION, Vector2(padding.start, padding.top));
+    ResizeActor(mStencil, contentSize);
+  }
+  if(mActiveLayer)
+  {
+    mActiveLayer.SetProperty(Actor::Property::POSITION, Vector2(padding.start, padding.top));
+    ResizeActor(mActiveLayer, contentSize);
+  }
+  if(mCursorLayer)
+  {
+    if(!mStencil)
+    {
+      // If there is a stencil, the cursor layer is added to the stencil in RenderText.
+      // Do not calculate the position because the stencil has already been resized excluding the padding size.
+      mCursorLayer.SetProperty(Actor::Property::POSITION, Vector2(padding.start, padding.top));
+    }
+    ResizeActor(mCursorLayer, contentSize);
+  }
+
+  // If there is text changed, callback is called.
+  if(mTextChanged)
+  {
+    EmitTextChanged();
+  }
+
+  Ui::Text::Controller::UpdateTextType updateTextType = mController->Relayout(contentSize, layoutDirection);
+  SyncAtlasGradientState();
+
+  if((Ui::Text::Controller::NONE_UPDATED != updateTextType) || !mRenderer)
+  {
+    mController->SetLayoutOffsetWithPadding(Vector2(padding.start, padding.top));
+
+    if(mDecorator &&
+       (Ui::Text::Controller::NONE_UPDATED != (Ui::Text::Controller::DECORATOR_UPDATED & updateTextType)))
+    {
+      mDecorator->Relayout(contentSize, container);
+    }
+
+    if(!mRenderer)
+    {
+      mRenderer = Ui::Text::Backend::Get().NewRenderer();
+      ApplyAtlasGradientState();
+      updateTextType = static_cast<Ui::Text::Controller::UpdateTextType>(updateTextType | Ui::Text::Controller::MODEL_UPDATED);
+    }
+
+    RenderText(updateTextType);
+  }
+  else
+  {
+    auto atlasFrameState = Ui::Text::Internal::Gradient::AtlasFrameState{};
+    if(mHasTextGradientPropertyData)
+    {
+      const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+      DALI_ASSERT_DEBUG(data && "Editable TextGradient property data should exist after creation");
+      if(data)
+      {
+        atlasFrameState = data->atlasResources.GetFrameState(mController->IsShowingPlaceholderText(), mAtlasApplyState);
+      }
+    }
+
+    Ui::Internal::CommonTextUtils::UpdateTextRenderPosition(Self(), mRenderer, mController, mAlignmentOffset,
+                                                            mRenderableActor, mStencil, atlasFrameState, size);
+  }
+
+  if(mController->HasValidReplacementSource())
+  {
+    UpdateInlineReplacementData(size, padding);
+  }
+  else
+  {
+    ClearInlineReplacementData();
+  }
+
+  if(mCursorPositionChanged)
+  {
+    EmitCursorPositionChanged();
+  }
+
+  if(mSelectionStarted)
+  {
+    EmitSelectionStarted();
+  }
+
+  if(mSelectionChanged)
+  {
+    EmitSelectionChanged();
+  }
+
+  if(mSelectionCleared)
+  {
+    EmitSelectionCleared();
+  }
+
+  // The input-field emits signals when the input style changes. These changes of style are
+  // detected during the relayout process (size negotiation), i.e after the cursor has been moved. Signals
+  // can't be emitted during the size negotiation as the callbacks may update the UI.
+  // The input-field adds an idle callback to the adaptor to emit the signals after the size negotiation.
+  if(!mController->IsInputStyleChangedSignalsQueueEmpty())
+  {
+    mController->RequestProcessInputStyleChangedSignals();
+  }
+}
+
+void InputFieldImpl::OnAnimateAnimatableProperty(Animation& animation, Dali::Property::Index index, Animation::State state)
+{
+  auto* data = mHasTextGradientPropertyData
+                 ? Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData)
+                 : nullptr;
+  if(data && index != Property::INVALID_INDEX && index == data->gradientAnimOffsetIndex)
+  {
+    if(state == Animation::State::PLAYING)
+    {
+      ++data->gradientAnimCount;
+    }
+    else if(state == Animation::State::STOPPED)
+    {
+      if(data->gradientAnimCount)
+      {
+        --data->gradientAnimCount;
+      }
+    }
+
+    SetGradientAnimApplyRate();
+  }
+  else if(data && index != Property::INVALID_INDEX && index == data->placeholderGradientAnimOffsetIndex)
+  {
+    if(state == Animation::State::PLAYING)
+    {
+      ++data->placeholderGradientAnimCount;
+    }
+    else if(state == Animation::State::STOPPED)
+    {
+      if(data->placeholderGradientAnimCount)
+      {
+        --data->placeholderGradientAnimCount;
+      }
+    }
+
+    SetGradientAnimApplyRate();
+  }
+
+  ViewImpl::OnAnimateAnimatableProperty(animation, index, state);
+}
+
+void InputFieldImpl::OnConstraintAnimatableProperty(Constraint& constraint, Dali::Property::Index index, bool applied)
+{
+  auto* data = mHasTextGradientPropertyData
+                 ? Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData)
+                 : nullptr;
+  if(data && index != Property::INVALID_INDEX && index == data->gradientAnimOffsetIndex)
+  {
+    if(applied)
+    {
+      ++data->gradientAnimCount;
+    }
+    else
+    {
+      if(data->gradientAnimCount)
+      {
+        --data->gradientAnimCount;
+      }
+    }
+
+    SetGradientAnimApplyRate();
+  }
+  else if(data && index != Property::INVALID_INDEX && index == data->placeholderGradientAnimOffsetIndex)
+  {
+    if(applied)
+    {
+      ++data->placeholderGradientAnimCount;
+    }
+    else
+    {
+      if(data->placeholderGradientAnimCount)
+      {
+        --data->placeholderGradientAnimCount;
+      }
+    }
+
+    SetGradientAnimApplyRate();
+  }
+
+  ViewImpl::OnConstraintAnimatableProperty(constraint, index, applied);
+}
+
+Vector3 InputFieldImpl::GetNaturalSize()
+{
+  Insets  padding     = GetEffectiveTextPadding();
+  Vector3 naturalSize = mController->GetNaturalSize();
+  naturalSize.width += static_cast<float>(padding.start + padding.end);
+  naturalSize.height += static_cast<float>(padding.top + padding.bottom);
+  return naturalSize;
+}
+
+float InputFieldImpl::GetHeightForWidth(float width)
+{
+  Insets padding      = GetEffectiveTextPadding();
+  float  contentWidth = std::max(width - static_cast<float>(padding.start + padding.end), 0.0f);
+  return mController->GetHeightForWidth(contentWidth) + static_cast<float>(padding.top + padding.bottom);
+}
+
+void InputFieldImpl::OnFocusChanged(bool focused)
+{
+  if(focused)
+  {
+    OnFocusGained();
+  }
+  else
+  {
+    OnFocusLost();
+  }
+  ViewImpl::OnFocusChanged(focused);
+}
+
+void InputFieldImpl::OnFocusGained()
+{
+  DALI_LOG_RELEASE_INFO("[%p]\n", mController.Get());
+  if(mInputMethodContext && IsEditable())
+  {
+    Dali::Integration::InputMethodContext::NotifyTextInputMultiLine(mInputMethodContext, false);
+
+    mInputMethodContext.StatusChangedSignal().Connect(this, &InputFieldImpl::OnKeyboardStatusChanged);
+
+    Dali::Integration::InputMethodContext::KeyboardEventReceivedSignal(mInputMethodContext).Connect(this, &InputFieldImpl::OnInputMethodContextEvent);
+  }
+
+  if(IsEditable() && mController->IsUserInteractionEnabled())
+  {
+    const bool scrollToCursor = !mFocusGainedByTouch;
+    mController->KeyboardFocusGainEvent(scrollToCursor);
+    mFocusGainedByTouch = false;
+  }
+
+  if(mInputMethodContext && IsEditable())
+  {
+    // Prepare the controller before activation, which can synchronously deliver IME events.
+    Dali::Integration::InputMethodContext::Activate(mInputMethodContext);
+
+    // Restore IME activation when the window regains focus.
+    mInputMethodContext.SetRestoreAfterFocusLostEnabled(true);
+  }
+}
+
+void InputFieldImpl::OnFocusLost()
+{
+  DALI_LOG_RELEASE_INFO("[%p]\n", mController.Get());
+  if(mInputMethodContext)
+  {
+    mInputMethodContext.StatusChangedSignal().Disconnect(this, &InputFieldImpl::OnKeyboardStatusChanged);
+    // The text editing is finished. Therefore the inputMethodContext don't have restore activation.
+    mInputMethodContext.SetRestoreAfterFocusLostEnabled(false);
+
+    // Notify that the text editing finish.
+    Dali::Integration::InputMethodContext::Deactivate(mInputMethodContext);
+
+    Dali::Integration::InputMethodContext::KeyboardEventReceivedSignal(mInputMethodContext).Disconnect(this, &InputFieldImpl::OnInputMethodContextEvent);
+  }
+
+  mController->KeyboardFocusLostEvent();
+  mFocusGainedByTouch = false;
+}
+
+void InputFieldImpl::OnSceneConnection(int depth)
+{
+  // Sets the depth to the visuals inside the text's decorator.
+  mDecorator->SetTextDepth(depth);
+
+  // The depth of the text renderer is set in the RenderText() called from OnRelayout().
+
+  // Call the Control::OnSceneConnection() to set the depth of the background.
+  ViewImpl::OnSceneConnection(depth);
+
+  Dali::Window window = Window::Get(Self());
+  if(window)
+  {
+    // Sets layoutDirection value
+    Dali::LayoutDirection::Type layoutDirection = window.GetRootLayer().GetEffectiveLayoutDirection();
+    mController->SetLayoutDirection(layoutDirection);
+
+    // Set BoundingBox to window size if not already set.
+    BoundsInteger boundingBox;
+    mDecorator->GetBoundingBox(boundingBox);
+    if(boundingBox.IsEmpty())
+    {
+      Dali::PositionSize posSize = window.GetPositionSize();
+      mDecorator->SetBoundingBox(BoundsInteger(0, 0, static_cast<int32_t>(posSize.width), static_cast<int32_t>(posSize.height)));
+    }
+  }
+}
+
+bool InputFieldImpl::FilterKeyEvent(const KeyEvent& event)
+{
+  return mInputMethodContext && Dali::Integration::InputMethodContext::FilterEventKey(mInputMethodContext, event);
+}
+
+bool InputFieldImpl::OnKeyEvent(const KeyEvent& event)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "[%p] Key event, code:%d\n", mController.Get(), event.GetKeyCode());
+
+  if(Dali::DALI_KEY_ESCAPE == event.GetKeyCode() && mController->ShouldClearFocusOnEscape())
+  {
+    // Make sure ClearKeyInputFocus when only key is up
+    if(event.GetState() == KeyEvent::UP)
+    {
+      Dali::Ui::FocusManager focusManager = Dali::Ui::FocusManager::Get();
+      if(focusManager)
+      {
+        focusManager.ClearFocus();
+      }
+      ClearKeyInputFocus(*this);
+    }
+
+    return true;
+  }
+  else if((Dali::DALI_KEY_RETURN == event.GetKeyCode() && strcmp(KEY_RETURN_NAME, event.GetKeyName().CStr()) == 0) ||
+          Dali::DALI_KEY_KP_ENTER == event.GetKeyCode())
+  {
+    // Do nothing when enter is coming.
+    return false;
+  }
+
+  return mController->KeyEvent(event);
+}
+
+void InputFieldImpl::OnTapDetected(Actor actor, TapGesture gesture)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "[%p] Tap detected\n", mController.Get());
+
+  // Deliver the tap before the focus event to controller; this allows us to detect when focus is gained due to tap-gestures
+  Insets         padding    = GetEffectiveTextPadding();
+  const Vector2& localPoint = gesture.GetLocalPoint();
+  mController->TapEvent(gesture.GetNumberOfTaps(), localPoint.x - static_cast<float>(padding.start), localPoint.y - static_cast<float>(padding.top));
+  mController->AnchorEvent(localPoint.x - static_cast<float>(padding.start), localPoint.y - static_cast<float>(padding.top));
+
+  Dali::Ui::FocusManager keyboardFocusManager = Dali::Ui::FocusManager::Get();
+  if(keyboardFocusManager)
+  {
+    keyboardFocusManager.SetCurrentFocusView(Ui::View::DownCast(Self()));
+  }
+  SetKeyInputFocus(*this);
+}
+
+void InputFieldImpl::OnPanDetected(Actor actor, PanGesture gesture)
+{
+  if(!mController->IsScrollable(gesture.GetDisplacement()))
+  {
+    Dali::DevelActor::SetNeedGesturePropagation(Self(), true);
+  }
+  else
+  {
+    Dali::DevelActor::SetNeedGesturePropagation(Self(), false);
+  }
+  mController->PanEvent(gesture.GetState(), gesture.GetDisplacement());
+}
+
+void InputFieldImpl::OnLongPressDetected(Actor actor, LongPressGesture gesture)
+{
+  // A background long press may update a deferred target, but must not activate
+  // its IME before the Window owns input. Retained key focus alone is not enough.
+  auto focusManager = Ui::FocusManager::Get();
+  if(mInputMethodContext && IsEditable() && focusManager &&
+     GetImpl(focusManager).IsActiveWindow(Dali::Integration::SceneHolder::Get(Self())))
+  {
+    Dali::Integration::InputMethodContext::Activate(mInputMethodContext);
+  }
+  Insets         padding    = GetEffectiveTextPadding();
+  const Vector2& localPoint = gesture.GetLocalPoint();
+  mController->LongPressEvent(gesture.GetState(), localPoint.x - static_cast<float>(padding.start), localPoint.y - static_cast<float>(padding.top));
+  SetKeyInputFocus(*this);
+}
+
+MeasuredSize InputFieldImpl::OnMeasure(float widthConstraint, float heightConstraint)
+{
+  mMeasureInvalidated = false;
+
+  const float effectiveScale = GetEffectiveScale();
+  if(SetTextUiScale(effectiveScale))
+  {
+    mController->InvalidateFontData();
+  }
+
+  const float requestedWidth  = ScaleIfFixedSize(GetRequestedWidth(), effectiveScale);
+  const float requestedHeight = ScaleIfFixedSize(GetRequestedHeight(), effectiveScale);
+
+  const float minWidth  = GetMinimumWidth() * effectiveScale;
+  const float maxWidth  = GetMaximumWidth() * effectiveScale;
+  const float minHeight = GetMinimumHeight() * effectiveScale;
+  const float maxHeight = GetMaximumHeight() * effectiveScale;
+
+  const bool wrapContentWidth  = requestedWidth == WRAP_CONTENT;
+  const bool wrapContentHeight = requestedHeight == WRAP_CONTENT;
+  const bool needsNaturalSize  = wrapContentWidth || wrapContentHeight;
+
+  float naturalWidth  = 0.0f;
+  float naturalHeight = 0.0f;
+
+  if(needsNaturalSize)
+  {
+    const Vector3 naturalSize = GetNaturalSize();
+
+    naturalWidth  = std::max(0.0f, naturalSize.width);
+    naturalHeight = std::max(0.0f, naturalSize.height);
+
+    if(wrapContentHeight && GetText().Empty())
+    {
+      // GetNaturalSize() includes view padding, but GetDefaultFontLineHeight() does not.
+      // Therefore, when text is empty, padding must be added explicitly to keep
+      // measurement consistent with the normal natural size path.
+      const Insets padding = GetEffectiveTextPadding();
+      naturalHeight        = mController->GetDefaultFontLineHeight() + padding.top + padding.bottom;
+    }
+  }
+
+  float measuredWidth  = 0.0f;
+  float measuredHeight = 0.0f;
+
+  // Width
+  if(requestedWidth >= 0.0f)
+  {
+    measuredWidth = ClampWithMinPriority(requestedWidth, minWidth, maxWidth);
+  }
+  else if(requestedWidth == MATCH_PARENT)
+  {
+    // MATCH_PARENT: report minimum desired size; actual size is determined
+    // by the parent during the Arrange phase.
+    measuredWidth = minWidth;
+  }
+  else // WRAP_CONTENT
+  {
+    const float allowedMaxWidth = (widthConstraint >= 0.0f) ? std::min(maxWidth, widthConstraint) : maxWidth;
+    measuredWidth               = ClampWithMinPriority(naturalWidth, minWidth, allowedMaxWidth);
+  }
+
+  // Height
+  if(requestedHeight >= 0.0f)
+  {
+    measuredHeight = ClampWithMinPriority(requestedHeight, minHeight, maxHeight);
+  }
+  else if(requestedHeight == MATCH_PARENT)
+  {
+    measuredHeight = minHeight;
+  }
+  else // WRAP_CONTENT
+  {
+    const float allowedMaxHeight = (heightConstraint >= 0.0f) ? std::min(maxHeight, heightConstraint) : maxHeight;
+    measuredHeight               = ClampWithMinPriority(naturalHeight, minHeight, allowedMaxHeight);
+  }
+
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "[%p] Measure constraints:%f,%f, measured:%f,%f\n", mController.Get(), widthConstraint, heightConstraint, measuredWidth, measuredHeight);
+  return MeasuredSize(measuredWidth, measuredHeight);
+}
+
+LayoutRect InputFieldImpl::OnArrange(const LayoutRect& bounds)
+{
+  return bounds;
+}
+
+// =============================================================================
+// ControlInterface
+// =============================================================================
+void InputFieldImpl::RequestTextRelayout()
+{
+  // Signal that a Relayout may be needed
+  RelayoutRequest();
+}
+
+void InputFieldImpl::InvalidateTextMeasure()
+{
+  if(!mMeasureInvalidated)
+  {
+    // Only invalidate measure when size depends on content.
+    if(GetRequestedWidth() == WRAP_CONTENT || GetRequestedHeight() == WRAP_CONTENT)
+    {
+      // Through the internal primitive, not ViewImpl::InvalidateMeasure(): the
+      // mMeasureInvalidated latch below is only released by OnMeasure, so this
+      // framework-internal invalidation must never be routed through the public
+      // entry point.
+      Internal::ViewDataImpl::Get(*this).InvalidateMeasure();
+      mMeasureInvalidated = true;
+    }
+  }
+}
+
+void InputFieldImpl::RequestAsyncRender()
+{
+}
+
+// =============================================================================
+// EditableControlInterface
+// =============================================================================
+void InputFieldImpl::AddDecoration(Actor& actor, Text::DecorationType type, bool needsClipping)
+{
+  if(actor)
+  {
+    if(needsClipping)
+    {
+      mClippingDecorationActors.push_back(actor);
+    }
+
+    // If the actor is a layer type, add it.
+    if(type == Text::DecorationType::ACTIVE_LAYER)
+    {
+      AddLayer(mActiveLayer, actor);
+    }
+    else if(type == Text::DecorationType::CURSOR_LAYER)
+    {
+      AddLayer(mCursorLayer, actor);
+    }
+  }
+}
+
+void InputFieldImpl::GetControlBackgroundColor(Vector4& color) const
+{
+  Property::Value propValue = Self().GetProperty(Ui::Integration::View::Property::BACKGROUND);
+  Property::Map*  resultMap = propValue.GetMap();
+
+  Property::Value* colorValue = nullptr;
+  if(resultMap && (colorValue = resultMap->Find(Ui::Integration::Visual::Property::MIX_COLOR)))
+  {
+    colorValue->Get(color);
+  }
+}
+
+bool InputFieldImpl::IsEditable() const
+{
+  return mController->IsEditable();
+}
+
+void InputFieldImpl::SetEditable(bool editable)
+{
+  const bool wasEditable = mController->IsEditable();
+  mController->SetEditable(editable);
+  const bool isEditable = mController->IsEditable();
+  if(wasEditable != isEditable && Dali::Integration::Accessibility::IsUp())
+  {
+    auto& viewData = Internal::ViewDataImpl::Get(*this);
+    viewData.EmitAccessibilityStateChanged(Dali::Integration::Accessibility::State::EDITABLE, isEditable);
+    viewData.EmitAccessibilityStateChanged(Dali::Integration::Accessibility::State::READ_ONLY, !isEditable);
+  }
+  if(mInputMethodContext && !editable)
+  {
+    Dali::Integration::InputMethodContext::Deactivate(mInputMethodContext);
+  }
+}
+
+std::string InputFieldImpl::CopyText()
+{
+  std::string copiedText = "";
+  if(mController && mController->IsShowingRealText())
+  {
+    copiedText = mController->CopyText();
+  }
+  return copiedText;
+}
+
+std::string InputFieldImpl::CutText()
+{
+  std::string cutText = "";
+  if(mController && mController->IsShowingRealText())
+  {
+    cutText = mController->CutText();
+  }
+  return cutText;
+}
+
+void InputFieldImpl::PasteText()
+{
+  if(mController)
+  {
+    SetKeyInputFocus(*this); //Giving focus to the field that was passed to the PasteText in case the passed field (current field) doesn't have focus.
+    mController->PasteText();
+  }
+}
+
+void InputFieldImpl::TextChanged(bool immediate)
+{
+  if(immediate) // Emits TextChanged signal immediately
+  {
+    EmitTextChanged();
+  }
+  else
+  {
+    mTextChanged = true;
+  }
+}
+
+void InputFieldImpl::MaximumLengthReached()
+{
+  EmitMaximumLengthReached();
+}
+
+void InputFieldImpl::CursorPositionChanged(unsigned int oldPosition, unsigned int newPosition)
+{
+  if((oldPosition != newPosition) && !mCursorPositionChanged)
+  {
+    mCursorPositionChanged = true;
+  }
+}
+
+void InputFieldImpl::InputStyleChanged(Text::InputStyle::Mask inputStyleMask)
+{
+  const Ui::Text::TypingStyle::Mask mask = ToTypingStyleMask(inputStyleMask);
+  if(mask != Ui::Text::TypingStyle::NONE)
+  {
+    EmitTypingStyleChanged(mask);
+  }
+}
+
+void InputFieldImpl::InputRejected(Ui::Text::InputFilter::RejectReason reason)
+{
+  EmitInputRejected(reason);
+}
+
+void InputFieldImpl::TextInserted(unsigned int position, unsigned int length, const std::string& content)
+{
+  if(!Dali::Integration::Accessibility::IsUp())
+  {
+    return;
+  }
+
+  auto accessible      = Internal::ViewDataImpl::Get(*this).GetAccessibleObject();
+  auto fieldAccessible = dynamic_cast<InputFieldAccessible*>(accessible.Get());
+  if(DALI_LIKELY(fieldAccessible))
+  {
+    fieldAccessible->EmitTextInserted(position, length, content);
+  }
+}
+
+void InputFieldImpl::TextDeleted(unsigned int position, unsigned int length, const std::string& content)
+{
+  if(!Dali::Integration::Accessibility::IsUp())
+  {
+    return;
+  }
+
+  auto accessible      = Internal::ViewDataImpl::Get(*this).GetAccessibleObject();
+  auto fieldAccessible = dynamic_cast<InputFieldAccessible*>(accessible.Get());
+  if(DALI_LIKELY(fieldAccessible))
+  {
+    fieldAccessible->EmitTextDeleted(position, length, content);
+  }
+}
+
+// =============================================================================
+// SelectableControlInterface
+// =============================================================================
+void InputFieldImpl::SelectText(const uint32_t start, const uint32_t end)
+{
+  if(mController && mController->IsShowingRealText())
+  {
+    mController->SelectText(start, end);
+    SetKeyInputFocus(*this);
+  }
+}
+
+void InputFieldImpl::SelectWholeText()
+{
+  if(mController && mController->IsShowingRealText())
+  {
+    mController->SelectWholeText();
+    SetKeyInputFocus(*this);
+  }
+}
+
+void InputFieldImpl::ClearSelection()
+{
+  if(mController && mController->IsShowingRealText())
+  {
+    mController->SelectNone();
+  }
+}
+
+InputMethodContext InputFieldImpl::GetInputMethodContext()
+{
+  return mInputMethodContext;
+}
+
+Dali::String InputFieldImpl::GetSelectedText() const
+{
+  Dali::String selectedText = "";
+  if(mController && mController->IsShowingRealText())
+  {
+    selectedText = ToDaliString(mController->GetSelectedText());
+  }
+  return selectedText;
+}
+
+void InputFieldImpl::SetTextSelectionRange(const uint32_t* start, const uint32_t* end)
+{
+  if(mController && mController->IsShowingRealText())
+  {
+    mController->SetTextSelectionRange(start, end);
+    SetKeyInputFocus(*this);
+  }
+}
+
+Text::Uint32Pair InputFieldImpl::GetTextSelectionRange() const
+{
+  Text::Uint32Pair range;
+  if(mController && mController->IsShowingRealText())
+  {
+    range = mController->GetTextSelectionRange();
+  }
+  return range;
+}
+
+void InputFieldImpl::SelectionChanged(uint32_t oldStart, uint32_t oldEnd, uint32_t newStart, uint32_t newEnd)
+{
+  if(((oldStart != newStart) || (oldEnd != newEnd)) && !mSelectionChanged)
+  {
+    if(newStart == newEnd)
+    {
+      mSelectionCleared = true;
+    }
+    else
+    {
+      if(oldStart == oldEnd)
+      {
+        mSelectionStarted = true;
+      }
+    }
+
+    mSelectionChanged = true;
+  }
+}
+
+// =============================================================================
+// AnchorControlInterface
+// =============================================================================
+bool InputFieldImpl::AnchorClicked(uint32_t cursorPosition, std::string& href)
+{
+  return mController->AnchorClickEvent(cursorPosition, href);
+}
+
+void InputFieldImpl::EmitAnchorClicked(const std::string& href)
+{
+  // TODO
+}
+
+// =============================================================================
+// Implementation
+// =============================================================================
+Dali::Integration::InputMethodContext::CallbackData InputFieldImpl::OnInputMethodContextEvent(
+  Dali::InputMethodContext                                inputMethodContext,
+  const Dali::Integration::InputMethodContext::EventData& inputMethodContextEvent)
+{
+  return mController->OnInputMethodContextEvent(inputMethodContext, inputMethodContextEvent);
+}
+
+void InputFieldImpl::OnSceneConnect(Dali::Actor actor)
+{
+  if(mHasBeenStaged)
+  {
+    RenderText(static_cast<Ui::Text::Controller::UpdateTextType>(Ui::Text::Controller::MODEL_UPDATED | Ui::Text::Controller::DECORATOR_UPDATED));
+  }
+  else
+  {
+    mHasBeenStaged = true;
+  }
+}
+
+bool InputFieldImpl::OnTouched(Actor actor, TouchEvent touch)
+{
+  if(touch.GetPointCount() == 0u)
+  {
+    return false;
+  }
+
+  const PointState::Type state = touch.GetState(0);
+
+  if(PointState::DOWN == state)
+  {
+    if(!HasKeyInputFocus(*this))
+    {
+      // Touch focus should not scroll to the old cursor position before tap is handled.
+      mFocusGainedByTouch = true;
+    }
+  }
+  else if(PointState::UP == state || PointState::INTERRUPTED == state)
+  {
+    mFocusGainedByTouch = false;
+  }
+
+  return false;
+}
+
+void InputFieldImpl::OnLayoutDirectionChanged(Actor actor, LayoutDirection::Type type)
+{
+  mController->ChangedLayoutDirection();
+}
+
+void InputFieldImpl::OnLocaleChanged(std::string locale)
+{
+  mController->InvalidateFontData();
+}
+
+void InputFieldImpl::OnKeyboardStatusChanged(InputMethodContext context, InputMethodContext::State state)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "[%p] Keyboard state:%d\n", mController.Get(), state);
+
+  bool isFocused = false;
+
+  Dali::Ui::FocusManager keyboardFocusManager = Dali::Ui::FocusManager::Get();
+  if(keyboardFocusManager)
+  {
+    isFocused = keyboardFocusManager.GetCurrentFocusView() == Self();
+  }
+
+  if(state == InputMethodContext::State::HIDE)
+  {
+    if(!isFocused)
+    {
+      mController->KeyboardFocusLostEvent();
+    }
+  }
+  else if(state == InputMethodContext::State::SHOW)
+  {
+    mController->KeyboardFocusGainEvent(); // Initially called by OnFocusGained
+  }
+}
+
+void InputFieldImpl::EnableClipping()
+{
+  if(!mStencil)
+  {
+    // Creates an extra actor to be used as stencil buffer.
+    mStencil = Actor::New();
+    mStencil.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+    mStencil.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+
+    // Enable the clipping property.
+    mStencil.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::CLIP_TO_BOUNDING_BOX);
+    DevelActor::SetResizePolicy(mStencil, ResizePolicy::FILL_TO_PARENT, Dimension::ALL_DIMENSIONS);
+
+    IntegrationView::AddActorChild(Ui::View::DownCast(Self()), mStencil);
+    if(mCursorLayer)
+    {
+      mStencil.Add(mCursorLayer);
+    }
+  }
+}
+
+void InputFieldImpl::ResizeActor(Actor& actor, const Vector2& size)
+{
+  if(actor.GetProperty<Vector3>(Dali::Actor::Property::SIZE).GetVectorXY() != size)
+  {
+    actor.SetProperty(Actor::Property::SIZE, size);
+  }
+}
+
+void InputFieldImpl::AddLayer(Actor& layer, Actor& actor)
+{
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  IntegrationView::AddActorChild(Ui::View::DownCast(Self()), actor);
+  layer = actor;
+}
+
+void InputFieldImpl::RenderText(Text::UpdateTextType updateTextType)
+{
+  const Vector2 size            = Self().GetProperty<Vector3>(Actor::Property::SIZE).GetVectorXY();
+  auto          atlasFrameState = Ui::Text::Internal::Gradient::AtlasFrameState{};
+  if(mHasTextGradientPropertyData)
+  {
+    const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+    DALI_ASSERT_DEBUG(data && "Editable TextGradient property data should exist after creation");
+    if(data)
+    {
+      atlasFrameState = data->atlasResources.GetFrameState(mController->IsShowingPlaceholderText(), mAtlasApplyState);
+    }
+  }
+
+  Ui::Internal::CommonTextUtils::RenderText(Self(), mRenderer, mController, mDecorator, mAlignmentOffset,
+                                            mRenderableActor, mBackgroundActor, mCursorLayer, mStencil,
+                                            mClippingDecorationActors, mAnchorActors, updateTextType,
+                                            atlasFrameState, size);
+  BindGradientAnimProperties();
+}
+
+bool InputFieldImpl::SyncAtlasGradientState()
+{
+  if(!mHasTextGradientPropertyData)
+  {
+    BindGradientAnimProperties();
+    return true;
+  }
+
+  const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data)
+  {
+    DALI_ASSERT_DEBUG(data && "Editable TextGradient property data should exist after creation");
+    BindGradientAnimProperties();
+    return true;
+  }
+
+  const auto& state = data->atlasResources.GetRendererState(mController->IsShowingPlaceholderText());
+  if(Ui::Text::Internal::Gradient::MatchesAtlasApplyState(mAtlasApplyState, state))
+  {
+    BindGradientAnimProperties();
+    return true;
+  }
+
+  const bool enabled = state.IsEnabled();
+  if(!enabled)
+  {
+    if(mAtlasApplyState.IsGradientApplied())
+    {
+      if(mRenderer)
+      {
+        mRenderer.Reset();
+      }
+      mAtlasApplyState.Reset();
+      return false;
+    }
+
+    // Switching between two disabled normal/placeholder resources, or clearing
+    // an unsupported fallback, requires no renderer work.
+    Ui::Text::Internal::Gradient::SetAtlasApplyState(mAtlasApplyState, state);
+    BindGradientAnimProperties();
+    return true;
+  }
+
+  if(mAtlasApplyState.initialized && !mAtlasApplyState.enabled && !mAtlasApplyState.IsSolidFallback())
+  {
+    if(mRenderer)
+    {
+      mRenderer.Reset();
+    }
+    mAtlasApplyState.Reset();
+    return false;
+  }
+
+  if(mRenderer && mRenderer->SetAtlasGradientState(state))
+  {
+    Ui::Text::Internal::Gradient::SetAtlasApplyState(mAtlasApplyState, state);
+    BindGradientAnimProperties();
+    return true;
+  }
+
+  if(mRenderer)
+  {
+    Ui::Text::Internal::Gradient::SetAtlasApplyStateAsSolidFallback(mAtlasApplyState, state);
+    BindGradientAnimProperties();
+    return true;
+  }
+
+  return false;
+}
+
+void InputFieldImpl::ApplyAtlasGradientState()
+{
+  if(mRenderer)
+  {
+    if(!mHasTextGradientPropertyData)
+    {
+      BindGradientAnimProperties();
+      return;
+    }
+
+    const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+    if(!data)
+    {
+      DALI_ASSERT_DEBUG(data && "Editable TextGradient property data should exist after creation");
+      BindGradientAnimProperties();
+      return;
+    }
+
+    const auto& state = data->atlasResources.GetRendererState(mController->IsShowingPlaceholderText());
+    if(!state.IsEnabled())
+    {
+      Ui::Text::Internal::Gradient::SetAtlasApplyState(mAtlasApplyState, state);
+    }
+    else if(mRenderer->SetAtlasGradientState(state))
+    {
+      Ui::Text::Internal::Gradient::SetAtlasApplyState(mAtlasApplyState, state);
+    }
+    else
+    {
+      Ui::Text::Internal::Gradient::SetAtlasApplyStateAsSolidFallback(mAtlasApplyState, state);
+    }
+    BindGradientAnimProperties();
+  }
+}
+
+void InputFieldImpl::SyncGradientAnimProperties()
+{
+  if(!mHasTextGradientPropertyData)
+  {
+    return;
+  }
+
+  auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data || data->gradientAnimOffsetIndex == Property::INVALID_INDEX)
+  {
+    return;
+  }
+
+  const auto& state = data->atlasResources.GetRendererState(false);
+  if(!state.IsEnabled())
+  {
+    return;
+  }
+
+  Actor self = Self();
+  if(self)
+  {
+    self.SetProperty(data->gradientAnimOffsetIndex, state.style.startOffset);
+  }
+}
+
+void InputFieldImpl::SyncPlaceholderGradientAnimProperties()
+{
+  if(!mHasTextGradientPropertyData)
+  {
+    return;
+  }
+
+  auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  if(!data || data->placeholderGradientAnimOffsetIndex == Property::INVALID_INDEX)
+  {
+    return;
+  }
+
+  const auto& state = data->atlasResources.GetRendererState(true);
+  if(!state.IsEnabled())
+  {
+    return;
+  }
+
+  Actor self = Self();
+  if(self)
+  {
+    self.SetProperty(data->placeholderGradientAnimOffsetIndex, state.style.startOffset);
+  }
+}
+
+void InputFieldImpl::BindGradientAnimProperties()
+{
+  if(!mRenderer)
+  {
+    return;
+  }
+
+  if(!mHasTextGradientPropertyData)
+  {
+    return;
+  }
+
+  Property::Index sourceIndex = Property::INVALID_INDEX;
+  if(IsActiveGradientAnimSupported())
+  {
+    if(const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData))
+    {
+      sourceIndex = mController->IsShowingPlaceholderText() ? data->placeholderGradientAnimOffsetIndex : data->gradientAnimOffsetIndex;
+    }
+  }
+
+  Actor sourceActor;
+  if(sourceIndex != Property::INVALID_INDEX)
+  {
+    sourceActor = Self();
+  }
+
+  mRenderer->SetAtlasGradientAnimProperties(sourceActor, sourceIndex);
+  SetGradientAnimApplyRate(true);
+}
+
+bool InputFieldImpl::IsActiveGradientAnimSupported() const
+{
+  if(!mHasTextGradientPropertyData || !mAtlasApplyState.IsGradientApplied())
+  {
+    return false;
+  }
+
+  const auto* data = Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData);
+  DALI_ASSERT_DEBUG(data && "Editable TextGradient property data should exist after creation");
+  return data &&
+         data->atlasResources.GetRendererState(mController->IsShowingPlaceholderText()).IsEnabled();
+}
+
+void InputFieldImpl::SetGradientAnimApplyRate(bool notifyToConstraint)
+{
+  if(!mRenderer || !mHasTextGradientPropertyData)
+  {
+    return;
+  }
+
+  const bool  showingPlaceholder = mController->IsShowingPlaceholderText();
+  const auto* data               = mHasTextGradientPropertyData
+                                     ? Internal::Text::GetEditableTextGradientPropertyData(mTextGradientPropertyData)
+                                     : nullptr;
+  DALI_ASSERT_DEBUG(!mHasTextGradientPropertyData || data);
+  const Property::Index sourceIndex = data ? (showingPlaceholder ? data->placeholderGradientAnimOffsetIndex : data->gradientAnimOffsetIndex) : Property::INVALID_INDEX;
+  const bool            applyAlways = IsActiveGradientAnimSupported() && sourceIndex != Property::INVALID_INDEX;
+  mRenderer->SetAtlasGradientAnimApplyAlways(applyAlways, notifyToConstraint);
+}
+
+void InputFieldImpl::EmitTextChanged()
+{
+  Ui::View handle(GetOwner());
+  mTextChangedSignal.Emit(handle);
+  mTextChanged = false;
+}
+
+void InputFieldImpl::EmitMaximumLengthReached()
+{
+  Ui::View handle(GetOwner());
+  mMaxLengthReachedSignal.Emit(handle);
+}
+
+void InputFieldImpl::EmitInputRejected(Ui::Text::InputFilter::RejectReason reason)
+{
+  Ui::View handle(GetOwner());
+  mInputRejectedSignal.Emit(handle, reason);
+}
+
+void InputFieldImpl::EmitCursorPositionChanged()
+{
+  Ui::View   handle(GetOwner());
+  const auto cursorPosition = mController->GetPrimaryCursorPosition();
+  mCursorPositionChangedSignal.Emit(handle, cursorPosition);
+  if(Dali::Integration::Accessibility::IsUp())
+  {
+    auto accessible = Internal::ViewDataImpl::Get(*this).GetAccessibleObject();
+    if(DALI_LIKELY(accessible))
+    {
+      accessible->EmitTextCursorMoved(cursorPosition);
+    }
+  }
+  mCursorPositionChanged = false;
+}
+
+void InputFieldImpl::EmitSelectionStarted()
+{
+  Ui::View handle(GetOwner());
+  mSelectionStartedSignal.Emit(handle);
+  mSelectionStarted = false;
+}
+
+void InputFieldImpl::EmitSelectionChanged()
+{
+  Ui::View         handle(GetOwner());
+  Text::Uint32Pair range = mController->GetTextSelectionRange();
+  mSelectionChangedSignal.Emit(handle, range.first, range.second);
+  mSelectionChanged = false;
+}
+
+void InputFieldImpl::EmitSelectionCleared()
+{
+  Ui::View handle(GetOwner());
+  mSelectionClearedSignal.Emit(handle);
+  mSelectionCleared = false;
+}
+
+void InputFieldImpl::EmitTypingStyleChanged(Ui::Text::TypingStyle::Mask mask)
+{
+  Ui::View handle(GetOwner());
+  mTypingStyleChangedSignal.Emit(handle, mask);
+}
+
+// =============================================================================
+// UiColorManager
+// =============================================================================
+void InputFieldImpl::SetTextColorInternal(const Vector4& color)
+{
+  if(mController->GetDefaultColor() != color)
+  {
+    mController->SetDefaultColor(color);
+    mController->SetInputColor(color);
+    mRenderer.Reset();
+  }
+}
+
+void InputFieldImpl::SetPlaceholderColorInternal(const Vector4& color)
+{
+  if(mController->GetPlaceholderTextColor() != color)
+  {
+    mController->SetPlaceholderTextColor(color);
+    mRenderer.Reset();
+  }
+}
+
+void InputFieldImpl::SetCursorColorInternal(const Vector4& color)
+{
+  mDecorator->SetCursorColor(Ui::Text::PRIMARY_CURSOR, color);
+  mDecorator->SetCursorColor(Ui::Text::SECONDARY_CURSOR, color);
+  RequestTextRelayout();
+}
+
+void InputFieldImpl::SetSelectionColorInternal(const Vector4& color)
+{
+  mDecorator->SetHighlightColor(color);
+  RequestTextRelayout();
+}
+
+void InputFieldImpl::SetTextHandleColorInternal(const Vector4& color)
+{
+  mDecorator->SetHandleColor(color);
+  RequestTextRelayout();
+}
+
+void InputFieldImpl::SetTextBackgroundColorInternal(const Vector4& color)
+{
+  if(mController->GetBackgroundColor() != color)
+  {
+    mController->SetBackgroundColor(color);
+    mRenderer.Reset();
+  }
+}
+
+void InputFieldImpl::SetUnderlineColorInternal(const Vector4& color)
+{
+  if(mController->GetUnderlineColor() != color)
+  {
+    mRenderer.Reset();
+  }
+  mController->SetUnderlineColor(color);
+}
+
+void InputFieldImpl::SetShadowColorInternal(const Vector4& color)
+{
+  if(mController->GetShadowColor() != color)
+  {
+    mController->SetShadowColor(color);
+    mRenderer.Reset();
+  }
+}
+
+void InputFieldImpl::SetOutlineColorInternal(const Vector4& color)
+{
+  if(mController->GetOutlineColor() != color)
+  {
+    mController->SetOutlineColor(color);
+    mRenderer.Reset();
+  }
+}
+
+void InputFieldImpl::SetLineThroughColorInternal(const Vector4& color)
+{
+  if(mController->GetStrikethroughColor() != color)
+  {
+    mRenderer.Reset();
+  }
+  mController->SetStrikethroughColor(color);
+}
+
+void InputFieldImpl::SetTypingTextColorInternal(const Vector4& color)
+{
+  mController->SetInputColor(color);
+}
+
+void InputFieldImpl::ApplyLocalizedPlaceholder(BaseHandle target, const Dali::String& text)
+{
+  SetPlaceholder(text);
+}
+
+// =============================================================================
+// Properties
+// =============================================================================
+void InputFieldImpl::OnPropertySet(Dali::Property::Index index, const Dali::Property::Value& propertyValue)
+{
+  // Reintroduce a switch statement here when InputField-specific properties are added.
+  ViewImpl::OnPropertySet(index, propertyValue); // up call to control for non-handled properties
+}
+
+void InputFieldImpl::SetProperty(BaseObject* object, Dali::Property::Index index, const Dali::Property::Value& value)
+{
+  Ui::View view = Ui::View::DownCast(Dali::BaseHandle(object));
+  if(view)
+  {
+    PropertyHandler::SetProperty(view, index, value);
+  }
+}
+
+Dali::Property::Value InputFieldImpl::GetProperty(BaseObject* object, Dali::Property::Index index)
+{
+  Dali::Property::Value value;
+  Ui::View              view = Ui::View::DownCast(Dali::BaseHandle(object));
+  if(view)
+  {
+    value = PropertyHandler::GetProperty(view, index);
+  }
+  return value;
+}
+
+} // namespace Integration
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

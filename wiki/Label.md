@@ -1,0 +1,586 @@
+# Label
+
+[→ 한국어 문서](https://github.sec.samsung.net/NUI/dali-ui/wiki/Label-(kr))
+
+## Overview
+
+`Label` is a non-editable View that displays text. It performs text layout and rendering, but does not support user input or editing. It provides various features from simple text display to multi-line, style, marquee, and async rendering.
+
+<br/>
+
+## Basic Usage
+
+Create with text:
+
+~~~cpp
+Label label = Label::New("Hello");
+
+window.Add(label);
+~~~
+
+Create and configure:
+
+~~~cpp
+Label label = Label::New();
+label.SetText("Hello");
+label.SetFontSize(24.0f);
+label.SetTextColor(UiColor::PRIMARY);
+~~~
+
+<br/>
+
+## Text Layout
+
+Representative text layout APIs.
+
+| API | Description |
+|---|---|
+| `SetMultiLine()` | Enable multi-line |
+| `SetMaximumLines()` | Set the maximum number of lines for multi-line layout |
+| `SetLineWrapMode()` | Line wrap mode (`WORD`, `CHARACTER`, `HYPHENATION`, `MIXED`) |
+| `SetHorizontalTextAlignment()` | Horizontal alignment (`START`, `CENTER`, `END`) |
+| `SetVerticalTextAlignment()` | Vertical alignment (`START`, `CENTER`, `END`) |
+| `SetTextOverflowMode()` | Overflow handling (`ELLIPSIS`, `CLIP`) |
+
+~~~cpp
+Label label = Label::New("Long text...");
+label.SetMultiLine(true);
+label.SetLineWrapMode(Text::LineWrapMode::WORD);
+label.SetHorizontalTextAlignment(Text::Alignment::CENTER);
+~~~
+
+<br/>
+
+### Maximum Lines
+
+`SetMaximumLines()` sets the maximum number of lines used for multi-line text layout. With a positive value, rendering and size measurement use layout results up to the specified number of lines. The default value, `Text::MAXIMUM_LINES_UNLIMITED` (`0`), applies no line-count limit. Negative values are also treated as `Text::MAXIMUM_LINES_UNLIMITED`.
+
+~~~cpp
+Label label = Label::New("First line\nSecond line\nThird line\nFourth line");
+label.SetMultiLine(true);
+label.SetMaximumLines(3);
+label.SetTextOverflowMode(Text::OverflowMode::ELLIPSIS);
+~~~
+
+In `ELLIPSIS` mode, up to three lines are displayed, and remaining text is represented by an ellipsis at the end of the last line.
+
+~~~text
+First line
+Second line
+Third line…
+~~~
+
+In `CLIP` mode, only up to three lines are displayed without an ellipsis.
+
+~~~text
+First line
+Second line
+Third line
+~~~
+
+`SetMaximumLines()` does not enable multi-line layout automatically. When `SetMultiLine(false)` is used, the Label continues to use single-line layout. Text beyond the maximum line count follows the `ELLIPSIS` or `CLIP` mode configured with `SetTextOverflowMode()`.
+
+The maximum line count is reflected in `GetNaturalSize()`, `GetHeightForWidth()`, `GetLineCount()`, and `GetLineCount(width)`. It is also applied during Text Fit calculation. See [Text Size Measurement](https://github.sec.samsung.net/NUI/dali-ui/wiki/Text#text-size-measurement) for details.
+
+<br/>
+
+## Line Height
+
+Control line spacing with `SetLineHeight()` and `SetLineHeightMode()`.
+
+- **RELATIVE** (default): Multiplier relative to font size
+  - `CalculatedLineHeight(px) = fontSize(px) * lineHeight * effectiveScale`
+- **ABSOLUTE**: Absolute value in pixels
+  - `CalculatedLineHeight(px) = lineHeight(px) * effectiveScale`
+
+Effective scale may include UI scale and font size scale.
+
+~~~cpp
+Label label = Label::New("Line height");
+label.SetMultiLine(true);
+label.SetLineHeight(1.4f);
+label.SetLineHeightMode(Text::LineHeightMode::RELATIVE);
+~~~
+
+~~~cpp
+Label label = Label::New("Auto line height");
+label.SetLineHeight(Text::LINE_HEIGHT_AUTO);
+~~~
+
+> [!NOTE]
+> `LINE_HEIGHT_AUTO` uses the default line height calculated from font metrics. If the calculated line height is smaller than the font-metrics-based height, the font-metrics-based height is used to avoid clipping glyphs.
+
+<br/>
+
+## Text Style
+
+Label can apply text styles such as underline, shadow, outline, line-through, and bevel through style objects.
+
+| Style | API | Clear |
+|---|---|---|
+| Text Underline | `SetTextUnderline(Text::Underline())` | `SetTextUnderline(Text::Underline::None())` |
+| Text Shadow | `SetTextShadow(Text::Shadow())` | `SetTextShadow(Text::Shadow::None())` |
+| Text Outline | `SetTextOutline(Text::Outline())` | `SetTextOutline(Text::Outline::None())` |
+| Text LineThrough | `SetTextLineThrough(Text::LineThrough())` | `SetTextLineThrough(Text::LineThrough::None())` |
+| Text Bevel | `SetTextBevel(Text::Bevel())` | `SetTextBevel(Text::Bevel::None())` |
+| Text Background | `SetTextBackgroundColor(UiColor)` | `ClearTextBackgroundColor()` |
+
+~~~cpp
+// Underline
+Label label = Label::New("Underline");
+label.SetTextUnderline(Text::Underline());
+
+// Dashed underline with color
+Text::Underline underline;
+underline.SetColor(UiColor(0x0088FF));
+underline.SetThickness(2.0f);
+underline.SetType(Text::Underline::Type::DASHED);
+underline.SetDashLength(4.0f);
+underline.SetDashGap(4.0f);
+
+Label label2 = Label::New("Dashed");
+label2.SetTextUnderline(underline);
+
+// Shadow
+Text::Shadow shadow;
+shadow.SetColor(UiColor(0xFF5500));
+shadow.SetOffset(Vector2(3.0f, 3.0f));
+shadow.SetBlurRadius(2.0f);
+
+Label label3 = Label::New("Shadow");
+label3.SetTextShadow(shadow);
+
+// Outline
+Text::Outline outline;
+outline.SetColor(UiColor(0x0066FF));
+outline.SetWidth(2.0f);
+
+Label label4 = Label::New("Outline");
+label4.SetTextOutline(outline);
+
+// LineThrough
+Text::LineThrough lineThrough;
+lineThrough.SetColor(UiColor(0xFF00FF));
+lineThrough.SetThickness(3.0f);
+
+Label label5 = Label::New("Strikethrough");
+label5.SetTextLineThrough(lineThrough);
+
+// Text background color
+Label label6 = Label::New("Highlighted");
+label6.SetTextBackgroundColor(UiColor(0xFFFF00));
+~~~
+
+See also:
+- [text-style-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-style-example.cpp)
+- [text-style-bevel-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-style-bevel-example.cpp)
+
+<br/>
+
+## Font
+
+| API | Description |
+|---|---|
+| `SetFontFamily()` | Set font family |
+| `SetFontSize()` | Set font size (pixels) |
+| `SetFontWeight()` | Set font weight (`THIN` ~ `BLACK`) |
+| `SetFontWidth()` | Set font width (`ULTRA_CONDENSED` ~ `ULTRA_EXPANDED`) |
+| `SetFontSlant()` | Set font slant (`NORMAL`, `ITALIC`, `OBLIQUE`) |
+| `SetFontVariation()` | Set variable font axis |
+
+If no font family is specified, the platform default font is used. Font family, weight, width, slant, and variation are applied within the range supported by the selected font.
+
+### Font Variation
+
+Set using string:
+
+~~~cpp
+Label label = Label::New("Variable Font");
+label.SetFontFamily("Sans VF");
+label.SetFontVariation("wght=700,wdth=90");
+~~~
+
+Set using `FontVariation::Axis`:
+
+~~~cpp
+Dali::Vector<Text::FontVariation::Axis> axes;
+axes.PushBack(Text::FontVariation::Axis("wght", 700.0f));
+axes.PushBack(Text::FontVariation::Axis("wdth", 90.0f));
+
+Label label = Label::New("Variable Font");
+label.SetFontFamily("Sans VF");
+label.SetFontVariation(axes);
+~~~
+
+Clear using `FontVariation::None()`:
+
+~~~cpp
+label.SetFontVariation(Text::FontVariation::None());
+~~~
+
+> [!NOTE]
+> If the font does not support a variation axis, the axis value may be ignored. `"Sans VF"` in the example above is a placeholder variable font name.
+> An empty font variation settings string is invalid and does not clear or change the current font variation. Use `SetFontVariation(Text::FontVariation::None())` to clear it.
+
+See also: [text-font-variation-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-font-variation-example.cpp)
+
+<br/>
+
+## UI Scale
+
+UI scale is reflected in font size and text layout related values during the measure/relayout process of Label, InputField, and InputEditor. Unlike Font Size Scale, UI scale is a value connected to the View/layout hierarchy's scale policy.
+
+| Target | Description |
+|---|---|
+| FontSize | Reflected in text layout / rendering base font size |
+| LineHeight | Reflected in relative/absolute line height calculation |
+| TextFit `Text::Fit::Range` | Reflected in min/max/step values |
+| TextFit `Text::Fit::Candidate` | Reflected in font size / line height |
+| Margin / Padding | Reflected in text layout area calculation |
+| Marquee | Reflected in MarqueeGap and other marquee layout values |
+
+> [!NOTE]
+> TBD: UI scale application for FontStyle-related values such as Underline, Shadow, and Outline.
+
+<br/>
+
+## Font Size Scale
+
+Font size scale is applied during layout/rendering without changing the font size value set by `SetFontSize()`.
+Label does not provide an app-defined font size scale setter. When enabled, the system font size scale is used as the scale source.
+To ignore system font size changes, disable it with `SetSystemFontSizeScaleEnabled(false)`.
+Minimum/maximum font size scale limits the final scale range. If the minimum value is greater than the maximum, the minimum takes priority.
+
+System font size scale:
+
+~~~cpp
+Label label = Label::New("System scaled text");
+label.SetSystemFontSizeScaleEnabled(true);
+label.SetMinimumFontSizeScale(0.8f);
+label.SetMaximumFontSizeScale(2.0f);
+~~~
+
+Ignore system font size scale:
+
+~~~cpp
+Label label = Label::New("Fixed size text");
+label.SetSystemFontSizeScaleEnabled(false);
+~~~
+
+`GetAdjustedFontSizeScale()` returns the final applied font size scale.
+
+<br/>
+
+## Markup
+
+Mark-up tags can be used to change the color, font, underline, anchor, etc. of part of the text. Convert a mark-up string with `Text::StyledText::FromMarkup()` and apply it with `SetStyledText()`.
+
+Markup is also shared by `InputField` and `InputEditor`. See [Markup](https://github.sec.samsung.net/NUI/dali-ui/wiki/Markup) for supported tags, color value formats, inline images, and usage examples.
+
+<br/>
+
+## Marquee
+
+Marquee is a feature that displays long text with scroll animation within a limited area.
+
+| API | Description |
+|---|---|
+| `SetMarqueeTriggerPolicy()` | Trigger policy (`MANUAL`, `ON_OVERFLOW`) |
+| `SetMarqueeSpeed()` | Speed (pixels/second) |
+| `SetMarqueeLoopCount()` | Loop count |
+| `SetMarqueeLoopDelay()` | Delay between loops (seconds) |
+| `SetMarqueeGap()` | Gap between end and start (pixels) |
+| `SetMarqueeOrientation()` | Direction (`HORIZONTAL`, `VERTICAL`) |
+| `SetMarqueeStopMode()` | Stop mode (`IMMEDIATE`, `FINISH_LOOP`) |
+| `StartMarquee()` | Start marquee |
+| `StopMarquee()` | Stop marquee |
+
+### MANUAL
+
+With `MANUAL`, `StartMarquee()` must be called to start the marquee regardless of overflow. `StopMarquee()` stops it.
+
+~~~cpp
+Label label = Label::New("Very long text...");
+label.SetMarqueeTriggerPolicy(Text::MarqueeTriggerPolicy::MANUAL);
+label.SetMarqueeSpeed(80);
+
+label.StartMarquee();
+label.StopMarquee();
+~~~
+
+### ON_OVERFLOW
+
+With `ON_OVERFLOW`, marquee starts automatically during layout when the text exceeds the available space. If the condition is met, there is no need to call `StartMarquee()`.
+
+~~~cpp
+Label label = Label::New("Very long text...");
+label.SetRequestedWidth(200.0f);
+label.SetMarqueeTriggerPolicy(Text::MarqueeTriggerPolicy::ON_OVERFLOW);
+label.SetMarqueeSpeed(80);
+~~~
+
+> [!NOTE]
+> `HORIZONTAL` applies only to single-line text, and `VERTICAL` applies only to multi-line text. If the condition is not met, the setting is ignored.
+
+> [!NOTE]
+> When the Label's inherited visibility changes and it disappears from the screen, marquee stops automatically. When it becomes visible again, marquee may restart depending on the previous running state.
+
+See also: [text-marquee-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-marquee-example.cpp)
+
+<br/>
+
+## Text Fit
+
+Text fit selects the largest font size that does not overflow within the given width/height. Label selects a value that fits the available space based on a font size range or candidate list.
+
+| API | Description |
+|---|---|
+| `SetTextFit(Text::Fit)` | Set or clear text fit with a complete configuration |
+| `SetTextFit(Text::Fit::Range)` | Set fit with font size range |
+| `SetTextFit(Vector<Text::Fit::Candidate>)` | Set fit with candidate list |
+| `GetTextFit()` | Get the current text fit configuration |
+
+### Range
+
+Specify a range with min/max font size and step. Line height follows the current style setting.
+
+~~~cpp
+Label label = Label::New("Auto-sized text");
+label.SetRequestedWidth(MATCH_PARENT);
+label.SetRequestedHeight(66.0f);
+label.SetMultiLine(true);
+label.SetTextFit(Text::Fit::Range(16.0f, 32.0f, 4.0f));
+~~~
+
+### Candidate
+
+Each candidate can specify fontSize and lineHeight directly. Text fit selects the largest candidate that fits the available space.
+
+~~~cpp
+Dali::Vector<Text::Fit::Candidate> candidates;
+candidates.PushBack(Text::Fit::Candidate(16.0f, 32.0f));
+candidates.PushBack(Text::Fit::Candidate(20.0f, 40.0f));
+candidates.PushBack(Text::Fit::Candidate(24.0f, 48.0f));
+
+Label label = Label::New("Candidate fit");
+label.SetRequestedWidth(MATCH_PARENT);
+label.SetRequestedHeight(80.0f);
+label.SetMultiLine(true);
+label.SetTextFit(candidates);
+~~~
+
+### Clear
+
+Clear text fit using `Text::Fit::None()`:
+
+~~~cpp
+label.SetTextFit(Text::Fit::None());
+~~~
+
+Passing an empty candidate vector to `SetTextFit()` has the same effect.
+
+### Get Current Fit
+
+`GetTextFit()` returns `Text::Fit`, which describes whether text fit is disabled, range-based, or candidate-based.
+
+~~~cpp
+Text::Fit fit = label.GetTextFit();
+
+if(fit.GetType() == Text::Fit::Type::RANGE)
+{
+  const Text::Fit::Range& range = fit.GetRange();
+}
+else if(fit.GetType() == Text::Fit::Type::CANDIDATES)
+{
+  const Dali::Vector<Text::Fit::Candidate>& candidates = fit.GetCandidates();
+}
+~~~
+
+> [!WARNING]
+> Text fit is recommended for layouts with a fixed size or explicit width/height constraints.
+> When used with `WRAP_CONTENT`, measurement is based on the maximum font size or maximum candidate.
+
+See also:
+- [text-fit-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-fit-example.cpp)
+- [text-fit-candidate-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-fit-candidate-example.cpp)
+
+<br/>
+
+## Localization
+
+Use `SetTranslatableText()` to bind a localized string.
+
+~~~cpp
+Label title = Label::New();
+title.SetTranslatableText("IDS_TITLE");
+~~~
+
+With explicit domain:
+
+~~~cpp
+Label title = Label::New();
+title.SetTranslatableText("IDS_TITLE", "myapp-settings");
+~~~
+
+> [!WARNING]
+> `SetText()` does not remove the translatable text binding.
+> To keep text set by `SetText()`, call `ClearTranslatableText()` first.
+
+See also: [Localization & Multilingual UI](https://github.sec.samsung.net/NUI/dali-ui/wiki/Localization-&-Multilingual-UI)
+
+<br/>
+
+## Advanced Rendering
+
+### Async Rendering
+
+Async rendering runs the major stages of the text rendering stack — text model update, layout, and render (pixel buffer creation and write) — through AsyncTask. It can help reduce main-thread delay when rendering large text or complex layouts.
+
+When async rendering is enabled, an async render request is automatically made during the OnRelayout phase based on the size determined by OnMeasure/OnArrange. When complete, `AsyncRenderFinishedSignal()` is emitted.
+
+~~~cpp
+Label label = Label::New("Async");
+label.SetRequestedWidth(300.0f);
+label.SetRequestedHeight(80.0f);
+label.SetAsyncRendering(true);
+~~~
+
+> [!NOTE]
+> Using a fixed size is beneficial for reducing main-thread computation during the measure phase.
+
+> [!WARNING]
+> If size/text/style changes continuously in real time, previous async requests may be canceled and replaced by new ones. Intermediate states may not be rendered, and only the final change is guaranteed to produce a rendering result. If immediate synchronization between rendering result and layout state is important, Async Rendering may not be suitable.
+
+### Async Size Computation
+
+Async Size Computation performs the same calculation as the sync APIs `GetNaturalSize()` and `GetHeightForWidth(width)` asynchronously.
+
+| API | Description |
+|---|---|
+| `RequestAsyncNaturalSize()` | Async computation corresponding to `GetNaturalSize()` |
+| `RequestAsyncHeightForWidth(float width)` | Async computation corresponding to `GetHeightForWidth(width)` |
+| `AsyncNaturalSizeComputedSignal()` | Signal emitted when async natural size computation completes |
+| `AsyncHeightForWidthComputedSignal()` | Signal emitted when async height-for-width computation completes |
+
+> [!NOTE]
+> Async size computation APIs can be used even when synchronous rendering mode is used.
+
+> [!NOTE]
+> When a maximum line count is set with `SetMaximumLines()`, the same limit is applied to async natural-size and height-for-width computations.
+
+~~~cpp
+label.AsyncNaturalSizeComputedSignal().Connect(
+  [](View view, float width, float height)
+  {
+    // width, height: natural size including padding
+  });
+
+label.RequestAsyncNaturalSize();
+~~~
+
+~~~cpp
+label.AsyncHeightForWidthComputedSignal().Connect(
+  [](View view, float width, float height)
+  {
+    // width: requested width, height: computed height including padding
+  });
+
+label.RequestAsyncHeightForWidth(300.0f);
+~~~
+
+### Render Scale
+
+Render scale rasterizes glyphs at a larger scale and downscales them to reduce texture upscaling quality loss when the View is visually scaled up. It does not affect layout size. It is only valid when async rendering is enabled, and the value must be 1.0 or greater.
+
+~~~cpp
+Label label = Label::New("High quality");
+label.SetAsyncRendering(true);
+label.SetRenderScale(2.0f);
+~~~
+
+See also: [text-render-scale-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-render-scale-example.cpp)
+
+### Cutout & Mask Effect
+
+Apply cutout using glyph shapes or mask effects.
+
+~~~cpp
+// Cutout
+Label label = Label::New("Cutout");
+label.SetTextCutoutEnabled(true);
+
+// Mask effect
+View maskView = ImageView::New("mask.png");
+
+Label label2 = Label::New("Masked");
+label2.SetMaskEffect(maskView);
+~~~
+
+See also: [text-cutout-mask-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-cutout-mask-example.cpp)
+
+### Text Reveal
+
+Text Reveal divides the content visible in the final output into `CHARACTER`, `WORD`, `LINE`, or `PIXEL` units and reveals it in sequence according to `TextRevealProgress`. At progress `0.0`, the reveal targets are hidden; at `1.0`, they are fully visible. Animating progress backwards hides them again in reverse order.
+
+![Text Reveal](./assets/text/text_reveal.gif)
+
+~~~cpp
+Label label = Label::New("Sequential text reveal");
+
+Text::Reveal reveal;
+reveal.SetUnit(Text::Reveal::Unit::CHARACTER);
+reveal.SetSequence(Text::Reveal::Sequence::WHOLE_TEXT);
+reveal.SetFadeDurationRatio(Text::Reveal::AUTO_FADE_DURATION_RATIO);
+
+label.SetTextReveal(reveal);
+label.SetTextRevealProgress(0.0f);
+
+Animation animation = Animation::New(2.0f);
+label.Animate(animation)
+  .TextRevealProgress(1.0f, Duration(2.0f), AlphaFunction::EASE_IN_OUT);
+animation.Play();
+~~~
+
+> [!NOTE]
+> Text Reveal affects the text foreground and inline `ImageSpan`. Decorations such as shadow, outline, underline, strikethrough, and background are not affected.
+
+For unit behavior, multi-line sequences and stagger, fade schedules, and animation, see the [Text Reveal guide](https://github.sec.samsung.net/NUI/dali-ui/wiki/Text-Reveal).
+
+<br/>
+
+## Signals
+
+| Signal | Signature | Description |
+|---|---|---|
+| `AnchorClickedSignal()` | `void(View, const String&)` | When an anchor is clicked |
+| `AsyncRenderFinishedSignal()` | `void(View, float, float)` | When async rendering completes |
+
+> [!NOTE]
+> For `AsyncNaturalSizeComputedSignal()` and `AsyncHeightForWidthComputedSignal()`, see the [Async Size Computation](#async-size-computation) section.
+
+<br/>
+
+## Samples
+
+| Feature | Sample |
+|---|---|
+| Basic | [text-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-example.cpp) |
+| Layout direction | [text-layout-direction-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-layout-direction-example.cpp) |
+| Markup | [text-markup-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-markup-example.cpp) |
+| Style | [text-style-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-style-example.cpp) |
+| Bevel | [text-style-bevel-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-style-bevel-example.cpp) |
+| Font variation | [text-font-variation-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-font-variation-example.cpp) |
+| Text fit | [text-fit-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-fit-example.cpp) |
+| Text fit candidate | [text-fit-candidate-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-fit-candidate-example.cpp) |
+| Maximum lines | [text-maximum-lines-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-maximum-lines-example.cpp) |
+| Marquee | [text-marquee-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-marquee-example.cpp) |
+| Render scale | [text-render-scale-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-render-scale-example.cpp) |
+| Cutout / Mask | [text-cutout-mask-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-cutout-mask-example.cpp) |
+| Text Reveal | [text-reveal-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-reveal-example.cpp) |
+| Localization | [text-localization-po-example.cpp](https://github.sec.samsung.net/NUI/dali-ui/tree/devel/samples/text/text-localization-po-example.cpp) |
+
+<br/>
+
+---
+
+[← Back to list](https://github.sec.samsung.net/NUI/dali-ui/wiki#documents)

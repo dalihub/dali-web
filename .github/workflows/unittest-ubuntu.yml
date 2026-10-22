@@ -1,0 +1,426 @@
+name: "Unittest (Ubuntu)"
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+    - devel
+  workflow_dispatch:
+    inputs:
+      dali_core_change:
+        description: 'dali-core Gerrit change number, or default'
+        required: false
+        default: 'default'
+      dali_adaptor_change:
+        description: 'dali-adaptor Gerrit change number, or default'
+        required: false
+        default: 'default'
+
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+
+  build:
+    name: "${{ matrix.job_name }}"
+    runs-on: [ code-linux ]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - configuration: debug
+          job_name: "Build & Test (debug)"
+        - configuration: release
+          job_name: "Build (release)"
+    container:
+      image: tizen-nui-docker-local.bart.sec.samsung.net/dali-ci-env:ubuntu22.04-v1
+      credentials:
+        username: ${{ secrets.BART_USERNAME }}
+        password: ${{ secrets.BART_IDENTITY_TOKEN }}
+    env:
+      CC: gcc
+      CXX: g++
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - uses: code-actions/checkout@v3
+      with:
+        ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.ref || github.sha }}
+        fetch-depth: 0
+        allow-unsafe-pr-checkout: true
+
+    - name: Merge PR into latest target branch
+      if: github.event_name == 'pull_request_target'
+      env:
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -euo pipefail
+
+        git fetch origin "$PR_HEAD_SHA"
+        git -c user.name='GitHub Actions' \
+          -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+          merge --no-ff --no-edit FETCH_HEAD
+
+    - name: Setup SSH
+      uses: code-actions/webfactory-ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Clone and resolve DALi dependencies
+      shell: bash
+      env:
+        PR_BODY: ${{ github.event.pull_request.body }}
+        DALI_CORE_CHANGE_INPUT: ${{ github.event.inputs.dali_core_change }}
+        DALI_ADAPTOR_CHANGE_INPUT: ${{ github.event.inputs.dali_adaptor_change }}
+        SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+      run: |
+        set -euo pipefail
+
+        KNOWN_HOSTS_FILE="$RUNNER_TEMP/review-tizen-known-hosts"
+        printf '%s\n' "$SSH_KNOWN_HOSTS" > "$KNOWN_HOSTS_FILE"
+        chmod 0600 "$KNOWN_HOSTS_FILE"
+
+        export GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=yes"
+
+        git clone --branch devel/master ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-core.git
+        git clone --branch devel/master ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-adaptor.git
+        # git clone --branch devel/master ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-toolkit.git
+        # git clone --branch devel/master ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-extension.git
+        # git clone --branch tizen ssh://jiyang@review.tizen.org:29418/platform/core/uifw/lottie-player.git
+        git clone --branch tizen ssh://jiyang@review.tizen.org:29418/platform/core/graphics/tizenvg.git
+
+        extract_dependency_value() {
+          local name=$1
+          local value
+          local count
+
+          value=$(printf '%s\n' "$PR_BODY" | awk '
+            /^##[[:space:]]+Test Dependencies \(optional\)[[:space:]]*$/ {
+              inDependencies = 1
+              next
+            }
+            inDependencies && /^##[[:space:]]/ {
+              exit
+            }
+            inDependencies {
+              print
+            }
+          ' | sed -nE "s/^[[:space:]]*-[[:space:]]*${name}:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p")
+          count=$(printf '%s\n' "$value" | sed '/^$/d' | wc -l)
+
+          if [ "$count" -eq 0 ]; then
+            printf '%s\n' 'default'
+          elif [ "$count" -eq 1 ]; then
+            printf '%s\n' "$value"
+          else
+            echo "::error::PR description contains multiple ${name} dependency values."
+            exit 1
+          fi
+        }
+
+        resolve_dependency() {
+          local name=$1
+          local directory=$2
+          local repository=$3
+          local change=$4
+          local bucket
+          local ref
+          local patchset
+          local commit
+
+          if [ "$change" = 'default' ]; then
+            commit=$(git -C "$directory" rev-parse HEAD)
+            result="- ${name}: devel/master latest, change default, patch set default, commit $commit"
+            echo "$result"
+            echo "$result" >> "$GITHUB_STEP_SUMMARY"
+            return
+          fi
+
+          if ! [[ "$change" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::${name} dependency must be 'default' or a positive Gerrit change number, got '$change'."
+            exit 1
+          fi
+
+          bucket=$(printf '%02d' "$((10#$change % 100))")
+          ref=$(git ls-remote "$repository" "refs/changes/$bucket/$change/*" | awk '{print $2}' | sort -t/ -k5,5n | tail -n 1)
+
+          if [ -z "$ref" ]; then
+            echo "::error::Unable to find Gerrit change $change for ${name}."
+            exit 1
+          fi
+
+          patchset=${ref##*/}
+          git -C "$directory" fetch origin "$ref"
+          git -C "$directory" checkout --detach FETCH_HEAD
+          commit=$(git -C "$directory" rev-parse HEAD)
+
+          result="- ${name}: change $change, patch set $patchset, commit $commit"
+          echo "$result"
+          echo "$result" >> "$GITHUB_STEP_SUMMARY"
+        }
+
+        if [ "$GITHUB_EVENT_NAME" = 'pull_request_target' ]; then
+          DALI_CORE_CHANGE=$(extract_dependency_value 'dali-core')
+          DALI_ADAPTOR_CHANGE=$(extract_dependency_value 'dali-adaptor')
+        else
+          DALI_CORE_CHANGE=${DALI_CORE_CHANGE_INPUT:-default}
+          DALI_ADAPTOR_CHANGE=${DALI_ADAPTOR_CHANGE_INPUT:-default}
+        fi
+
+        echo '## Test dependencies' >> "$GITHUB_STEP_SUMMARY"
+
+        resolve_dependency \
+          'dali-core' \
+          'dali-core' \
+          'ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-core.git' \
+          "$DALI_CORE_CHANGE"
+        resolve_dependency \
+          'dali-adaptor' \
+          'dali-adaptor' \
+          'ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-adaptor.git' \
+          "$DALI_ADAPTOR_CHANGE"
+
+    - name: Prepare DALi prefix
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        install -m 0755 dali-core/build/scripts/fastcov.py "$DESKTOP_PREFIX/bin/fastcov.py"
+        echo "DESKTOP_PREFIX=$DESKTOP_PREFIX"
+        gcc --version | head -1
+        cmake --version | head -1
+
+    - name: Build DALi (Debug)
+      if: matrix.configuration == 'debug'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        cd tizenvg
+        meson setup builddir -Dtools=svg2png --prefix "$DESKTOP_PREFIX" --libdir "$DESKTOP_PREFIX/lib"
+        ninja -C builddir install
+        cd -
+
+        cd dali-core/build/tizen
+        CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Debug
+        make install -j8
+        cd -
+
+        cd dali-adaptor/build/tizen
+        CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Debug -DENABLE_GRAPHICS_BACKEND=GLES
+        make install -j8
+        cd -
+
+        cd build/tizen
+        CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Debug
+        make -j8 install
+        cd -
+
+        cd manual-tests
+        CXXFLAGS='-g -O0 --coverage' LDFLAGS='--coverage' cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Debug
+        make install -j8
+        cd -
+
+        cd samples
+        ./build.sh
+
+    - name: Run automated test
+      if: matrix.configuration == 'debug'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        (
+          cd automated-tests
+          ./build.sh
+          ./execute.sh
+        )
+
+    - name: Generate LCOV coverage data
+      if: matrix.configuration == 'debug'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        (
+          cd automated-tests
+          ./coverage.sh -n
+        )
+        test -s build/tizen/dali.info
+        workspace_prefix="SF:${GITHUB_WORKSPACE%/}/"
+        awk -v prefix="$workspace_prefix" '
+          index($0, prefix) == 1 {
+            print "SF:" substr($0, length(prefix) + 1)
+            next
+          }
+          { print }
+        ' build/tizen/dali.info > build/tizen/dali.info.normalized
+        mv build/tizen/dali.info.normalized build/tizen/dali.info
+        genhtml \
+          --branch-coverage \
+          --no-sort \
+          --output-directory build/tizen/doc/coverage \
+          build/tizen/dali.info
+        test -s build/tizen/doc/coverage/index.html
+        {
+          echo '## Total coverage'
+          echo
+          echo '| Metric | Covered | Total | Coverage |'
+          echo '| --- | ---: | ---: | ---: |'
+          awk -F: '
+            /^LF:/  { linesFound += $2 }
+            /^LH:/  { linesHit += $2 }
+            /^FNF:/ { functionsFound += $2 }
+            /^FNH:/ { functionsHit += $2 }
+            /^BRF:/ { branchesFound += $2 }
+            /^BRH:/ { branchesHit += $2 }
+            END {
+              printf "| Lines | %d | %d | %.2f%% |\n", linesHit, linesFound, linesFound ? 100 * linesHit / linesFound : 0
+              printf "| Functions | %d | %d | %.2f%% |\n", functionsHit, functionsFound, functionsFound ? 100 * functionsHit / functionsFound : 0
+              printf "| Branches | %d | %d | %.2f%% |\n", branchesHit, branchesFound, branchesFound ? 100 * branchesHit / branchesFound : 0
+            }
+          ' build/tizen/dali.info
+        } >> "$GITHUB_STEP_SUMMARY"
+        if ! awk -F: '
+          /^LF:/ { linesFound += $2 }
+          /^LH:/ { linesHit += $2 }
+          END { exit linesFound > 0 && 100 * linesHit >= 90 * linesFound ? 0 : 1 }
+        ' build/tizen/dali.info; then
+          echo '::error::Total line coverage is below the required 90%.'
+          exit 1
+        fi
+
+    - name: Calculate changed-code coverage
+      if: matrix.configuration == 'debug' && github.event_name == 'pull_request_target'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        python3 .github/scripts/check-patch-coverage.py \
+          --coverage build/tizen/dali.info \
+          --base HEAD^1 \
+          --head HEAD \
+          --threshold 90 \
+          --output-directory patch_coverage
+        cat patch_coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Collect artifacts
+      if: matrix.configuration == 'debug'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        rm -rf coverage
+        mkdir -p test_results coverage
+        chmod +x automated-tests/scripts/convert-to-gtest.py
+        python3 automated-tests/scripts/convert-to-gtest.py test-results.xml
+        cp test-results.xml test_results/
+        cp build/tizen/dali.info coverage/
+        (
+          cd build/tizen/doc/coverage
+          find . -type f \( -name 'index.html' -o -name '*.func.html' \) \
+            -exec cp --parents '{}' "$GITHUB_WORKSPACE/coverage/" \;
+        )
+        test -s coverage/index.html
+        test "$(find coverage -name '*.func.html' | wc -l)" -gt 0
+
+    - name: Upload artifacts (test_results)
+      if: matrix.configuration == 'debug'
+      uses: CODE-Actions/upload-artifact@v2
+      with:
+        name: test_results     # name of stored artifact
+        path: test_results     # target directory or file to store
+        retention-days: 1
+
+    - name: Upload artifacts (coverage)
+      if: matrix.configuration == 'debug'
+      uses: CODE-Actions/upload-artifact@v2
+      with:
+        name: coverage
+        path: coverage
+        retention-days: 1
+
+    - name: Upload artifacts (patch coverage)
+      if: matrix.configuration == 'debug' && github.event_name == 'pull_request_target'
+      uses: CODE-Actions/upload-artifact@v2
+      with:
+        name: patch_coverage
+        path: patch_coverage
+        retention-days: 1
+
+    - name: Release build check
+      if: matrix.configuration == 'release'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        cd tizenvg
+        meson setup builddir -Dtools=svg2png --prefix "$DESKTOP_PREFIX" --libdir "$DESKTOP_PREFIX/lib"
+        ninja -C builddir install
+        cd -
+
+        cd dali-core/build/tizen
+        cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Debug
+        make install -j8
+        cd -
+
+        cd dali-adaptor/build/tizen
+        cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Debug -DENABLE_GRAPHICS_BACKEND=GLES
+        make install -j8
+        cd -
+
+        cd build/tizen
+        cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Release -DENABLE_GRAPHICS_BACKEND=GLES
+        make install -j8
+        cd -
+
+        cd automated-tests
+        ./build.sh
+        cd -
+
+        cd manual-tests
+        cmake -DCMAKE_INSTALL_PREFIX="$DESKTOP_PREFIX" -DCMAKE_BUILD_TYPE=Release
+        make install -j8
+        cd -
+
+        cd samples
+        ./build.sh Release
+
+  testhub:
+    runs-on: [ code-linux ]
+    needs: [ build ]
+    if: success()
+    steps:
+    - name: Send to TestHub
+      uses: CODE-Actions/testhub@v1
+      with:
+        test-tool: gtest
+        test-artifact-name: test_results
+        coverage-tool: lcov
+        coverage-artifact-name: coverage
+
+  patch-coverage:
+    name: Patch coverage (90%)
+    runs-on: [ code-linux ]
+    needs: [ build, testhub ]
+    if: github.event_name == 'pull_request_target' && needs.build.result == 'success' && needs.testhub.result == 'success'
+    steps:
+    - name: Download patch coverage result
+      uses: CODE-Actions/download-artifact@v2
+      with:
+        name: patch_coverage
+        path: patch_coverage
+
+    - name: Report and enforce patch coverage
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        cat patch_coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
+        if ! grep -qx 'PASS' patch_coverage/status; then
+          echo '::error::Changed-code coverage is below the required 90%.'
+          exit 1
+        fi

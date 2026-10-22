@@ -1,0 +1,504 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/internal/visuals/color/color-visual.h>
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/rendering/renderer-devel.h>
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+#include <dali/integration-api/constraint-integ.h>
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/rendering/decorated-visual-renderer.h>
+#include <dali/integration-api/stream-operators.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/public-api/animation/constraints.h>
+
+#include <locale>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/integration-api/ui-constraint-tag-ranges.h>
+#include <dali-ui-foundation/integration-api/visuals/color-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-actions-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/internal/graphics/builtin-shader-extern-gen.h>
+#include <dali-ui-foundation/internal/visuals/visual-base-data-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-cache.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-string-constants.h>
+#include <dali-ui-foundation/public-api/views/view.h>
+#include <dali-ui-foundation/public-api/visuals/visual-types.h>
+
+using Dali::Integration::ToDaliString;
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Internal
+{
+namespace
+{
+// cutout policies
+DALI_ENUM_TO_STRING_TABLE_BEGIN(CUTOUT_POLICY)
+  DALI_ENUM_CLASS_TO_STRING_WITH_SCOPE(Dali::Ui::CutoutPolicy, NONE)
+  DALI_ENUM_CLASS_TO_STRING_WITH_SCOPE(Dali::Ui::CutoutPolicy, CUTOUT_VIEW)
+  DALI_ENUM_CLASS_TO_STRING_WITH_SCOPE(Dali::Ui::CutoutPolicy, CUTOUT_VIEW_WITH_CORNER_RADIUS)
+  DALI_ENUM_CLASS_TO_STRING_WITH_SCOPE(Dali::Ui::CutoutPolicy, CUTOUT_OUTSIDE)
+  DALI_ENUM_CLASS_TO_STRING_WITH_SCOPE(Dali::Ui::CutoutPolicy, CUTOUT_OUTSIDE_WITH_CORNER_RADIUS)
+DALI_ENUM_TO_STRING_TABLE_END(CUTOUT_POLICY)
+
+static constexpr uint32_t CUTOUT_CORNER_RADIUS_CONSTRAINT_TAG(Dali::Ui::Integration::ConstraintTagRanges::UI_CONSTRAINT_TAG_START +
+                                                              20);
+
+constexpr int CUSTOM_CUTOUT_PROPERTY_COUNT(2);        // uCutoutWithCornerRadius, uCutoutOutside
+constexpr int CUSTOM_CUTOUT_CORNER_PROPERTY_COUNT(3); // CutoutCornerRadius, CutoutCornerRadiusPolicy, CutoutCornerSquareness
+
+static void EqualToConstraintIntegerToFloat(float& current, const PropertyInputContainer& inputs)
+{
+  current = static_cast<float>(inputs[0]->GetInteger());
+}
+
+} // unnamed namespace
+
+struct ColorVisual::CutoutCornerContext
+{
+public:
+  CutoutCornerContext(ColorVisual& visual, VisualRenderer& renderer)
+  : mVisual(visual)
+  {
+    mCutoutCornerRadiusIndex       = renderer.RegisterUniqueProperty(CUTOUT_CORNER_RADIUS_UNIFORM_NAME, Vector4::ZERO);
+    mCutoutCornerRadiusPolicyIndex = renderer.RegisterUniqueProperty(CUTOUT_CORNER_RADIUS_POLICY_UNIFORM_NAME, Property::Value(static_cast<float>(Ui::Integration::Visual::Transform::Policy::ABSOLUTE)));
+    mCutoutCornerSquarenessIndex   = renderer.RegisterUniqueProperty(CUTOUT_CORNER_SQUARENESS_UNIFORM_NAME, Vector4::ZERO);
+  }
+
+  ~CutoutCornerContext()
+  {
+    RemoveConstraints();
+  }
+
+public:
+  void ApplyConstraints(VisualRenderer& renderer, Ui::View& view)
+  {
+    DALI_ASSERT_DEBUG(mCutoutCornerRadiusIndex != Property::INVALID_INDEX);
+    DALI_ASSERT_DEBUG(mCutoutCornerRadiusPolicyIndex != Property::INVALID_INDEX);
+    DALI_ASSERT_DEBUG(mCutoutCornerSquarenessIndex != Property::INVALID_INDEX);
+
+    // Get the corner radius from view
+    mCutoutCornerRadiusConstraint = Constraint::New<Vector4>(renderer, mCutoutCornerRadiusIndex, Dali::EqualToConstraint());
+    mCutoutCornerRadiusConstraint.AddSource(Source(view, Ui::View::Property::CORNER_RADIUS));
+    Dali::Integration::ConstraintSetInternalTag(mCutoutCornerRadiusConstraint, CUTOUT_CORNER_RADIUS_CONSTRAINT_TAG);
+
+    // Get the corner radius policy from view
+    // Note : Ui::View::Property::CORNER_RADIUS_POLICY is integer type. So we need to add converter from integer to float at constraint.
+    mCutoutCornerRadiusPolicyConstraint = Constraint::New<float>(renderer, mCutoutCornerRadiusPolicyIndex, EqualToConstraintIntegerToFloat);
+    mCutoutCornerRadiusPolicyConstraint.AddSource(Source(view, Ui::View::Property::CORNER_RADIUS_POLICY));
+    Dali::Integration::ConstraintSetInternalTag(mCutoutCornerRadiusConstraint, CUTOUT_CORNER_RADIUS_CONSTRAINT_TAG + 1);
+
+    // // Get the corner squareness policy from view
+    mCutoutCornerSquarenessConstraint = Constraint::New<Vector4>(renderer, mCutoutCornerSquarenessIndex, Dali::EqualToConstraint());
+    mCutoutCornerSquarenessConstraint.AddSource(Source(view, Ui::View::Property::CORNER_SQUARENESS));
+    Dali::Integration::ConstraintSetInternalTag(mCutoutCornerSquarenessConstraint, CUTOUT_CORNER_RADIUS_CONSTRAINT_TAG + 2);
+
+    mVisual.AddConstraintFeature(mCutoutCornerRadiusConstraint, {Ui::View::Property::CORNER_RADIUS});
+    mVisual.AddConstraintFeature(mCutoutCornerRadiusPolicyConstraint, {Ui::View::Property::CORNER_RADIUS_POLICY});
+    mVisual.AddConstraintFeature(mCutoutCornerSquarenessConstraint, {Ui::View::Property::CORNER_SQUARENESS});
+
+    // Apply the constraint to renderer
+    mCutoutCornerRadiusConstraint.Apply();
+    mCutoutCornerRadiusPolicyConstraint.Apply();
+    mCutoutCornerSquarenessConstraint.Apply();
+  }
+
+  void RemoveConstraints()
+  {
+    if(mCutoutCornerRadiusConstraint)
+    {
+      mVisual.RemoveConstraintFeature(mCutoutCornerRadiusConstraint);
+      mCutoutCornerRadiusConstraint.Remove();
+      mCutoutCornerRadiusConstraint.Reset();
+    }
+    if(mCutoutCornerRadiusPolicyConstraint)
+    {
+      mVisual.RemoveConstraintFeature(mCutoutCornerRadiusPolicyConstraint);
+      mCutoutCornerRadiusPolicyConstraint.Remove();
+      mCutoutCornerRadiusPolicyConstraint.Reset();
+    }
+    if(mCutoutCornerSquarenessConstraint)
+    {
+      mVisual.RemoveConstraintFeature(mCutoutCornerSquarenessConstraint);
+      mCutoutCornerSquarenessConstraint.Remove();
+      mCutoutCornerSquarenessConstraint.Reset();
+    }
+  }
+
+public:
+  ColorVisual& mVisual;
+
+  Constraint mCutoutCornerRadiusConstraint{};
+  Constraint mCutoutCornerRadiusPolicyConstraint{};
+  Constraint mCutoutCornerSquarenessConstraint{};
+
+  Property::Index mCutoutCornerRadiusIndex;       ///< The index of cutout corner radius property for renderer
+  Property::Index mCutoutCornerRadiusPolicyIndex; ///< The index of cutout corner radius policy property for renderer
+  Property::Index mCutoutCornerSquarenessIndex;   ///< The index of cutout corner squareness property for renderer
+};
+
+ColorVisualPtr ColorVisual::New(VisualFactoryCache& factoryCache, ColorVisualShaderFactory& shaderFactory,
+                                const Property::Map& properties)
+{
+  ColorVisualPtr colorVisualPtr(new ColorVisual(factoryCache, shaderFactory));
+  colorVisualPtr->SetProperties(properties);
+  colorVisualPtr->Initialize();
+  return colorVisualPtr;
+}
+
+ColorVisual::ColorVisual(VisualFactoryCache& factoryCache, ColorVisualShaderFactory& shaderFactory)
+: Visual::Base(factoryCache, Ui::Integration::InternalVisualType::COLOR),
+  mBlurRadius(0.0f),
+  mCutoutCornerContext(nullptr),
+  mCutoutPolicy(Dali::Ui::CutoutPolicy::NONE),
+  mAlwaysUsingBlurRadius(false),
+  mColorVisualShaderFactory(shaderFactory)
+{
+}
+
+ColorVisual::~ColorVisual()
+{
+  mCutoutCornerContext.reset();
+}
+
+void ColorVisual::DoSetProperties(const Property::Map& propertyMap)
+{
+  // By virtue of DoSetProperties being called last, this will override
+  // anything set by Ui::Integration::Visual::Property::MIX_COLOR
+  Property::Value* colorValue = propertyMap.Find(Ui::Integration::Visual::Property::MIX_COLOR, MIX_COLOR);
+  if(colorValue)
+  {
+    Vector4 color;
+    if(colorValue->Get(color))
+    {
+      Property::Type type = colorValue->GetType();
+      if(type == Property::VECTOR4)
+      {
+        SetMixColor(color);
+      }
+      else if(type == Property::VECTOR3)
+      {
+        Vector3 color3(color);
+        SetMixColor(color3);
+      }
+    }
+    else
+    {
+      DALI_LOG_ERROR("ColorVisual: mixColor property has incorrect type\n");
+    }
+  }
+
+  Property::Value* blurRadiusValue = propertyMap.Find(Ui::Integration::ColorVisual::Property::BLUR_RADIUS, BLUR_RADIUS_NAME);
+  if(blurRadiusValue)
+  {
+    if(!blurRadiusValue->Get(mBlurRadius))
+    {
+      DALI_LOG_ERROR("ColorVisual:DoSetProperties:: BLUR_RADIUS property has incorrect type: %d\n",
+                     blurRadiusValue->GetType());
+    }
+
+    if(DALI_UNLIKELY(mImpl->mRenderer))
+    {
+      // Unusual case. SetProperty called after OnInitialize().
+      // Assume that DoAction call UPDATE_PROPERTY.
+      mImpl->mRenderer.SetProperty(DecoratedVisualRenderer::Property::BLUR_RADIUS, mBlurRadius);
+
+      // Check whether we must update shader.
+      if(!mAlwaysUsingBlurRadius && IsBlurRequired())
+      {
+        // Change the shader must not be occured many times. we always have to use blur feature.
+        mAlwaysUsingBlurRadius = true;
+
+        if(!IsBorderlineRequired())
+        {
+          // If IsBorderlineRequired is true, BLEND_MODE is already BlendMode::ON_WITHOUT_CULL. So we don't overwrite
+          // it.
+          mImpl->mRenderer.SetProperty(Renderer::Property::BLEND_MODE, BlendMode::ON);
+        }
+
+        // Change shader
+        if(!IsUsingCustomShader())
+        {
+          UpdateShader();
+        }
+      }
+    }
+  }
+
+  Property::Value* cutoutPolicyValue =
+    propertyMap.Find(Ui::Integration::ColorVisual::Property::CUTOUT_POLICY, CUTOUT_POLICY_NAME);
+  if(cutoutPolicyValue)
+  {
+    int cutoutPolicy = static_cast<int>(Dali::Ui::CutoutPolicy::NONE) - 1; ///< Make always invalid
+    if(DALI_UNLIKELY(!Scripting::GetEnumerationProperty(*cutoutPolicyValue, CUTOUT_POLICY_TABLE,
+                                                        CUTOUT_POLICY_TABLE_COUNT, cutoutPolicy)))
+    {
+      std::ostringstream oss;
+      oss.imbue(std::locale::classic());
+      oss << *cutoutPolicyValue;
+      DALI_LOG_ERROR("ColorVisual:DoSetProperties:: CUTOUT_POLICY property has incorrect type : %d, value : %s\n",
+                     cutoutPolicyValue->GetType(), oss.str().c_str());
+    }
+    else
+    {
+      mCutoutPolicy = static_cast<Dali::Ui::CutoutPolicy>(cutoutPolicy);
+    }
+  }
+}
+
+void ColorVisual::DoSetOnScene(Actor& actor)
+{
+  actor.AddRenderer(mImpl->mRenderer);
+
+  if(mCutoutCornerContext)
+  {
+    // If cutout policy is CUTOUT_VIEW_WITH_CORNER_RADIUS or CUTOUT_OUTSIDE_WITH_CORNER_RADIUS, we need to apply equal
+    // constraint to it with view's corner radius.
+    Ui::View view = Ui::View::DownCast(actor);
+    DALI_ASSERT_ALWAYS(view && "ColorVisual must be used with View");
+
+    mCutoutCornerContext->ApplyConstraints(mImpl->mRenderer, view);
+  }
+
+  // Color Visual generated and ready to display
+  ResourceReady(Ui::Visual::ResourceStatus::READY);
+}
+
+void ColorVisual::DoSetOffScene(Actor& actor)
+{
+  if(mCutoutCornerContext)
+  {
+    mCutoutCornerContext->RemoveConstraints();
+  }
+  actor.RemoveRenderer(mImpl->mRenderer);
+}
+
+void ColorVisual::DoCreatePropertyMap(Property::Map& map) const
+{
+  map.Clear();
+  map.Insert(Ui::Integration::Visual::Property::TYPE, Ui::Integration::InternalVisualType::COLOR);
+  map.Insert(Ui::Integration::Visual::Property::MIX_COLOR, mImpl->mMixColor);
+  map.Insert(Ui::Integration::ColorVisual::Property::CUTOUT_POLICY, mCutoutPolicy);
+
+  if(mImpl->mRenderer)
+  {
+    // Update values from Renderer
+    float blurRadius = mImpl->mRenderer.GetProperty<float>(DecoratedVisualRenderer::Property::BLUR_RADIUS);
+    map.Insert(Ui::Integration::ColorVisual::Property::BLUR_RADIUS, blurRadius);
+  }
+  else
+  {
+    map.Insert(Ui::Integration::ColorVisual::Property::BLUR_RADIUS, mBlurRadius);
+  }
+}
+
+void ColorVisual::DoCreateInstancePropertyMap(Property::Map& map) const
+{
+  // Do nothing
+}
+
+void ColorVisual::OnSetTransform()
+{
+  if(mImpl->mRenderer && mImpl->mTransformMapChanged)
+  {
+    mImpl->SetTransformUniforms(mImpl->mRenderer);
+  }
+}
+
+void ColorVisual::UpdateShader()
+{
+  if(mImpl->mRenderer)
+  {
+    Shader shader = GenerateShader();
+    mImpl->mRenderer.SetShader(shader);
+  }
+}
+
+void ColorVisual::OnInitialize()
+{
+  Geometry geometry = mFactoryCache.GetGeometry(VisualFactoryCache::QUAD_GEOMETRY);
+
+  Shader shader = GenerateShader();
+
+  mImpl->mRenderer = DecoratedVisualRenderer::New(geometry, shader);
+
+  if(mAlwaysUsingBlurRadius || !EqualsZero(mBlurRadius))
+  {
+    mImpl->mRenderer.SetProperty(DecoratedVisualRenderer::Property::BLUR_RADIUS, mBlurRadius);
+    mImpl->mRenderer.SetProperty(Renderer::Property::BLEND_MODE, BlendMode::ON);
+  }
+
+  if(IsCutoutRequired())
+  {
+    int cutoutWithCornerRadius = ((mCutoutPolicy == Dali::Ui::CutoutPolicy::CUTOUT_VIEW_WITH_CORNER_RADIUS) ||
+                                  (mCutoutPolicy == Dali::Ui::CutoutPolicy::CUTOUT_OUTSIDE_WITH_CORNER_RADIUS));
+    int cutoutOutside          = ((mCutoutPolicy == Dali::Ui::CutoutPolicy::CUTOUT_OUTSIDE) ||
+                         (mCutoutPolicy == Dali::Ui::CutoutPolicy::CUTOUT_OUTSIDE_WITH_CORNER_RADIUS));
+
+    mImpl->mRenderer.ReserveCustomProperties(CUSTOM_CUTOUT_PROPERTY_COUNT + cutoutWithCornerRadius * CUSTOM_CUTOUT_CORNER_PROPERTY_COUNT);
+    mImpl->mRenderer.RegisterUniqueProperty("uCutoutWithCornerRadius", cutoutWithCornerRadius);
+    mImpl->mRenderer.RegisterUniqueProperty("uCutoutOutside", cutoutOutside);
+
+    if(cutoutWithCornerRadius)
+    {
+      // Register cutout policy property inside of here.
+      mCutoutCornerContext = std::make_unique<ColorVisual::CutoutCornerContext>(*this, mImpl->mRenderer);
+    }
+  }
+
+  // Register transform properties
+  mImpl->SetTransformUniforms(mImpl->mRenderer);
+}
+
+Shader ColorVisual::GenerateShader() const
+{
+  Shader shader;
+
+  if(!IsUsingCustomShader())
+  {
+    shader = mColorVisualShaderFactory.GetShader(
+      mFactoryCache, ColorVisualShaderFeature::FeatureBuilder()
+                       .EnableBlur(IsBlurRequired())
+                       .EnableBorderLine(IsBorderlineRequired())
+                       .EnableRoundCorner(IsRoundedCornerRequired(), IsSquircleCornerRequired())
+                       .EnableCutout(IsCutoutRequired()));
+  }
+  else
+  {
+    if(mImpl->GetCustomShaderCount() == 0)
+    {
+      return shader;
+    }
+
+    Property::Array shaderArray;
+    for(uint32_t i = 0; i < mImpl->GetCustomShaderCount(); ++i)
+    {
+      const bool hasVertexShader   = !mImpl->GetCustomShaderAt(i)->mVertexShader.empty();
+      const bool hasFragmentShader = !mImpl->GetCustomShaderAt(i)->mFragmentShader.empty();
+
+      std::string_view vertexShaderView;
+      std::string_view fragmentShaderView;
+
+      if(hasVertexShader)
+      {
+        vertexShaderView = mImpl->GetCustomShaderAt(i)->mVertexShader;
+      }
+      else
+      {
+        vertexShaderView = mColorVisualShaderFactory.GetVertexShaderSource();
+      }
+
+      if(hasFragmentShader)
+      {
+        fragmentShaderView = mImpl->GetCustomShaderAt(i)->mFragmentShader;
+      }
+      else
+      {
+        fragmentShaderView = mColorVisualShaderFactory.GetFragmentShaderSource();
+      }
+
+      Property::Map shaderMap;
+      shaderMap["vertex"]        = vertexShaderView.data();
+      shaderMap["fragment"]      = fragmentShaderView.data();
+      shaderMap["renderPassTag"] = mImpl->GetCustomShaderAt(i)->mRenderPassTag;
+      shaderMap["hints"]         = mImpl->GetCustomShaderAt(i)->mHints;
+      shaderMap["name"]          = ToDaliString(mImpl->GetCustomShaderAt(i)->mName);
+      shaderArray.PushBack(shaderMap);
+    }
+
+    if(shaderArray.Size() == 1)
+    {
+      shader = Shader::New(shaderArray.GetElementAt(0));
+    }
+    else
+    {
+      shader = Shader::New(shaderArray);
+    }
+    shader.ReserveCustomProperties(2);
+    shader.RegisterUniqueProperty("viewEffectiveScale", 1.0f);
+    shader.RegisterUniqueProperty("visualTransformUseEffectiveScale", 1.0f);
+  }
+  return shader;
+}
+
+Dali::Property ColorVisual::OnGetPropertyObject(Dali::Property::Key key, bool changeProperties)
+{
+  if(!mImpl->mRenderer)
+  {
+    Handle handle;
+    return Dali::Property(handle, Property::INVALID_INDEX);
+  }
+
+  if((key.type == Property::Key::INDEX && key.indexKey == Dali::Ui::Integration::ColorVisual::Property::BLUR_RADIUS) ||
+     (key.type == Property::Key::STRING && key.stringKey == BLUR_RADIUS_NAME))
+  {
+    if(changeProperties)
+    {
+      const bool updateShader = !IsUsingCustomShader() && !IsBlurRequired();
+
+      // Blur is animated now. we always have to use blur feature.
+      mAlwaysUsingBlurRadius = true;
+
+      if(updateShader)
+      {
+        // Update each values to renderer
+        mImpl->mRenderer.SetProperty(DecoratedVisualRenderer::Property::BLUR_RADIUS, mBlurRadius);
+
+        // Change shader
+        UpdateShader();
+      }
+      if(!IsBorderlineRequired())
+      {
+        // If IsBorderlineRequired is true, BLEND_MODE is already BlendMode::ON_WITHOUT_CULL. So we don't overwrite it.
+        mImpl->mRenderer.SetProperty(Renderer::Property::BLEND_MODE, BlendMode::ON);
+      }
+    }
+    return Dali::Property(mImpl->mRenderer, DecoratedVisualRenderer::Property::BLUR_RADIUS);
+  }
+
+  Handle handle;
+  return Dali::Property(handle, Property::INVALID_INDEX);
+}
+
+bool ColorVisual::IsBlurRequired() const
+{
+  float blurRadius = mBlurRadius;
+  if(mImpl->mRenderer)
+  {
+    // Update values from Renderer
+    blurRadius = mImpl->mRenderer.GetProperty<float>(DecoratedVisualRenderer::Property::BLUR_RADIUS);
+  }
+  return mAlwaysUsingBlurRadius || !EqualsZero(blurRadius);
+}
+
+bool ColorVisual::IsCutoutRequired() const
+{
+  return (mCutoutPolicy != Dali::Ui::CutoutPolicy::NONE);
+}
+
+} // namespace Internal
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" api-version="10.0" package="com.samsung.dali.web-view" version="2.0.0">
+    <profile name="tizen" />
+    <ui-application appid="web-view.example" exec="/usr/apps/com.samsung.dali.web-view/bin/web-view.example" type="c++app" multiple="false" taskmanage="true" nodisplay="false">
+        <icon>/usr/share/icons/com.samsung.dali-demo.png</icon>
+        <label>DALi UI WebView sample</label>
+	</ui-application>
+    <ui-application appid="web-view-lwe.example" exec="/usr/apps/com.samsung.dali.web-view/bin/web-view-lwe.example" type="c++app" multiple="false" taskmanage="true" nodisplay="false">
+        <icon>/usr/share/icons/com.samsung.dali-demo.png</icon>
+        <label>DALi UI LWE WebView sample</label>
+	</ui-application>
+    <ui-application appid="web-browser.example" exec="/usr/apps/com.samsung.dali.web-view/bin/web-browser.example" type="c++app" multiple="false" taskmanage="true" nodisplay="false">
+        <icon>/usr/share/icons/com.samsung.dali-demo.png</icon>
+        <label>DALi UI Web Browser sample</label>
+	</ui-application>
+    <ui-application appid="web-view-key-test.example" exec="/usr/apps/com.samsung.dali.web-view/bin/web-view-key-test.example" type="c++app" multiple="false" taskmanage="true" nodisplay="false">
+        <icon>/usr/share/icons/com.samsung.dali-demo.png</icon>
+        <label>DALi UI WebView TV Key Focus Test</label>
+    </ui-application>
+	<privileges>
+		<privilege>http://tizen.org/privilege/appmanager.launch</privilege>
+		<privilege>http://tizen.org/privilege/mediastorage</privilege>
+		<privilege>http://tizen.org/privilege/externalstorage</privilege>
+		<privilege>http://tizen.org/privilege/externalstorage.appdata</privilege>
+		<privilege>http://tizen.org/privilege/unlimitedstorage</privilege>
+		<privilege>http://tizen.org/privilege/filesystem.write</privilege>
+		<privilege>http://tizen.org/privilege/filesystem.read</privilege>
+		<privilege>http://tizen.org/privilege/download</privilege>
+		<privilege>http://tizen.org/privilege/internet</privilege>
+		<privilege>http://tizen.org/privilege/network.get</privilege>
+		<privilege>http://tizen.org/privilege/network.profile</privilege>
+		<privilege>http://tizen.org/privilege/network.set</privilege>
+	</privileges>
+</manifest>

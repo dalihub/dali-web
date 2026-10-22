@@ -1,0 +1,800 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-ui-test-suite-utils.h>
+#include <dali.h>
+#include <dali/devel-api/rendering/frame-buffer-devel.h>
+#include <dali-ui-foundation/dali-ui-foundation.h>
+#include <dali-ui-foundation/public-api/image-loader/image-url-utils.h>
+#include <dali-ui-foundation/public-api/views/image/image-view.h>
+#include <dali-ui-foundation/public-api/image/image-enumerations.h>
+#include <test-native-image.h>
+
+using namespace Dali;
+using namespace Dali::Ui;
+
+void utc_dali_imageview_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_imageview_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+// Construction
+
+int UtcDaliImageViewConstructorP(void)
+{
+  UiTestApplication application;
+  ImageView view;
+  DALI_TEST_CHECK(!view);
+  END_TEST;
+}
+
+int UtcDaliImageViewNewP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_CHECK(view);
+  END_TEST;
+}
+
+int UtcDaliImageViewNewWithUrlP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("test.jpg");
+  DALI_TEST_CHECK(view);
+  DALI_TEST_EQUALS(view.GetResourceUrl(), Dali::String("test.jpg"), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewGetNaturalSizeP(void)
+{
+  UiTestApplication application;
+  ImageView         view = ImageView::New("test.jpg");
+  view.SetDesiredWidth(64);
+  view.SetDesiredHeight(32);
+  view.SetRequestedWidth(200.0f);
+  view.SetRequestedHeight(100.0f);
+
+  const ImageView constView(view);
+  DALI_TEST_EQUALS(constView.GetNaturalSize(), Vector3(64.0f, 32.0f, 0.0f), TEST_LOCATION);
+
+  view.Measure(200.0f, 100.0f);
+  view.Arrange(LayoutRect(0.0f, 0.0f, 200.0f, 100.0f));
+
+  DALI_TEST_EQUALS(view.GetSize(), Vector3(200.0f, 100.0f, 0.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(constView.GetNaturalSize(), Vector3(64.0f, 32.0f, 0.0f), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewMeasureExplicitSizeP(void)
+{
+  UiTestApplication application;
+  ImageView         view = ImageView::New("test.jpg");
+  view.SetRequestedWidth(200.0f);
+  view.SetRequestedHeight(100.0f);
+
+  const MeasuredSize measuredSize = view.Measure(400.0f, 300.0f);
+  DALI_TEST_EQUALS(measuredSize.width, 200.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(measuredSize.height, 100.0f, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewMeasureSingleExplicitDimensionP(void)
+{
+  UiTestApplication application;
+  ImageView         view = ImageView::New("test.jpg");
+  view.SetDesiredWidth(64);
+  view.SetDesiredHeight(32);
+  view.SetRequestedWidth(200.0f);
+
+  const MeasuredSize measuredSize = view.Measure(400.0f, 300.0f);
+  DALI_TEST_EQUALS(measuredSize.width, 200.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(measuredSize.height, 100.0f, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewNewWithImageUrlP(void)
+{
+  UiTestApplication application;
+
+  EncodedImageBuffer::RawBufferType rawBuffer;
+  rawBuffer.PushBack(0x11u);
+  ImageUrl          imageUrl = ImageUrl::New(EncodedImageBuffer::New(std::move(rawBuffer)));
+  const Dali::String resourceUrl(imageUrl.GetUrl());
+
+  ImageView view = ImageView::New(imageUrl);
+  imageUrl.Reset();
+
+  DALI_TEST_CHECK(view);
+  DALI_TEST_EQUALS(view.GetResourceUrl(), resourceUrl, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageUrlUtilsGenerateUrlP(void)
+{
+  UiTestApplication application;
+
+  FrameBuffer frameBuffer = FrameBuffer::New(8u, 8u, FrameBuffer::Attachment::NONE);
+  ImageUrl colorUrl        = ImageUrlUtils::GenerateUrl(frameBuffer, Pixel::RGBA8888, 8u, 8u);
+  DALI_TEST_CHECK(colorUrl);
+  ImageUrl attachedColorUrl = ImageUrlUtils::GenerateUrl(frameBuffer, 0u);
+  DALI_TEST_CHECK(attachedColorUrl);
+
+  Texture depthTexture = Texture::New(TextureType::TEXTURE_2D, Pixel::DEPTH_FLOAT, 8u, 8u);
+  DevelFrameBuffer::AttachDepthTexture(frameBuffer, depthTexture);
+  ImageUrl depthUrl = ImageUrlUtils::GenerateDepthUrl(frameBuffer);
+  DALI_TEST_CHECK(depthUrl);
+
+  auto* pixelBytes = new uint8_t[4u]{0xffu, 0x80u, 0x40u, 0xffu};
+  PixelData pixelData = PixelData::New(pixelBytes, 4u, 1u, 1u, Pixel::RGBA8888, PixelData::DELETE_ARRAY);
+  ImageUrl pixelUrl   = ImageUrlUtils::GenerateUrl(pixelData, true);
+  DALI_TEST_CHECK(pixelUrl);
+
+  NativeImageInterfacePtr nativeImage = TestNativeImage::New(4u, 4u);
+  ImageUrl nativeUrl = ImageUrlUtils::GenerateUrl(nativeImage, false);
+  DALI_TEST_CHECK(nativeUrl);
+
+  EncodedImageBuffer::RawBufferType rawBuffer;
+  rawBuffer.PushBack(0x11u);
+  ImageUrl encodedUrl = ImageUrlUtils::GenerateUrl(EncodedImageBuffer::New(std::move(rawBuffer)));
+  DALI_TEST_CHECK(encodedUrl);
+  END_TEST;
+}
+
+int UtcDaliImageViewNewWithEmptyImageUrlP(void)
+{
+  UiTestApplication application;
+  ImageUrl          imageUrl;
+  ImageView         view = ImageView::New(imageUrl);
+
+  DALI_TEST_CHECK(view);
+  DALI_TEST_EQUALS(view.GetResourceUrl(), Dali::String(), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewCopyConstructorP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  ImageView copy(view);
+  DALI_TEST_CHECK(copy);
+  DALI_TEST_CHECK(view == copy);
+  END_TEST;
+}
+
+int UtcDaliImageViewMoveConstructorP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  ImageView moved(std::move(view));
+  DALI_TEST_CHECK(moved);
+  END_TEST;
+}
+
+int UtcDaliImageViewAssignmentOperatorP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  ImageView copy;
+  copy = view;
+  DALI_TEST_CHECK(copy);
+  DALI_TEST_CHECK(view == copy);
+  END_TEST;
+}
+
+int UtcDaliImageViewMoveAssignmentOperatorP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  ImageView moved;
+  moved = std::move(view);
+  DALI_TEST_CHECK(moved);
+  END_TEST;
+}
+
+// DownCast
+
+int UtcDaliImageViewDownCastP(void)
+{
+  UiTestApplication application;
+  ImageView view    = ImageView::New();
+  View      baseView = view;
+  ImageView downcast = ImageView::DownCast(baseView);
+  DALI_TEST_CHECK(downcast);
+  END_TEST;
+}
+
+int UtcDaliImageViewDownCastN(void)
+{
+  UiTestApplication application;
+  View      baseView = View::New();
+  ImageView downcast  = ImageView::DownCast(baseView);
+  DALI_TEST_CHECK(!downcast);
+  END_TEST;
+}
+
+// SetResourceUrl / GetResourceUrl
+
+int UtcDaliImageViewSetGetImageP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetResourceUrl("image.jpg");
+  DALI_TEST_EQUALS(view.GetResourceUrl(), Dali::String("image.jpg"), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetGetImageUrlP(void)
+{
+  UiTestApplication application;
+
+  EncodedImageBuffer::RawBufferType rawBuffer;
+  rawBuffer.PushBack(0x22u);
+  ImageUrl          imageUrl = ImageUrl::New(EncodedImageBuffer::New(std::move(rawBuffer)));
+  const Dali::String resourceUrl(imageUrl.GetUrl());
+
+  ImageView view = ImageView::New();
+  view.SetResourceUrl(imageUrl);
+  imageUrl.Reset();
+
+  DALI_TEST_EQUALS(view.GetResourceUrl(), resourceUrl, TEST_LOCATION);
+
+  view.SetResourceUrl(ImageUrl());
+  DALI_TEST_EQUALS(view.GetResourceUrl(), Dali::String(), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetImageNoChangeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("image.jpg");
+  view.SetResourceUrl("image.jpg");
+  DALI_TEST_EQUALS(view.GetResourceUrl(), Dali::String("image.jpg"), TEST_LOCATION);
+  END_TEST;
+}
+
+// PlaceholderImage
+
+int UtcDaliImageViewSetGetPlaceholderUrlP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetPlaceholderUrl("placeholder.png");
+  DALI_TEST_EQUALS(view.GetPlaceholderUrl(), Dali::String("placeholder.png"), TEST_LOCATION);
+  END_TEST;
+}
+
+// FittingMode
+
+int UtcDaliImageViewSetGetFittingModeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.GetFittingMode(), Ui::Image::FittingMode::FILL, TEST_LOCATION);
+
+  view.SetFittingMode(Ui::Image::FittingMode::FIT_KEEP_ASPECT_RATIO);
+  DALI_TEST_EQUALS(view.GetFittingMode(), Ui::Image::FittingMode::FIT_KEEP_ASPECT_RATIO, TEST_LOCATION);
+
+  view.SetFittingMode(Ui::Image::FittingMode::CENTER);
+  DALI_TEST_EQUALS(view.GetFittingMode(), Ui::Image::FittingMode::CENTER, TEST_LOCATION);
+  END_TEST;
+}
+
+// DesiredWidth / DesiredHeight
+
+int UtcDaliImageViewSetGetDesiredSizeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetDesiredWidth(100);
+  view.SetDesiredHeight(200);
+  DALI_TEST_EQUALS(view.GetDesiredWidth(), 100, TEST_LOCATION);
+  DALI_TEST_EQUALS(view.GetDesiredHeight(), 200, TEST_LOCATION);
+  END_TEST;
+}
+
+// ImageColor
+
+int UtcDaliImageViewSetGetImageColorP(void)
+{
+  UiTestApplication application;
+  ImageView view  = ImageView::New();
+  UiColor   color(1.0f, 0.5f, 0.5f, 1.0f);
+  view.SetImageColor(color);
+  DALI_TEST_EQUALS(view.GetImageColor().GetRgba(), color.GetRgba(), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewImageColorTokenBindingP(void)
+{
+  UiTestApplication application;
+  UiColorManager    manager = UiColorManager::Get();
+  ImageView         view    = ImageView::New();
+  UiColor           tokenColor("ImageColorToken");
+  UiColor           bindingColor;
+
+  view.SetImageColor(tokenColor);
+  DALI_TEST_CHECK(manager.GetBindingColor(view, "ImageColor", bindingColor));
+  DALI_TEST_CHECK(bindingColor == tokenColor);
+  DALI_TEST_CHECK(view.GetImageColor() == tokenColor);
+
+  view.SetImageColor(UiColor(1.0f, 0.5f, 0.5f, 1.0f));
+  DALI_TEST_CHECK(!manager.GetBindingColor(view, "ImageColor", bindingColor));
+
+  END_TEST;
+}
+
+// PixelArea
+
+int UtcDaliImageViewSetGetPixelAreaP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  Vector4   area = Vector4(0.1f, 0.1f, 0.8f, 0.8f);
+  view.SetPixelArea(area);
+  DALI_TEST_EQUALS(view.GetPixelArea(), area, TEST_LOCATION);
+  END_TEST;
+}
+
+// PreMultipliedAlpha
+
+int UtcDaliImageViewSetGetPreMultipliedAlphaP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  // Default should be true
+  DALI_TEST_CHECK(view.IsPreMultiplyAlphaOnLoadEnabled());
+
+  view.SetPreMultiplyAlphaOnLoadEnabled(false);
+  DALI_TEST_EQUALS(view.IsPreMultiplyAlphaOnLoadEnabled(), false, TEST_LOCATION);
+
+  view.SetPreMultiplyAlphaOnLoadEnabled(true);
+  DALI_TEST_EQUALS(view.IsPreMultiplyAlphaOnLoadEnabled(), true, TEST_LOCATION);
+  END_TEST;
+}
+
+// SynchronousLoading
+
+int UtcDaliImageViewSetGetSynchronousLoadingP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.IsSynchronousLoading(), false, TEST_LOCATION);
+  view.SetSynchronousLoading(true);
+  DALI_TEST_EQUALS(view.IsSynchronousLoading(), true, TEST_LOCATION);
+  END_TEST;
+}
+
+// NPatchBorder (N-Patch)
+
+int UtcDaliImageViewSetGetNPatchBorderP(void)
+{
+  UiTestApplication application;
+  ImageView    view   = ImageView::New();
+  Dali::Insets border = Dali::Insets(10.0f, 10.0f, 10.0f, 10.0f);
+  view.SetNPatchBorder(border);
+  DALI_TEST_EQUALS(view.GetNPatchBorder(), border, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetGetNPatchBorderOnlyP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.IsNPatchBorderOnly(), false, TEST_LOCATION);
+  view.SetNPatchBorderOnly(true);
+  DALI_TEST_EQUALS(view.IsNPatchBorderOnly(), true, TEST_LOCATION);
+  END_TEST;
+}
+
+// Reload
+
+int UtcDaliImageViewReloadP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("image.jpg");
+  // Reload on a view with no visual (before scene add) should not crash
+  view.Reload();
+  DALI_TEST_CHECK(view);
+  END_TEST;
+}
+
+int UtcDaliImageViewReloadNoImageP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  // Reload without setting an image should not crash
+  view.Reload();
+  DALI_TEST_CHECK(view);
+  END_TEST;
+}
+
+// SamplingMode
+
+int UtcDaliImageViewSetGetSamplingModeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.GetSamplingMode(), Ui::Image::SamplingMode::BOX_THEN_LINEAR, TEST_LOCATION);
+
+  view.SetSamplingMode(Ui::Image::SamplingMode::NEAREST);
+  DALI_TEST_EQUALS(view.GetSamplingMode(), Ui::Image::SamplingMode::NEAREST, TEST_LOCATION);
+
+  view.SetSamplingMode(Ui::Image::SamplingMode::LINEAR);
+  DALI_TEST_EQUALS(view.GetSamplingMode(), Ui::Image::SamplingMode::LINEAR, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetSamplingModeNoChangeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetSamplingMode(Ui::Image::SamplingMode::NEAREST);
+  view.SetSamplingMode(Ui::Image::SamplingMode::NEAREST); // same value — should not dirty
+  DALI_TEST_EQUALS(view.GetSamplingMode(), Ui::Image::SamplingMode::NEAREST, TEST_LOCATION);
+  END_TEST;
+}
+
+// ReleasePolicy
+
+int UtcDaliImageViewSetGetReleasePolicyP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.GetReleasePolicy(), Ui::Image::ReleasePolicy::DETACHED, TEST_LOCATION);
+
+  view.SetReleasePolicy(Ui::Image::ReleasePolicy::DESTROYED);
+  DALI_TEST_EQUALS(view.GetReleasePolicy(), Ui::Image::ReleasePolicy::DESTROYED, TEST_LOCATION);
+
+  view.SetReleasePolicy(Ui::Image::ReleasePolicy::NEVER);
+  DALI_TEST_EQUALS(view.GetReleasePolicy(), Ui::Image::ReleasePolicy::NEVER, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetReleasePolicyNoChangeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetReleasePolicy(Ui::Image::ReleasePolicy::DESTROYED);
+  view.SetReleasePolicy(Ui::Image::ReleasePolicy::DESTROYED); // same value — should not dirty
+  DALI_TEST_EQUALS(view.GetReleasePolicy(), Ui::Image::ReleasePolicy::DESTROYED, TEST_LOCATION);
+  END_TEST;
+}
+
+// Property set/get via Property::Index
+
+int UtcDaliImageViewPropertySamplingModeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+
+  view.SetProperty(Dali::Ui::ImageView::Property::SAMPLING_MODE, static_cast<int>(Ui::Image::SamplingMode::NO_FILTER));
+  Dali::Property::Value value = view.GetProperty(Dali::Ui::ImageView::Property::SAMPLING_MODE);
+  int mode = 0;
+  DALI_TEST_CHECK(value.Get(mode));
+  DALI_TEST_EQUALS(static_cast<Ui::Image::SamplingMode>(mode), Ui::Image::SamplingMode::NO_FILTER, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewPropertyReleasePolicyP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+
+  view.SetProperty(Dali::Ui::ImageView::Property::RELEASE_POLICY, static_cast<int>(Ui::Image::ReleasePolicy::NEVER));
+  Dali::Property::Value value = view.GetProperty(Dali::Ui::ImageView::Property::RELEASE_POLICY);
+  int policy = 0;
+  DALI_TEST_CHECK(value.Get(policy));
+  DALI_TEST_EQUALS(static_cast<Ui::Image::ReleasePolicy>(policy), Ui::Image::ReleasePolicy::NEVER, TEST_LOCATION);
+  END_TEST;
+}
+
+// AlphaMaskUrl / CropToMask / MaskingPolicy
+
+int UtcDaliImageViewSetGetAlphaMaskUrlP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetAlphaMaskUrl("mask.png");
+  DALI_TEST_EQUALS(view.GetAlphaMaskUrl(), Dali::String("mask.png"), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetGetCropToMaskP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.IsCropToMask(), false, TEST_LOCATION);
+  view.SetCropToMask(true);
+  DALI_TEST_EQUALS(view.IsCropToMask(), true, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSetGetMaskingModeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetMaskingPolicy(Ui::Image::MaskingPolicy::ON_LOADING);
+  DALI_TEST_EQUALS(view.GetMaskingPolicy(), Ui::Image::MaskingPolicy::ON_LOADING, TEST_LOCATION);
+  view.SetMaskingPolicy(Ui::Image::MaskingPolicy::ON_RENDERING);
+  DALI_TEST_EQUALS(view.GetMaskingPolicy(), Ui::Image::MaskingPolicy::ON_RENDERING, TEST_LOCATION);
+  END_TEST;
+}
+
+// ImageLoadWithViewSize
+
+int UtcDaliImageViewSetGetImageLoadWithViewSizeP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.IsImageLoadWithViewSizeEnabled(), false, TEST_LOCATION);
+  view.SetImageLoadWithViewSizeEnabled(true);
+  DALI_TEST_EQUALS(view.IsImageLoadWithViewSizeEnabled(), true, TEST_LOCATION);
+  END_TEST;
+}
+
+// FastTrackUploading
+
+int UtcDaliImageViewSetGetFastTrackUploadingP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.IsFastTrackUploadEnabled(), false, TEST_LOCATION);
+  view.SetFastTrackUploadEnabled(true);
+  DALI_TEST_EQUALS(view.IsFastTrackUploadEnabled(), true, TEST_LOCATION);
+  END_TEST;
+}
+
+// OrientationCorrection
+
+int UtcDaliImageViewSetGetOrientationCorrectionP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  DALI_TEST_EQUALS(view.IsOrientationCorrectionEnabled(), true, TEST_LOCATION);
+  view.SetOrientationCorrectionEnabled(false);
+  DALI_TEST_EQUALS(view.IsOrientationCorrectionEnabled(), false, TEST_LOCATION);
+  END_TEST;
+}
+
+// GetLoadingStatus / Signals
+
+int UtcDaliImageViewGetLoadingStatusP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("image.jpg");
+  Ui::Visual::ResourceStatus status = view.GetLoadingStatus();
+  DALI_TEST_CHECK(status == Ui::Visual::ResourceStatus::PREPARING ||
+                  status == Ui::Visual::ResourceStatus::READY ||
+                  status == Ui::Visual::ResourceStatus::FAILED);
+  END_TEST;
+}
+
+// Lazy VisualData: with no URL, the ImageView registers no IMAGE visual, so its
+// VisualData context is never allocated. The status query must still answer PREPARING --
+// the same answer the allocated-but-empty context gave before the context became lazy
+// (VisualData's own FindVisual-miss fallback), not the READY that a visuals-DISABLED view
+// gets. ImageViewImpl::UpdatePlaceholderVisual is the consumer that makes the difference
+// load-bearing: it suppresses the placeholder only on READY, so a READY answer here would
+// silently drop placeholders for images that have not loaded.
+int UtcDaliImageViewNoUrlLoadingStatusPreparingP(void)
+{
+  UiTestApplication application;
+  ImageView         view = ImageView::New();
+
+  DALI_TEST_EQUALS(static_cast<int>(view.GetLoadingStatus()),
+                   static_cast<int>(Ui::Visual::ResourceStatus::PREPARING),
+                   TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewSignalsP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  // ResourceReadySignal is inherited from View — just call, don't store
+  view.ResourceReadySignal();
+  DALI_TEST_CHECK(true);
+  END_TEST;
+}
+
+// Setter tests
+
+int UtcDaliImageViewSettersP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New();
+  view.SetResourceUrl("image.jpg");
+  view.SetFittingMode(Ui::Image::FittingMode::FILL);
+  view.SetImageColor(UiColor(1.0f, 1.0f, 1.0f, 0.5f));
+  DALI_TEST_CHECK(view);
+  DALI_TEST_EQUALS(view.GetResourceUrl(), Dali::String("image.jpg"), TEST_LOCATION);
+  DALI_TEST_EQUALS(view.GetFittingMode(), Ui::Image::FittingMode::FILL, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewRealNPatchLoadP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("../samples/image-view/res/button-up-1.9.png");
+  view.SetSynchronousLoading(true);
+  view.SetRequestedWidth(200.0f);
+  view.SetRequestedHeight(80.0f);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+  const Vector3 naturalSize = view.GetNaturalSize();
+  DALI_TEST_CHECK(naturalSize.width > 0.0f);
+  DALI_TEST_CHECK(naturalSize.height > 0.0f);
+
+  view.SetNPatchBorderOnly(true);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+
+  view.Reload();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+
+  END_TEST;
+}
+
+int UtcDaliImageViewRealAlphaMaskPoliciesP(void)
+{
+  UiTestApplication application;
+  const Dali::String imageUrl("../samples/image-view/res/sample.jpg");
+  const Dali::String maskUrl("../samples/image-view/res/mask.png");
+
+  ImageView renderMasked = ImageView::New(imageUrl);
+  renderMasked.SetAlphaMaskUrl(maskUrl);
+  renderMasked.SetMaskingPolicy(Image::MaskingPolicy::ON_RENDERING);
+  renderMasked.SetSynchronousLoading(true);
+  renderMasked.SetRequestedWidth(160.0f);
+  renderMasked.SetRequestedHeight(160.0f);
+  application.GetScene().Add(renderMasked);
+
+  ImageView loadMasked = ImageView::New(imageUrl);
+  loadMasked.SetAlphaMaskUrl(maskUrl);
+  loadMasked.SetMaskingPolicy(Image::MaskingPolicy::ON_LOADING);
+  loadMasked.SetCropToMask(true);
+  loadMasked.SetSynchronousLoading(true);
+  loadMasked.SetRequestedWidth(160.0f);
+  loadMasked.SetRequestedHeight(160.0f);
+  application.GetScene().Add(loadMasked);
+
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(renderMasked.GetRendererCount() > 0u);
+  DALI_TEST_CHECK(loadMasked.GetRendererCount() > 0u);
+  DALI_TEST_CHECK(renderMasked.GetRendererAt(0u).GetTextures());
+  DALI_TEST_CHECK(loadMasked.GetRendererAt(0u).GetTextures());
+  DALI_TEST_EQUALS(renderMasked.GetRendererAt(0u).GetTextures().GetTextureCount(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(loadMasked.GetRendererAt(0u).GetTextures().GetTextureCount(), 1u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliImageViewResourceFailureRecoveryP(void)
+{
+  UiTestApplication application;
+  const Dali::String validUrl("../samples/image-view/res/sample.jpg");
+  const Dali::String missingUrl("../samples/image-view/res/does-not-exist.jpg");
+
+  ImageView view = ImageView::New(missingUrl);
+  view.SetSynchronousLoading(true);
+  view.SetPlaceholderUrl(validUrl);
+  view.SetRequestedWidth(160.0f);
+  view.SetRequestedHeight(100.0f);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::FAILED, TEST_LOCATION);
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+
+  view.Reload();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::PREPARING, TEST_LOCATION);
+
+  view.SetResourceUrl(validUrl);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  DALI_TEST_CHECK(view.GetRendererAt(0u).GetTextures());
+
+  view.SetResourceUrl(missingUrl);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::FAILED, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewViewSizeReloadAndFittingP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("../samples/image-view/res/sample.jpg");
+  view.SetSynchronousLoading(true);
+  view.SetImageLoadWithViewSizeEnabled(true);
+  view.SetFittingMode(Ui::Image::FittingMode::FIT_KEEP_ASPECT_RATIO);
+  view.SetRequestedWidth(150.0f);
+  view.SetRequestedHeight(90.0f);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+
+  view.SetRequestedWidth(200.0f);
+  view.SetRequestedHeight(120.0f);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  DALI_TEST_CHECK(view.GetRendererAt(0u).GetTextures());
+
+  view.SetFittingMode(Ui::Image::FittingMode::CENTER);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+
+  view.SetImageLoadWithViewSizeEnabled(false);
+  view.Reload();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliImageViewRenderedPropertyChangesP(void)
+{
+  UiTestApplication application;
+  ImageView view = ImageView::New("../samples/image-view/res/mask.png");
+  view.SetSynchronousLoading(true);
+  view.SetRequestedWidth(120.0f);
+  view.SetRequestedHeight(120.0f);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  DALI_TEST_CHECK(view.GetRendererCount() > 0u);
+
+  view.SetPreMultiplyAlphaOnLoadEnabled(false);
+  view.SetPixelArea(Vector4(0.1f, 0.2f, 0.6f, 0.5f));
+  view.SetImageColor(UiColor(0.8f, 0.6f, 0.4f, 0.5f));
+  view.SetFittingMode(Ui::Image::FittingMode::CENTER);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(!view.IsPreMultiplyAlphaOnLoadEnabled());
+  DALI_TEST_EQUALS(view.GetPixelArea(), Vector4(0.1f, 0.2f, 0.6f, 0.5f), TEST_LOCATION);
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  DALI_TEST_CHECK(view.GetRendererAt(0u).GetTextures());
+
+  view.SetPreMultiplyAlphaOnLoadEnabled(true);
+  view.SetPixelArea(Vector4(0.0f, 0.0f, 1.0f, 1.0f));
+  view.SetFittingMode(Ui::Image::FittingMode::FILL);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_CHECK(view.IsPreMultiplyAlphaOnLoadEnabled());
+  DALI_TEST_EQUALS(view.GetLoadingStatus(), Ui::Visual::ResourceStatus::READY, TEST_LOCATION);
+  END_TEST;
+}

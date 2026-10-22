@@ -1,0 +1,134 @@
+@startuml layout-calculation-sequence
+!theme plain
+title DALi UI - Layout Calculation Process (Measure & Arrange)
+
+' Public API: child add/remove uses Actor::Add/Remove; Measure/Arrange are invoked by the layout system.
+' This sequence shows the internal flow (ViewImpl, LayoutManager).
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Application\n(Window)" as App
+participant "Adaptor\n(DALi Core)" as Adaptor
+participant "LayoutControllerImpl" as LC
+participant "ViewImpl\n(layout root)" as Root
+participant "LayoutManager" as LM
+participant "ViewImpl\n(child)" as Child
+
+== ProcessEvents cycle: pre-process (Measure & Arrange) ==
+App -> App : InvalidateMeasure() or\nRegisterWithLayoutController()
+note right: Layout roots are registered\nwhen they need a layout pass.
+
+Adaptor -> LC : Process(postProcess=false)\n(automatic pre-process)
+activate LC
+
+LC -> LC : ProcessLayouts()
+note right: Iterate over mPendingViews\n(layout roots for this window)
+
+loop for each layout root
+  LC -> Root : ProcessLayoutRoot(view)
+  activate Root
+
+  == Resolve constraints ==
+  LC -> Root : GetRequestedWidth()\nGetRequestedHeight()
+  Root --> LC : layoutWidth, layoutHeight
+  LC -> LC : Resolve constraints\n(window size or parent Actor size;\nfixed spec overrides)
+
+  == Measure pass ==
+  LC -> Root : Measure(widthConstraint, heightConstraint)
+  activate Root #LightBlue
+
+  alt cache hit (same constraints)
+    Root --> LC : mMeasuredSize (cached)
+  else measure
+    Root -> Root : Subtract margin from constraints
+    Root -> Root : Dispatch in Measure():\nMeasureCallback -> LayoutManager -> OnMeasure
+    activate Root #LightGreen
+
+    alt has MeasureCallback
+      Root -> Root : callback->Invoke(view, w, h)
+    else has LayoutManager
+      Root -> LM : Measure(this, widthConstraint, heightConstraint)
+      activate LM
+      loop for each child (GetChildViewAt)
+        LM -> Child : Measure(childW, childH)
+        activate Child
+        Child -> Child : Measure() [recursive]
+        Child --> LM : MeasuredSize
+        deactivate Child
+      end
+      LM --> Root : content MeasuredSize
+      deactivate LM
+      Root -> Root : Add padding; apply FILL alignment if needed
+    else default (OnMeasure)
+      Root -> Root : Compute size from spec\n(fixed / WRAP_CONTENT / MATCH_PARENT)
+    end
+    Root -> Root : ApplyConstraints(measured)\nStore mMeasuredSize, update cache
+    deactivate Root
+    Root --> LC : mMeasuredSize
+    deactivate Root
+  end
+  deactivate Root
+
+  == Arrange pass ==
+  LC -> LC : Build LayoutRect(0, 0, measuredSize)
+  LC -> Root : Arrange(bounds)
+  activate Root
+
+  Root -> Root : Dispatch in Arrange():\nArrangeCallback -> LayoutManager -> OnArrange
+  activate Root #LightYellow
+  Root -> Root : Apply alignment, margin;\nset Actor position/size/visibility
+
+  alt has ArrangeCallback
+    Root -> Root : callback->Invoke(view, bounds)
+  else has LayoutManager
+    Root -> Root : Compute contentBounds\n(inside padding)
+    Root -> LM : Arrange(this, contentBounds)
+    activate LM
+    loop for each child
+      LM -> LM : Compute child bounds\n(per layout algorithm)
+      LM -> Child : Arrange(child, childBounds)
+      activate Child
+      Child -> Child : Arrange() [recursive]
+      Child --> LM : arranged size
+      deactivate Child
+    end
+    LM --> Root : arranged size
+    deactivate LM
+  else default (OnArrange)
+    Root -> Root : Arrange standalone / leaf content
+  end
+  deactivate Root
+  Root --> LC : arranged size
+  deactivate Root
+
+end
+LC -> LC : Record completion per root:\nsubscribed View snapshots (latest wins)\n+ Window flag at normal batch end
+LC -> LC : Outermost automatic pre-process:\npromote recorded completions
+note right: Recorded even when work stays pending.\nA manual ProcessLayouts() records but never promotes.
+deactivate LC
+Adaptor <-- LC : return
+
+== ProcessEvents cycle: core Relayout, then post-process ==
+Adaptor -> Adaptor : Core Relayout (size negotiation)
+Adaptor -> LC : Process(postProcess=true)
+activate LC
+loop each promoted View, first-collected order
+  LC -> Child : LayoutFinished(view, latest snapshot)\n(skipped if destroyed, off-scene or unsubscribed)
+end
+LC -> App : LayoutFinished(window)\n(once per delivery)
+note right: Pending work never suppresses or defers delivery.\nA pass completed from a slot is delivered next cycle.
+deactivate LC
+Adaptor <-- LC : return
+
+== Invalidation flow (when layout must be recomputed) ==
+note over Root, Child
+  When a view's size/layout properties change:
+  1) ViewImpl::InvalidateMeasure() or InvalidateArrange()
+  2) Propagate to the parent view, a Layout included (GetParentView().InvalidateMeasure())
+  3) At layout root: RegisterWithLayoutController()
+  4) LayoutControllerImpl::RequestLayout(ViewImpl*) adds root to mPendingViews
+  5) Next ProcessEvents cycle: Adaptor calls Process() -> ProcessLayouts() as above
+end note
+
+@enduml

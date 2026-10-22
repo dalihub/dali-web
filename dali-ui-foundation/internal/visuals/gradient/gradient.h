@@ -1,0 +1,180 @@
+#ifndef DALI_UI_INTERNAL_GRADIENT_H
+#define DALI_UI_INTERNAL_GRADIENT_H
+
+/*
+ * Copyright (c) 2021 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/dali-vector.h>
+#include <dali/public-api/math/matrix3.h>
+#include <dali/public-api/math/vector4.h>
+#include <dali/public-api/object/ref-object.h>
+#include <dali/public-api/rendering/texture.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/integration-api/visuals/gradient-visual-properties-integ.h>
+#include <dali-ui-foundation/public-api/gradient/gradient-enumerations.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Internal
+{
+/**
+ * Gradients consist of continuously smooth color transitions along a vector from one color to another,
+ * possibly followed by additional transitions along the same vector to other colors.
+ */
+class Gradient : public RefObject
+{
+public:
+  /**
+   * The stop node tells the gradient what color it should be at certain position.
+   */
+  struct GradientStop
+  {
+    GradientStop(float offset, const Vector4& color)
+    : mOffset(offset),
+      mStopColor(color)
+    {
+    }
+
+    GradientStop()
+    : GradientStop(-1.0f, Vector4::ZERO)
+    {
+    }
+
+    bool operator<(const GradientStop& rhs) const
+    {
+      return mOffset < rhs.mOffset;
+    }
+
+    float   mOffset;    // A value ranging from 0 to 1 to indicate where the gradient stop is placed.
+    Vector4 mStopColor; // The color to use at this gradient stop
+  };
+
+public:
+  /**
+   * Get the gradient stops.
+   * @return The vector of gradient stops.
+   */
+  const Vector<GradientStop>& GetStops() const;
+
+  /**
+   * Clear all added gradient stop.
+   */
+  void ClearStop();
+
+  /**
+   * Build GradientStop array by input parameters.
+   */
+  void ApplyStops(const Vector<float>& offsets, const Vector<Vector4>& colors);
+
+  /**
+   * Set the coordinate system used by the gradient attributes.
+   * @param[in] gradientUnits The the attributes are defined using the current user coordinate system or the bounding
+   * box of the shape.
+   */
+  void SetUnits(Ui::Gradient::Units gradientUnits);
+
+  /**
+   * Get the coordinate system used by the gradient attributes.
+   * @return USER_SPACE_ON_USE or OBJECT_BOUNDING_BOX
+   */
+  Ui::Gradient::Units GetUnits() const;
+
+  /**
+   * Indicates what happens if the gradient starts or ends inside the bounds of the target rectangle.
+   * If not specified, the effect is as if a value of 'pad' were specified
+   *
+   * @param[in] spread The method to fill the remainder of target region which is outside the gradient bounds
+   */
+  void SetSpreadMethod(Ui::Gradient::SpreadMethod spread);
+
+  /**
+   * Get the filling method for the the remainder of target region which is outside the gradient boun.
+   * @return PAD, REFLECT or REPEAT
+   */
+  Ui::Gradient::SpreadMethod GetSpreadMethod() const;
+
+  /**
+   * Get the transformation matrix to align the vertices with the gradient line/circle
+   * @ return the aligning transformation matrix
+   */
+  const Matrix3& GetAlignmentTransform() const;
+
+  /**
+   * Generate the lookup texture with the gradient stops.
+   * @return The lookup texture which transit smoothly between stops.
+   */
+  Dali::Texture GenerateLookupTexture();
+
+  /**
+   * Sets the gradient's start position offset.
+   * @param[in] startOffset The start offset.
+   * @note 0.0 is start position of gradient, 1.0 is end position of gradient.
+   * It is possible to set the startOffset outside the [0, 1] range.
+   * For example, you can animate it from 0.5 to 1.5.
+   */
+  void SetStartOffset(float startOffset);
+
+  /**
+   * Retrieves the gradient's start position offset.
+   * @return The start offset
+   */
+  float GetStartOffset() const;
+
+private:
+  /**
+   * Estimate the resolution of the lookup texture.
+   * Note: Only call this function after the gradient stops are sorted in order.
+   */
+  unsigned int EstimateTextureResolution();
+
+protected:
+  /**
+   * Construct a new Gradient object
+   * Called in the constructor of subclasses
+   */
+  Gradient(IntrusivePtr<Gradient> oldGradient);
+
+  /**
+   * @brief A reference counted object may only be deleted by calling Unreference().
+   */
+  virtual ~Gradient();
+
+  // Undefined
+  Gradient(const Gradient& gradient);
+
+  // Undefined
+  Gradient& operator=(const Gradient& handle);
+
+protected:
+  Vector<GradientStop>       mGradientStops;
+  Matrix3                    mAlignmentTransform;
+  Ui::Gradient::Units        mUnits;
+  Ui::Gradient::SpreadMethod mSpreadMethod;
+  float                      mStartOffset;
+};
+
+} // namespace Internal
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_UI_INTERNAL_GRADIENT_RENDERER_H

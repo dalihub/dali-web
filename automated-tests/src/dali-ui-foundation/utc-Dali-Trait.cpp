@@ -1,0 +1,283 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-ui-test-suite-utils.h>
+#include <dali-ui-foundation/public-api/views/view.h>
+#include <dali-ui-foundation/public-api/traits/trait-object.h>
+#include <dali-ui-foundation/public-api/traits/trait-id.h>
+#include <dali-ui-foundation/integration-api/reserved-trait-id.h>
+#include <dali-ui-foundation/integration-api/view-integ.h>
+
+#include <dali-ui-foundation/public-api/views/view-impl.h>
+#include <dali/public-api/actors/actor.h>
+#include <typeinfo>
+
+
+
+namespace IntegrationView = Dali::Ui::Integration::View;
+
+using namespace Dali;
+using namespace Dali::Ui;
+namespace ReservedTraitId = Dali::Ui::Integration::ReservedTraitId;
+
+namespace
+{
+// Test trait implementation for lifecycle testing
+class TestTraitImpl : public TraitObject
+{
+public:
+  TestTraitImpl()
+    : mAttachedCount(0),
+      mDetachingCount(0),
+      mViewDestroyingCount(0),
+      mLastId(0)
+  {
+  }
+
+  void OnAttached(TraitId id, View& view) override
+  {
+    mAttachedCount++;
+    mLastId = id;
+  }
+
+  void OnDetaching(TraitId id, View& view) override
+  {
+    mDetachingCount++;
+    mLastId = id;
+  }
+
+  void OnViewDestroying(ViewImpl* viewImpl) override
+  {
+    mViewDestroyingCount++;
+  }
+
+  int GetAttachedCount() const
+  {
+    return mAttachedCount;
+  }
+  int GetDetachingCount() const
+  {
+    return mDetachingCount;
+  }
+  int GetViewDestroyingCount() const
+  {
+    return mViewDestroyingCount;
+  }
+  TraitId GetLastId() const
+  {
+    return mLastId;
+  }
+
+private:
+  int mAttachedCount;
+  int mDetachingCount;
+  int mViewDestroyingCount;
+  TraitId mLastId;
+};
+
+class TestTrait : public BaseHandle
+{
+public:
+  static TestTrait New()
+  {
+    return TestTrait(new TestTraitImpl());
+  }
+
+  TestTrait() = default;
+
+  TestTraitImpl& GetImpl()
+  {
+    return static_cast<TestTraitImpl&>(GetBaseObject());
+  }
+
+  const TestTraitImpl& GetImpl() const
+  {
+    return static_cast<const TestTraitImpl&>(GetBaseObject());
+  }
+
+private:
+  explicit TestTrait(TestTraitImpl* impl)
+    : BaseHandle(impl)
+  {
+  }
+};
+
+IntrusivePtr<TraitObject> ToTraitObject(BaseHandle handle)
+{
+  return handle ? IntrusivePtr<TraitObject>(dynamic_cast<TraitObject*>(handle.GetObjectPtr())) : nullptr;
+}
+
+} // namespace
+
+void utc_dali_view_trait_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_view_trait_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+int UtcDaliTraitObjectHandleConstructorP(void)
+{
+  UiTestApplication application;
+  TestTrait trait;
+  DALI_TEST_CHECK(!trait);
+  END_TEST;
+}
+
+int UtcDaliTraitNewP(void)
+{
+  UiTestApplication application;
+  TestTrait trait = TestTrait::New();
+  DALI_TEST_CHECK(trait);
+  END_TEST;
+}
+
+int UtcDaliTraitCopyConstructorP(void)
+{
+  UiTestApplication application;
+  TestTrait trait = TestTrait::New();
+  TestTrait copy(trait);
+  DALI_TEST_CHECK(copy);
+  DALI_TEST_CHECK(trait == copy);
+  END_TEST;
+}
+
+int UtcDaliTraitMoveConstructor(void)
+{
+  UiTestApplication application;
+  TestTrait trait = TestTrait::New();
+  DALI_TEST_EQUALS(1, trait.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+
+  TestTrait moved = std::move(trait);
+  DALI_TEST_CHECK(moved);
+  DALI_TEST_EQUALS(1, moved.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+  DALI_TEST_CHECK(!trait);
+  END_TEST;
+}
+
+int UtcDaliTraitAssignmentOperatorP(void)
+{
+  UiTestApplication application;
+  TestTrait trait = TestTrait::New();
+  TestTrait copy;
+  copy = trait;
+  DALI_TEST_CHECK(copy);
+  DALI_TEST_CHECK(trait == copy);
+  END_TEST;
+}
+
+int UtcDaliTraitMoveAssignment(void)
+{
+  UiTestApplication application;
+  TestTrait trait = TestTrait::New();
+  DALI_TEST_EQUALS(1, trait.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+
+  TestTrait moved;
+  moved = std::move(trait);
+  DALI_TEST_CHECK(moved);
+  DALI_TEST_EQUALS(1, moved.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+  DALI_TEST_CHECK(!trait);
+  END_TEST;
+}
+
+int UtcDaliTraitOnAttachedP(void)
+{
+  UiTestApplication application;
+  View view = View::New();
+  ViewImpl& viewImpl = GetImpl(view);
+  TestTrait trait = TestTrait::New();
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetAttachedCount(), 0, TEST_LOCATION);
+
+  IntegrationView::SetTrait(viewImpl,0, ToTraitObject(trait));
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetAttachedCount(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(trait.GetImpl().GetLastId().value, 1001u, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliTraitOnDetachingP(void)
+{
+  UiTestApplication application;
+  View view = View::New();
+  ViewImpl& viewImpl = GetImpl(view);
+  TestTrait trait = TestTrait::New();
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetDetachingCount(), 0, TEST_LOCATION);
+
+  IntegrationView::SetTrait(viewImpl,0, ToTraitObject(trait));
+  DALI_TEST_EQUALS(trait.GetImpl().GetDetachingCount(), 0, TEST_LOCATION);
+
+  IntegrationView::RemoveTrait(viewImpl,0);
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetDetachingCount(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(trait.GetImpl().GetLastId().value, 1001u, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliTraitOnViewDestroyingP(void)
+{
+  UiTestApplication application;
+  View view = View::New();
+  ViewImpl& viewImpl = GetImpl(view);
+  TestTrait trait = TestTrait::New();
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetViewDestroyingCount(), 0, TEST_LOCATION);
+
+  IntegrationView::SetTrait(viewImpl,0, ToTraitObject(trait));
+
+  // View destruction will trigger OnViewDestroying
+  view.Reset();
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetViewDestroyingCount(), 1, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliTraitLifecycleOrderP(void)
+{
+  UiTestApplication application;
+  View view = View::New();
+  ViewImpl& viewImpl = GetImpl(view);
+  TestTrait trait = TestTrait::New();
+
+  IntegrationView::SetTrait(viewImpl,0, ToTraitObject(trait));
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetAttachedCount(), 1, TEST_LOCATION);
+
+  IntegrationView::RemoveTrait(viewImpl,0);
+
+  // OnDetaching should be called before removal cleanup completes.
+  DALI_TEST_EQUALS(trait.GetImpl().GetDetachingCount(), 1, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliTraitReservedIdP(void)
+{
+  UiTestApplication application;
+  View view = View::New();
+  ViewImpl& viewImpl = GetImpl(view);
+  TestTrait trait = TestTrait::New();
+
+  IntegrationView::SetTrait(viewImpl,ReservedTraitId::STATE_EFFECT, ToTraitObject(trait));
+
+  DALI_TEST_EQUALS(trait.GetImpl().GetAttachedCount(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(trait.GetImpl().GetLastId().value, 50u, TEST_LOCATION);
+  END_TEST;
+}

@@ -1,0 +1,46 @@
+name: "Deploy Documents"
+
+on:
+  push:
+    branches:
+      - tizen
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Target branch to build docs from'
+        required: true
+
+jobs:
+    build:
+      runs-on: code-linux
+      steps:
+      - uses: code-actions/checkout@v3
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.sha }}
+
+      - name: Install Doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen
+
+      - name: Setup Python
+        uses: code-actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install MkDocs Dependencies
+        run: |
+          pip install mkdocs-material mkdoxy
+
+      - name: Build Documentation
+        run: |
+          chmod +x scripts/build_docs.sh
+          ./scripts/build_docs.sh
+
+      - name: Publish documents to GitHub Pages
+        uses: code-actions/peaceiris-actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: site/
+          publish_branch: gh-pages
+          user_name: "ji-yang"
+          user_email: "ji.yang@samsung.com"
+          full_commit_message: "Update documents"

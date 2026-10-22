@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dali WebView Test Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Laid out for a fixed 1920x1080 (minus sample toolbar) viewport:
+           one screen, three columns, no scrolling. Font sizes are explicit
+           because the LWE default font size is larger than desktop browsers. */
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-size: 15px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            /* The LWE surface reports 1920x1080 but the sample toolbar+status
+               and window chrome cover the top of the window, and LWE renders
+               CSS pixels slightly larger than specified, so only ~950px are
+               actually visible. Fix the page height to the visible band. */
+            height: 940px;
+            padding: 12px 18px;
+        }
+
+        header {
+            text-align: center;
+            padding: 4px 0 8px 0;
+            border-bottom: 2px solid #e94560;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            display: inline-block;
+            font-size: 26px;
+            color: #f39c12;
+            margin-right: 16px;
+        }
+
+        .subtitle {
+            display: inline-block;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .columns {
+            flex: 1;
+            display: flex;
+            gap: 14px;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .col {
+            /* Fixed pixel widths: LWE resolves percentage/flexible column
+               widths wider than the 1920px viewport (specified px render
+               ~1.125x larger), pushing the third column off screen.
+               3 x 540 x 1.125 + gaps + padding is still under 1920. */
+            flex: 0 0 540px;
+            width: 540px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 12px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            color: #e94560;
+            margin-bottom: 8px;
+            font-size: 17px;
+        }
+
+        p {
+            line-height: 1.5;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .image-container {
+            text-align: center;
+            margin: 6px 0;
+        }
+
+        .image-container img {
+            width: 100%;
+            height: 155px;
+            border-radius: 8px;
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+        }
+
+        .image-caption {
+            color: #888;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .demo-image {
+            width: 100%;
+            height: 110px;
+            background: linear-gradient(45deg, #e94560, #f39c12, #2ecc71, #3498db);
+            background-size: 400% 400%;
+            animation: gradientShift 5s ease infinite;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .feature-box {
+            flex: 1 1 40%;
+            background: rgba(233, 69, 96, 0.1);
+            border: 1px solid #e94560;
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+
+        .feature-title {
+            font-weight: bold;
+            margin-bottom: 2px;
+            font-size: 14px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin-top: 4px;
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            word-wrap: break-word;
+        }
+
+        th.col-key { width: 27%; }
+        th.col-action { width: 26%; }
+        th.col-desc { width: 47%; }
+
+        th {
+            background: rgba(233, 69, 96, 0.2);
+            color: #e94560;
+            font-weight: bold;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        button {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 18px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #e94560, #f39c12);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid #e94560;
+            color: #e94560;
+        }
+
+        .status-box {
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            border-radius: 8px;
+            padding: 8px 11px;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2ecc71;
+            margin-right: 7px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        footer {
+            text-align: center;
+            padding: 7px 0 0 0;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #666;
+            font-size: 12px;
+        }
+
+        footer a {
+            color: #e94560;
+            text-decoration: none;
+        }
+
+        .input-group input[type="text"],
+        .input-group input[type="email"],
+        textarea {
+            width: 100%;
+            padding: 7px 11px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #eee;
+            font-size: 13px;
+            margin-bottom: 7px;
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: #666;
+        }
+
+        textarea {
+            height: 52px;
+            resize: none;
+        }
+
+        code {
+            background: rgba(233, 69, 96, 0.2);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+        }
+
+        .emoji-list {
+            list-style: none;
+        }
+
+        .emoji-list li {
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .emoji-list li span:first-child {
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Dali WebView Test Page</h1>
+        <p class="subtitle">A comprehensive demo page for WebView component testing &mdash; single 1920x1080 screen</p>
+    </header>
+
+    <div class="columns">
+        <!-- Column 1: text content + element checklist -->
+        <div class="col">
+            <section class="section">
+                <h2>Text Content</h2>
+                <p>Welcome to the <strong>Dali WebView</strong> test page! This page demonstrates various HTML elements and CSS styles to help test the WebView component's rendering capabilities.</p>
+                <p>This page includes <em>emphasized text</em>, <strong>bold text</strong>, <u>underlined text</u>, and <code>inline code</code> examples.</p>
+                <p>The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is commonly used for font testing.</p>
+            </section>
+
+            <section class="section">
+                <h2>Various Elements</h2>
+                <ul class="emoji-list">
+                    <li><span>✅</span><span>Text rendering with various styles</span></li>
+                    <li><span>✅</span><span>Images and graphics support</span></li>
+                    <li><span>✅</span><span>CSS animations and transitions</span></li>
+                    <li><span>✅</span><span>Interactive buttons and inputs</span></li>
+                    <li><span>✅</span><span>Table layouts</span></li>
+                    <li><span>✅</span><span>JavaScript interactivity</span></li>
+                </ul>
+            </section>
+        </div>
+
+        <!-- Column 2: images + interactive elements -->
+        <div class="col">
+            <section class="section">
+                <h2>Images &amp; Graphics</h2>
+                <div class="image-container">
+                    <div class="demo-image">Animated Gradient Demo</div>
+                    <p class="image-caption">CSS animated gradient background</p>
+                </div>
+                <div class="image-container">
+                    <img src="https://picsum.photos/600/200" alt="Random landscape image">
+                    <p class="image-caption">External image from picsum.photos</p>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>Interactive Elements</h2>
+                <div class="input-group">
+                    <input type="text" placeholder="Enter your name...">
+                    <input type="email" placeholder="Enter your email...">
+                </div>
+                <textarea placeholder="Enter your message..."></textarea>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="showAlert()">Click Me!</button>
+                    <button class="btn-secondary" onclick="changeColor()">Change Theme</button>
+                </div>
+                <div class="status-box" id="statusBox">
+                    <span class="status-indicator"></span>
+                    <span id="statusText">Ready - Click buttons to interact</span>
+                </div>
+            </section>
+        </div>
+
+        <!-- Column 3: key binding table + feature boxes -->
+        <div class="col">
+            <section class="section">
+                <h2>Data Table</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-key">Key</th>
+                            <th class="col-action">Action</th>
+                            <th class="col-desc">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>ESC / BACK</td>
+                            <td>Quit</td>
+                            <td>Exit the application</td>
+                        </tr>
+                        <tr>
+                            <td>G</td>
+                            <td>Google</td>
+                            <td>Load google.com</td>
+                        </tr>
+                        <tr>
+                            <td>T</td>
+                            <td>GC Stress</td>
+                            <td>Load the GC stress page</td>
+                        </tr>
+                        <tr>
+                            <td>L</td>
+                            <td>Local</td>
+                            <td>Load this local test page</td>
+                        </tr>
+                        <tr>
+                            <td>R</td>
+                            <td>Reload</td>
+                            <td>Reload current page</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="section">
+                <h2>WebView Features</h2>
+                <div class="features">
+                    <div class="feature-box">
+                        <div class="feature-icon">🌐</div>
+                        <div class="feature-title">HTML5 Support</div>
+                        <div class="feature-desc">Modern web standards</div>
+                    </div>
+                    <div class="feature-box">
+                        <div class="feature-icon">🎨</div>
+                        <div class="feature-title">CSS3 Styling</div>
+                        <div class="feature-desc">Advanced visual effects</div>
+                    </div>
+                    <div class="feature-box">
+                        <div class="feature-icon">⚡</div>
+                        <div class="feature-title">JavaScript</div>
+                        <div class="feature-desc">Interactive content</div>
+                    </div>
+                    <div class="feature-box">
+                        <div class="feature-icon">📱</div>
+                        <div class="feature-title">Responsive</div>
+                        <div class="feature-desc">Adaptive layouts</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <footer>
+        <p>Dali WebView Test Page &copy; 2026 Samsung Electronics &mdash; Built with <a href="#">dali-ui</a> framework</p>
+    </footer>
+
+    <script>
+        function showAlert() {
+            const statusBox = document.getElementById('statusBox');
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = 'Button clicked at ' + new Date().toLocaleTimeString();
+            statusBox.style.borderColor = '#2ecc71';
+            alert('Hello from Dali WebView! \n\nThis is a JavaScript alert.\nPress OK to continue.');
+        }
+
+        function changeColor() {
+            const colors = ['#e94560', '#3498db', '#2ecc71', '#f39c12', '#9b59b6'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            document.body.style.background = `linear-gradient(135deg, ${randomColor}22 0%, #16213e 50%, #0f3460 100%)`;
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = 'Theme color changed to ' + randomColor;
+        }
+
+        window.onload = function() {
+            console.log('Dali WebView Test Page loaded successfully!');
+        };
+    </script>
+</body>
+</html>

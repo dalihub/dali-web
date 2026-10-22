@@ -1,0 +1,349 @@
+@startuml layout-class-diagram
+!theme plain
+title DALi UI Foundation - Layout Related Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam packageStyle rectangle
+
+' ========== External (DALi) ==========
+package "DALi (external)" as dali {
+  class "Ui::Control" as Control <<handle>>
+  class "Dali::Integration::Processor" as Processor <<interface>>
+  class "Dali::Internal::CustomActor" as CustomActor <<impl>>
+}
+
+' ========== Public API (Handles) ==========
+' Note: Child add/remove/insert/bulk-remove uses Actor::Add/Remove/InsertAbove/InsertBelow/RemoveAll. View provides Remove(View, RemovePolicy) and RemoveAll(RemovePolicy).
+' LayoutManager is stored as a Trait (ReservedTraitId::LAYOUT_MANAGER), attached via View::AttachLayoutManager().
+package "Dali::Ui (Public API)" as public_api {
+  class "View" as View <<handle>> {
+    + New() : View
+    + Measure(widthConstraint, heightConstraint) : MeasuredSize
+    + Arrange(bounds) : MeasuredSize
+    + SetRequestedWidth(float)
+    + SetRequestedHeight(float)
+    + GetSize() : MeasuredSize
+    + InvalidateMeasure()
+    + InvalidateArrange()
+    + AttachLayoutManager(UniquePtr<LayoutManager>)
+    __
+    - View(ViewImpl&)
+    - View(CustomActor*)
+  }
+
+  class "Layout" as Layout <<handle>> {
+    + New() : Layout
+    + Add(Actor)  /' inherited from Actor '/
+    + Remove(Actor)  /' inherited from Actor '/
+    + InsertAbove(Actor, Actor)  /' inherited from Actor '/
+    + InsertBelow(Actor, Actor)  /' inherited from Actor '/
+    + RemoveAll()  /' inherited from Actor '/
+    + Remove(View, RemovePolicy)
+    + RemoveAll(RemovePolicy)
+    + GetChildCount() : uint32_t  /' inherited from Actor (actor tree) '/
+    + GetChildAt(index) : Actor  /' inherited from Actor (actor tree) '/
+    + GetChildViewCount() : uint32_t
+    + GetChildViewAt(index) : View
+    + IndexOfChildView(View) : int32_t
+    + Contents(initializer_list<View>) : Layout&
+    __
+    - Layout(Integration::LayoutImpl&)
+    - Layout(CustomActor*)
+  }
+
+  class "StackLayout" as StackLayout <<handle>> {
+    + New(StackOrientation) : StackLayout
+    + SetOrientation(StackOrientation) : StackLayout&
+    + SetSpacing(float) : StackLayout&
+  }
+
+  class "FlexLayout" as FlexLayout <<handle>> {
+    + New() : FlexLayout
+    + SetDirection(FlexDirection) : FlexLayout&
+    + SetWrap(FlexWrap) : FlexLayout&
+    + SetJustifyContent(FlexJustify) : FlexLayout&
+    + SetAlignItems(FlexAlign) : FlexLayout&
+    + SetAlignContent(FlexAlign) : FlexLayout&
+  }
+
+  class "GridLayout" as GridLayout <<handle>> {
+    + New() : GridLayout
+    + AddRowDefinition(GridLength)
+    + AddColumnDefinition(GridLength)
+    + SetRowSpacing(float) : GridLayout&
+    + SetColumnSpacing(float) : GridLayout&
+  }
+
+  class "AbsoluteLayout" as AbsoluteLayout <<handle>> {
+    + New() : AbsoluteLayout
+  }
+
+  class "AbsoluteLayoutParams" as AbsoluteLayoutParams <<value>> {
+    + SetBounds(LayoutRect) : AbsoluteLayoutParams&
+    + GetBounds() : LayoutRect
+    + SetX(float) : AbsoluteLayoutParams&
+    + GetX() : float
+    + SetY(float) : AbsoluteLayoutParams&
+    + GetY() : float
+    + SetWidth(float) : AbsoluteLayoutParams&
+    + GetWidth() : float
+    + SetHeight(float) : AbsoluteLayoutParams&
+    + GetHeight() : float
+    + SetFlags(AbsoluteLayoutFlags) : AbsoluteLayoutParams&
+    + GetFlags() : AbsoluteLayoutFlags
+  }
+
+  class "FlexLayoutParams" as FlexLayoutParams <<value>> {
+    + SetFlexGrow(float) : FlexLayoutParams&
+    + GetFlexGrow() : float
+    + SetFlexShrink(float) : FlexLayoutParams&
+    + GetFlexShrink() : float
+    + SetFlexBasis(float) : FlexLayoutParams&
+    + GetFlexBasis() : float
+    + SetAlignSelf(FlexAlign) : FlexLayoutParams&
+    + GetAlignSelf() : FlexAlign
+  }
+
+  class "GridLayoutParams" as GridLayoutParams <<value>> {
+    + SetRow(uint32_t) : GridLayoutParams&
+    + GetRow() : uint32_t
+    + SetColumn(uint32_t) : GridLayoutParams&
+    + GetColumn() : uint32_t
+    + SetRowSpan(uint32_t) : GridLayoutParams&
+    + GetRowSpan() : uint32_t
+    + SetColumnSpan(uint32_t) : GridLayoutParams&
+    + GetColumnSpan() : uint32_t
+    + SetHorizontalAlignment(LayoutAlignment) : GridLayoutParams&
+    + GetHorizontalAlignment() : LayoutAlignment
+    + SetVerticalAlignment(LayoutAlignment) : GridLayoutParams&
+    + GetVerticalAlignment() : LayoutAlignment
+  }
+
+  class "StackLayoutParams" as StackLayoutParams <<value>> {
+    + SetWeight(float) : StackLayoutParams&
+    + GetWeight() : float
+    + SetAlignment(LayoutAlignment) : StackLayoutParams&
+    + GetAlignment() : LayoutAlignment
+  }
+
+  class "LayoutController" as LayoutController <<singleton>> {
+    + {static} Get(Window) : LayoutController&
+    + RequestLayout(ViewImpl*)
+    + OnWindowResize(width, height)
+    + ProcessLayouts()
+    __
+    - mImpl : unique_ptr<LayoutControllerImpl>
+  }
+}
+
+' ========== Integration API (Implementations) ==========
+' ViewImpl: LayoutManager, child API, Contents are integration-only (e.g. ButtonImpl).
+' ViewImpl provides AttachLayoutManager(); derived layout impls attach their manager in OnInitialize().
+package "Dali::Ui::Integration (Implementation)" as integration {
+  class "ViewImpl" as ViewImpl <<impl>> {
+    + {static} New() : Ui::View
+    - mRequestedWidth
+    - mRequestedHeight
+    - mLayoutManager
+    - mChildren : ChildContainer
+    __
+    + AttachLayoutManager(UniquePtr<LayoutManager>)
+    + GetLayoutManager() : LayoutManager*
+    + HasLayoutManager() : bool
+    + HasLayoutCallback() : bool
+    + RemoveAll(Ui::RemovePolicy)
+    + OnChildAdd(Actor&)
+    + OnChildRemove(Actor&)
+    + OnChildOrderChanged(Actor)
+    + GetChildViewCount() : uint32_t
+    + GetChildViewAt(index) : Ui::View
+    + IndexOfChildView(Ui::View) : int32_t
+    + Contents(initializer_list<View>) : ViewImpl&
+    __
+    + Measure(widthConstraint, heightConstraint) : MeasuredSize
+    + Arrange(bounds) : MeasuredSize
+    + OnMeasure(w, h) : MeasuredSize
+    + OnArrange(bounds) : MeasuredSize
+    + InvalidateMeasure()
+    + GetParentView() : Ui::View
+    + IsLayout() : bool
+    + RegisterWithLayoutController()
+    # GetChildren() : ChildContainer&
+  }
+
+  class "LayoutImpl" as LayoutImpl <<impl>> {
+    + {static} New() : Ui::Layout
+    __
+    # LayoutImpl()
+  }
+
+  class "StackLayoutImpl" as StackLayoutImpl <<impl>> {
+    + {static} New(StackOrientation) : Ui::StackLayout
+  }
+
+  class "FlexLayoutImpl" as FlexLayoutImpl <<impl>> {
+    + {static} New() : Ui::FlexLayout
+  }
+
+  class "GridLayoutImpl" as GridLayoutImpl <<impl>> {
+    + {static} New() : Ui::GridLayout
+  }
+
+  class "AbsoluteLayoutImpl" as AbsoluteLayoutImpl <<impl>> {
+    + {static} New() : Ui::AbsoluteLayout
+  }
+
+  class "LayoutControllerImpl" as LayoutControllerImpl <<impl>> {
+    - mWindow : Window
+    - mPendingViews : unordered_set<ViewImpl*>
+    __
+    + RequestLayout(ViewImpl*)
+    + ProcessLayouts()
+    + Process(postProcess) : void
+    - ProcessLayoutRoot(ViewImpl*)
+  }
+
+  class "AbsoluteLayoutParamsImpl" as AbsoluteLayoutParamsImpl <<trait>> {
+    + explicit AbsoluteLayoutParamsImpl(const AbsoluteLayoutParams&)
+    + GetBounds() : LayoutRect
+    + GetFlags() : AbsoluteLayoutFlags
+    + {static} Get(ViewImpl&) : AbsoluteLayoutParamsImpl*
+  }
+
+  class "FlexLayoutParamsImpl" as FlexLayoutParamsImpl <<trait>> {
+    + explicit FlexLayoutParamsImpl(const FlexLayoutParams&)
+    + GetFlexGrow() : float
+    + GetFlexShrink() : float
+    + GetFlexBasis() : float
+    + GetAlignSelf() : FlexAlign
+    + {static} Get(ViewImpl&) : FlexLayoutParamsImpl*
+  }
+
+  class "GridLayoutParamsImpl" as GridLayoutParamsImpl <<trait>> {
+    + explicit GridLayoutParamsImpl(const GridLayoutParams&)
+    + GetRow() : uint32_t
+    + GetColumn() : uint32_t
+    + GetRowSpan() : uint32_t
+    + GetColumnSpan() : uint32_t
+    + GetHorizontalAlignment() : LayoutAlignment
+    + GetVerticalAlignment() : LayoutAlignment
+    + {static} Get(ViewImpl&) : GridLayoutParamsImpl*
+  }
+
+  class "StackLayoutParamsImpl" as StackLayoutParamsImpl <<trait>> {
+    + explicit StackLayoutParamsImpl(const StackLayoutParams&)
+    + GetWeight() : float
+    + GetAlignment() : LayoutAlignment
+    + {static} Get(ViewImpl&) : StackLayoutParamsImpl*
+  }
+}
+
+' ========== Layout Managers ==========
+package "Layout Managers" as managers {
+  abstract class "LayoutManager" as LayoutManager {
+    + {abstract} Measure(ViewImpl*, widthConstraint, heightConstraint) : MeasuredSize
+    + {abstract} Arrange(ViewImpl*, bounds) : MeasuredSize
+    __
+    # GetChildViewCount(ViewImpl*) : uint32_t
+    # GetChildViewAt(ViewImpl*, index) : View
+    # IsStandalone(ViewImpl*) : bool
+    __
+    - mImpl : Impl*
+  }
+
+  class "StackLayoutManager" as StackLayoutManager {
+    Measure(ViewImpl*, w, h) : MeasuredSize
+    Arrange(ViewImpl*, bounds) : MeasuredSize
+  }
+
+  class "FlexLayoutManager" as FlexLayoutManager {
+    Measure(ViewImpl*, w, h) : MeasuredSize
+    Arrange(ViewImpl*, bounds) : MeasuredSize
+  }
+
+  class "GridLayoutManager" as GridLayoutManager {
+    Measure(ViewImpl*, w, h) : MeasuredSize
+    Arrange(ViewImpl*, bounds) : MeasuredSize
+  }
+
+  class "AbsoluteLayoutManager" as AbsoluteLayoutManager {
+    Measure(ViewImpl*, w, h) : MeasuredSize
+    Arrange(ViewImpl*, bounds) : MeasuredSize
+  }
+}
+
+' ========== Layout Types ==========
+package "Layout Types" as types {
+  class "MeasuredSize" as MeasuredSize <<struct>> {
+    + width : float
+    + height : float
+    + MeasuredSize(w, h)
+  }
+
+  class "LayoutRect" as LayoutRect <<struct>> {
+    + x, y, width, height : float
+  }
+
+  class "WRAP_CONTENT" as WrapContent <<constant>> {
+    WRAP_CONTENT = -1.0f
+  }
+
+  class "MATCH_PARENT" as MatchParent <<constant>> {
+    MATCH_PARENT = -2.0f
+  }
+}
+
+' ========== Inheritance (Public API) ==========
+Control <|-- View
+View <|-- Layout
+Layout <|-- StackLayout
+Layout <|-- FlexLayout
+Layout <|-- GridLayout
+Layout <|-- AbsoluteLayout
+
+' ========== Inheritance (Integration / p-impl) ==========
+Processor <|.. LayoutControllerImpl : implements
+CustomActor <|-- ViewImpl
+ViewImpl <|-- LayoutImpl
+LayoutImpl <|-- StackLayoutImpl
+LayoutImpl <|-- FlexLayoutImpl
+LayoutImpl <|-- GridLayoutImpl
+LayoutImpl <|-- AbsoluteLayoutImpl
+
+' ========== Handle -> Impl (p-impl) ==========
+View ..> ViewImpl : uses
+Layout ..> LayoutImpl : uses
+StackLayout ..> StackLayoutImpl : uses
+FlexLayout ..> FlexLayoutImpl : uses
+GridLayout ..> GridLayoutImpl : uses
+AbsoluteLayout ..> AbsoluteLayoutImpl : uses
+LayoutController o-- LayoutControllerImpl : owns
+
+' ========== LayoutManager ==========
+LayoutManager <|-- StackLayoutManager
+LayoutManager <|-- FlexLayoutManager
+LayoutManager <|-- GridLayoutManager
+LayoutManager <|-- AbsoluteLayoutManager
+
+ViewImpl ..> LayoutManager : owns via Trait (AttachLayoutManager)
+
+' ========== Layout Params (value + private PIMPL; View-owned trait snapshot) ==========
+ViewImpl ..> AbsoluteLayoutParamsImpl : creates snapshot
+ViewImpl ..> FlexLayoutParamsImpl : creates snapshot
+ViewImpl ..> GridLayoutParamsImpl : creates snapshot
+ViewImpl ..> StackLayoutParamsImpl : creates snapshot
+
+' ========== Layout Params Traits ==========
+AbsoluteLayoutManager ..> AbsoluteLayoutParamsImpl : reads
+FlexLayoutManager ..> FlexLayoutParamsImpl : reads
+GridLayoutManager ..> GridLayoutParamsImpl : reads
+StackLayoutManager ..> StackLayoutParamsImpl : reads
+
+' ========== Types ==========
+ViewImpl ..> MeasuredSize : returns
+ViewImpl ..> LayoutRect : uses
+LayoutManager ..> MeasuredSize : returns
+LayoutManager ..> LayoutRect : uses
+
+@enduml

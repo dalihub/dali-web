@@ -1,0 +1,416 @@
+/*
+ * Copyright (c) 2023 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/internal/text/text-model.h>
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/environment-variable.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/public-api/configuration/ui-config.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Text
+{
+namespace
+{
+}
+
+ModelPtr Model::New()
+{
+  return ModelPtr(new Model());
+}
+
+const Size& Model::GetControlSize() const
+{
+  return mVisualModel->mControlSize;
+}
+
+const Size& Model::GetLayoutSize() const
+{
+  return mVisualModel->GetLayoutSize();
+}
+
+const Vector2& Model::GetScrollPosition() const
+{
+  return mScrollPosition;
+}
+
+Alignment Model::GetHorizontalAlignment() const
+{
+  return mHorizontalAlignment;
+}
+
+Alignment Model::GetVerticalAlignment() const
+{
+  return mVerticalAlignment;
+}
+
+Alignment Model::GetVerticalLineAlignment() const
+{
+  return mVerticalLineAlignment;
+}
+
+bool Model::IsTextElideEnabled() const
+{
+  return mElideEnabled;
+}
+
+Length Model::GetNumberOfLines() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mVisualModel->mLines.Count());
+}
+
+const LineRun* Model::GetLines() const
+{
+  return mVisualModel->mLines.Begin();
+}
+
+Length Model::GetNumberOfScripts() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mLogicalModel->mScriptRuns.Count());
+}
+
+const ScriptRun* Model::GetScriptRuns() const
+{
+  return mLogicalModel->mScriptRuns.Begin();
+}
+
+Length Model::GetNumberOfCharacters() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mLogicalModel->mText.Count());
+}
+
+Length Model::GetNumberOfGlyphs() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mVisualModel->mGlyphs.Count());
+}
+
+GlyphIndex Model::GetEndIndexOfElidedGlyphs() const
+{
+  return mVisualModel->GetEndIndexOfElidedGlyphs();
+}
+
+const GlyphInfo* Model::GetGlyphs() const
+{
+  return mVisualModel->mGlyphs.Begin();
+}
+
+const Vector2* Model::GetLayout() const
+{
+  return mVisualModel->mGlyphPositions.Begin();
+}
+
+const Vector4* Model::GetColors() const
+{
+  return mVisualModel->mColors.Begin();
+}
+
+const ColorIndex* Model::GetColorIndices() const
+{
+  return mVisualModel->mColorIndices.Begin();
+}
+
+const Internal::GradientSpanModelData* Model::GetGradientSpanModelData() const
+{
+  return mLogicalModel->mGradientSpanData.get();
+}
+
+const Vector4* Model::GetBackgroundColors() const
+{
+  return mVisualModel->mBackgroundColors.Begin();
+}
+
+const ColorIndex* Model::GetBackgroundColorIndices() const
+{
+  return mVisualModel->mBackgroundColorIndices.Begin();
+}
+
+bool Model::IsMarkupBackgroundColorSet() const
+{
+  return (mVisualModel->mBackgroundColors.Count() > 0);
+}
+
+const Vector4& Model::GetDefaultColor() const
+{
+  return mVisualModel->mTextColor;
+}
+
+const Vector2& Model::GetShadowOffset() const
+{
+  return mVisualModel->GetEffectiveShadowOffset();
+}
+
+bool Model::IsShadowEnabled() const
+{
+  return mVisualModel->IsShadowEnabled();
+}
+
+const Vector4& Model::GetShadowColor() const
+{
+  return mVisualModel->GetShadowColor();
+}
+
+const float& Model::GetShadowBlurRadius() const
+{
+  return mVisualModel->GetShadowBlurRadius();
+}
+
+const Vector4& Model::GetUnderlineColor() const
+{
+  return mVisualModel->GetUnderlineColor();
+}
+
+bool Model::IsUnderlineEnabled() const
+{
+  return mVisualModel->IsUnderlineEnabled();
+}
+
+bool Model::IsMarkupUnderlineSet() const
+{
+  return (mVisualModel->mUnderlineRuns.Count() > 0u);
+}
+
+float Model::GetUnderlineHeight() const
+{
+  return mVisualModel->GetEffectiveUnderlineHeight();
+}
+
+Text::Underline::Type Model::GetUnderlineType() const
+{
+  return mVisualModel->GetUnderlineType();
+}
+
+float Model::GetDashedUnderlineWidth() const
+{
+  return mVisualModel->GetEffectiveDashedUnderlineWidth();
+}
+
+float Model::GetDashedUnderlineGap() const
+{
+  return mVisualModel->GetEffectiveDashedUnderlineGap();
+}
+
+Length Model::GetNumberOfUnderlineRuns() const
+{
+  return mVisualModel->GetNumberOfUnderlineRuns();
+}
+
+void Model::GetUnderlineRuns(UnderlinedGlyphRun* underlineRuns, UnderlineRunIndex index, Length numberOfRuns) const
+{
+  mVisualModel->GetUnderlineRuns(underlineRuns, index, numberOfRuns);
+}
+
+const Vector2& Model::GetOutlineOffset() const
+{
+  return mVisualModel->GetEffectiveOutlineOffset();
+}
+
+const Vector4& Model::GetOutlineColor() const
+{
+  return mVisualModel->GetOutlineColor();
+}
+
+uint16_t Model::GetOutlineWidth() const
+{
+  return mVisualModel->GetEffectiveOutlineWidth();
+}
+
+bool Model::IsOutlineEnabled() const
+{
+  return mVisualModel->IsOutlineEnabled();
+}
+
+const float& Model::GetOutlineBlurRadius() const
+{
+  return mVisualModel->GetOutlineBlurRadius();
+}
+
+const Vector4& Model::GetBackgroundColor() const
+{
+  return mVisualModel->GetBackgroundColor();
+}
+
+bool Model::IsBackgroundEnabled() const
+{
+  return mVisualModel->IsBackgroundEnabled();
+}
+
+const GlyphInfo* Model::GetHyphens() const
+{
+  return mVisualModel->mHyphen.glyph.Begin();
+}
+
+const Length* Model::GetHyphenIndices() const
+{
+  return mVisualModel->mHyphen.index.Begin();
+}
+
+Length Model::GetHyphensCount() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mVisualModel->mHyphen.glyph.Size());
+}
+const Vector4& Model::GetStrikethroughColor() const
+{
+  return mVisualModel->GetStrikethroughColor();
+}
+
+bool Model::IsStrikethroughEnabled() const
+{
+  return mVisualModel->IsStrikethroughEnabled();
+}
+
+bool Model::IsMarkupStrikethroughSet() const
+{
+  return (mVisualModel->mStrikethroughRuns.Count() > 0u);
+}
+
+float Model::GetStrikethroughHeight() const
+{
+  return mVisualModel->GetEffectiveStrikethroughHeight();
+}
+
+Length Model::GetNumberOfStrikethroughRuns() const
+{
+  return mVisualModel->GetNumberOfStrikethroughRuns();
+}
+
+Length Model::GetNumberOfBoundedParagraphRuns() const
+{
+  return mLogicalModel->GetNumberOfBoundedParagraphRuns();
+}
+
+const Vector<BoundedParagraphRun>& Model::GetBoundedParagraphRuns() const
+{
+  return mLogicalModel->GetBoundedParagraphRuns();
+}
+
+void Model::GetStrikethroughRuns(StrikethroughGlyphRun* strikethroughRuns, StrikethroughRunIndex index,
+                                 Length numberOfRuns) const
+{
+  mVisualModel->GetStrikethroughRuns(strikethroughRuns, index, numberOfRuns);
+}
+
+Length Model::GetNumberOfCharacterSpacingGlyphRuns() const
+{
+  return mVisualModel->GetNumberOfCharacterSpacingGlyphRuns();
+}
+
+const Vector<CharacterSpacingGlyphRun>& Model::GetCharacterSpacingGlyphRuns() const
+{
+  return mVisualModel->GetCharacterSpacingGlyphRuns();
+}
+
+float Model::GetCharacterSpacing() const
+{
+  return mVisualModel->GetCharacterSpacing();
+}
+
+const Character* Model::GetTextBuffer() const
+{
+  return mLogicalModel->mText.Begin();
+}
+
+const Vector<CharacterIndex>& Model::GetGlyphsToCharacters() const
+{
+  return mVisualModel->mGlyphsToCharacters;
+}
+
+const Vector<FontRun>& Model::GetFontRuns() const
+{
+  return mLogicalModel->mFontRuns;
+}
+
+const Vector<FontDescriptionRun>& Model::GetFontDescriptionRuns() const
+{
+  return mLogicalModel->mFontDescriptionRuns;
+}
+
+bool Model::IsRemoveFrontInset() const
+{
+  return mRemoveFrontInset;
+}
+
+bool Model::IsRemoveBackInset() const
+{
+  return mRemoveBackInset;
+}
+
+bool Model::IsCutoutEnabled() const
+{
+  return mVisualModel->IsCutoutEnabled();
+}
+
+const bool Model::IsBackgroundWithCutoutEnabled() const
+{
+  return mVisualModel->IsBackgroundWithCutoutEnabled();
+}
+
+const Vector4& Model::GetBackgroundColorWithCutout() const
+{
+  return mVisualModel->GetBackgroundColorWithCutout();
+}
+
+const Vector2& Model::GetOffsetWithCutout() const
+{
+  return mVisualModel->GetOffsetWithCutout();
+}
+
+const Vector<CharacterDirection>& Model::GetCharacterDirections() const
+{
+  return mLogicalModel->mCharacterDirections;
+}
+
+Model::Model()
+: mLogicalModel(),
+  mVisualModel(),
+  mScrollPosition(),
+  mScrollPositionLast(),
+  mLayoutAlignmentOffset(),
+  mLayoutOffsetWithPadding(),
+  mHorizontalAlignment(Alignment::START),
+  mVerticalAlignment(Alignment::START),
+  mVerticalLineAlignment(Alignment::START),
+  mLineWrapMode(LineWrapMode::WORD),
+  mAlignmentOffset(0.0f),
+  mElideEnabled(false),
+  mRemoveFrontInset(false),
+  mRemoveBackInset(false),
+  mLayoutDirectionMode(LayoutDirectionMode::INHERIT)
+{
+  mLogicalModel = LogicalModel::New();
+  mVisualModel  = VisualModel::New();
+
+  if(UiConfig::HasCurrent())
+  {
+    mLayoutDirectionMode = UiConfig::GetCurrent().GetTextLayoutDirectionMode();
+  }
+}
+
+Model::~Model()
+{
+}
+
+} // namespace Text
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

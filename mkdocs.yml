@@ -1,0 +1,89 @@
+site_name: DALi UI Reference
+site_url: https://dalihub.github.io/dali-ui/
+use_directory_urls: false
+site_description: High-performance C++ UI documentation.
+repo_name: dalihub/dali-ui
+repo_url: https://github.com/dalihub/dali-ui
+docs_dir: build/doc/source
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdoxy:
+      projects:
+        daliUi:
+          src-dirs: >-
+            dali-ui-foundation/public-api
+            dali-ui-foundation/extension-api
+            dali-ui-foundation/integration-api
+            dali-ui-components/public-api
+            dali-ui-components/integration-api
+          full-doc: True
+          doxy-cfg:
+            FILE_PATTERNS: "*.h *.md"
+            EXTRACT_ANON_NSPACES: "NO"
+            RECURSIVE: "YES"
+            EXCLUDE_PATTERNS: "*/internal/*"
+            EXTRACT_ALL: "YES"
+            EXTRACT_PRIVATE: "NO"
+            EXTRACT_STATIC: "YES"
+            HIDE_UNDOC_MEMBERS: "NO"
+            SOURCE_BROWSER: "YES"
+            STRIP_FROM_INC_PATH: "."
+            INCLUDE_PATH: "dali-ui-foundation dali-ui-components"
+            ENABLE_PREPROCESSING: "YES"
+            MACRO_EXPANSION: "YES"
+            # DALI_NAMESPACE stands in for the namespace name at every namespace
+            # definition in DALi, and dali-namespace.h that defines it is not on
+            # INCLUDE_PATH, so without this the API would be documented as
+            # DALI_NAMESPACE::Ui::X. Set it to Tizen::Dali to document a build made
+            # with ENABLE_TIZEN_NAMESPACE. DALI_DOXYGEN hides the compatibility
+            # namespace alias, which doxygen reports as recursive.
+            PREDEFINED: "DALI_NAMESPACE=Dali DALI_TIZEN_NAMESPACE=0 DALI_DOXYGEN"
+            SEARCH_INCLUDES: "YES"
+            SHOW_FILES: "NO"
+
+hooks:
+  - scripts/hooks/search_exclude_files.py
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+nav:
+  - Home: index.md
+  - Project: 'guides/project/index.html'
+  - Guides:
+      - 'Layout Structure': 'guides/layout-structure.md'
+  - API Reference:
+      - 'Class Index': 'daliUi/classes.md'
+      - 'Class List': 'daliUi/annotated.md'
+      - 'Namespace List': 'daliUi/namespaces.md'
+      - 'Files': 'daliUi/files.md'

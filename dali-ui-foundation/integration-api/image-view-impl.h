@@ -1,0 +1,421 @@
+#pragma once
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-ui-foundation/integration-api/visual-factory/visual-base.h>
+#include <dali-ui-foundation/public-api/image/image-enumerations.h>
+#include <dali-ui-foundation/public-api/types/ui-color.h>
+#include <dali-ui-foundation/public-api/views/image/image-view-properties.h>
+#include <dali-ui-foundation/public-api/views/view-impl.h>
+#include <dali/public-api/common/dali-string.h>
+#include <dali/public-api/common/intrusive-ptr.h>
+#include <dali/public-api/math/vector4.h>
+#include <dali/public-api/signals/dali-signal.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+class ImageUrl;
+
+namespace Integration
+{
+
+class ImageViewImpl;
+using ImageViewImplPtr = IntrusivePtr<ImageViewImpl>;
+
+/**
+ * @brief This is the internal implementation class for ImageView.
+ *
+ * @see Dali::Ui::ImageView
+ */
+class DALI_UI_API ImageViewImpl : public ViewImpl
+{
+public: // Properties
+  /**
+   * @brief Property indices — aliased from the shared ImageViewPropertyIndex.
+   */
+  struct Property
+  {
+    enum
+    {
+      IMAGE                      = Ui::ImageViewPropertyIndex::IMAGE,
+      FITTING_MODE               = Ui::ImageViewPropertyIndex::FITTING_MODE,
+      SAMPLING_MODE              = Ui::ImageViewPropertyIndex::SAMPLING_MODE,
+      DESIRED_WIDTH              = Ui::ImageViewPropertyIndex::DESIRED_WIDTH,
+      DESIRED_HEIGHT             = Ui::ImageViewPropertyIndex::DESIRED_HEIGHT,
+      IMAGE_COLOR                = Ui::ImageViewPropertyIndex::IMAGE_COLOR,
+      PRE_MULTIPLY_ALPHA_ON_LOAD = Ui::ImageViewPropertyIndex::PRE_MULTIPLY_ALPHA_ON_LOAD,
+      PLACEHOLDER_IMAGE          = Ui::ImageViewPropertyIndex::PLACEHOLDER_IMAGE,
+      IMAGE_LOAD_WITH_VIEW_SIZE  = Ui::ImageViewPropertyIndex::IMAGE_LOAD_WITH_VIEW_SIZE,
+      ALPHA_MASK_URL             = Ui::ImageViewPropertyIndex::ALPHA_MASK_URL,
+      CROP_TO_MASK               = Ui::ImageViewPropertyIndex::CROP_TO_MASK,
+      MASKING_POLICY             = Ui::ImageViewPropertyIndex::MASKING_POLICY,
+      LOAD_POLICY                = Ui::ImageViewPropertyIndex::LOAD_POLICY,
+      RELEASE_POLICY             = Ui::ImageViewPropertyIndex::RELEASE_POLICY,
+      SYNCHRONOUS_LOADING        = Ui::ImageViewPropertyIndex::SYNCHRONOUS_LOADING,
+      FAST_TRACK_UPLOADING       = Ui::ImageViewPropertyIndex::FAST_TRACK_UPLOADING,
+      ORIENTATION_CORRECTION     = Ui::ImageViewPropertyIndex::ORIENTATION_CORRECTION,
+      N_PATCH_BORDER             = Ui::ImageViewPropertyIndex::N_PATCH_BORDER,
+      N_PATCH_BORDER_ONLY        = Ui::ImageViewPropertyIndex::N_PATCH_BORDER_ONLY,
+      PIXEL_AREA                 = Ui::ImageViewPropertyIndex::PIXEL_AREA,
+    };
+  };
+
+protected: // Construction & Destruction
+  /**
+   * @brief ImageViewImpl constructor.
+   */
+  ImageViewImpl();
+
+  /**
+   * @brief A reference counted object may only be deleted by calling Unreference().
+   */
+  virtual ~ImageViewImpl();
+
+public: // Creation
+  /**
+   * @brief Creates a new ImageViewImpl.
+   *
+   * @return An intrusive pointer to the newly allocated ImageViewImpl
+   */
+  static ImageViewImplPtr New();
+
+public: // Properties (required by DALI_PROPERTY_REGISTRATION)
+  /// @cond internal
+  static void                  SetProperty(Dali::BaseObject* object, Dali::Property::Index index, const Dali::Property::Value& value);
+  static Dali::Property::Value GetProperty(Dali::BaseObject* object, Dali::Property::Index index);
+  /// @endcond
+
+public: // API — Image
+  /**
+   * @copydoc Dali::Ui::ImageView::SetResourceUrl
+   */
+  void SetResourceUrl(const Dali::String& url);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetResourceUrl(const Dali::Ui::ImageUrl&)
+   */
+  void SetResourceUrl(const Dali::Ui::ImageUrl& imageUrl);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetResourceUrl
+   */
+  Dali::String GetResourceUrl() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::Reload
+   */
+  void Reload();
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetPlaceholderUrl
+   */
+  void SetPlaceholderUrl(const Dali::String& url);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetPlaceholderUrl
+   */
+  Dali::String GetPlaceholderUrl() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetImageColor
+   */
+  void SetImageColor(const UiColor& color);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetImageColor
+   */
+  UiColor GetImageColor() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetPixelArea
+   */
+  void SetPixelArea(const Vector4& pixelArea);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetPixelArea
+   */
+  Vector4 GetPixelArea() const;
+
+public: // API — Size & Fitting Control
+  /**
+   * @copydoc Dali::Ui::ImageView::GetNaturalSize
+   */
+  Vector3 GetNaturalSize() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetSamplingMode
+   */
+  void SetSamplingMode(Ui::Image::SamplingMode samplingMode);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetSamplingMode
+   */
+  Ui::Image::SamplingMode GetSamplingMode() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetFittingMode
+   */
+  void SetFittingMode(Ui::Image::FittingMode fittingMode);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetFittingMode
+   */
+  Ui::Image::FittingMode GetFittingMode() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetDesiredWidth
+   */
+  void SetDesiredWidth(int width);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetDesiredWidth
+   */
+  int GetDesiredWidth() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetDesiredHeight
+   */
+  void SetDesiredHeight(int height);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetDesiredHeight
+   */
+  int GetDesiredHeight() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetImageLoadWithViewSizeEnabled
+   */
+  void SetImageLoadWithViewSizeEnabled(bool enabled);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsImageLoadWithViewSizeEnabled
+   */
+  bool IsImageLoadWithViewSizeEnabled() const;
+
+public: // API — Advanced Rendering & Masking
+  /**
+   * @copydoc Dali::Ui::ImageView::SetPreMultiplyAlphaOnLoadEnabled
+   */
+  void SetPreMultiplyAlphaOnLoadEnabled(bool preMultiplied);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsPreMultiplyAlphaOnLoadEnabled
+   */
+  bool IsPreMultiplyAlphaOnLoadEnabled() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetAlphaMaskUrl
+   */
+  void SetAlphaMaskUrl(const Dali::String& maskUrl);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetAlphaMaskUrl
+   */
+  Dali::String GetAlphaMaskUrl() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetCropToMask
+   */
+  void SetCropToMask(bool cropToMask);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsCropToMask
+   */
+  bool IsCropToMask() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetMaskingPolicy
+   */
+  void SetMaskingPolicy(Ui::Image::MaskingPolicy maskingPolicy);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetMaskingPolicy
+   */
+  Ui::Image::MaskingPolicy GetMaskingPolicy() const;
+
+public: // API — Loading Behavior
+  /**
+   * @copydoc Dali::Ui::ImageView::SetLoadPolicy
+   */
+  void SetLoadPolicy(Ui::Image::LoadPolicy loadPolicy);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetLoadPolicy
+   */
+  Ui::Image::LoadPolicy GetLoadPolicy() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetReleasePolicy
+   */
+  void SetReleasePolicy(Ui::Image::ReleasePolicy releasePolicy);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetReleasePolicy
+   */
+  Ui::Image::ReleasePolicy GetReleasePolicy() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetSynchronousLoading
+   */
+  void SetSynchronousLoading(bool synchronous);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsSynchronousLoading
+   */
+  bool IsSynchronousLoading() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetFastTrackUploadEnabled
+   */
+  void SetFastTrackUploadEnabled(bool fastTrack);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsFastTrackUploadEnabled
+   */
+  bool IsFastTrackUploadEnabled() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetOrientationCorrectionEnabled
+   */
+  void SetOrientationCorrectionEnabled(bool orientationCorrection);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsOrientationCorrectionEnabled
+   */
+  bool IsOrientationCorrectionEnabled() const;
+
+public: // API — N-Patch Border
+  /**
+   * @copydoc Dali::Ui::ImageView::SetNPatchBorder
+   */
+  void SetNPatchBorder(const Dali::Insets& border);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::GetNPatchBorder
+   */
+  Dali::Insets GetNPatchBorder() const;
+
+  /**
+   * @copydoc Dali::Ui::ImageView::SetNPatchBorderOnly
+   */
+  void SetNPatchBorderOnly(bool borderOnly);
+
+  /**
+   * @copydoc Dali::Ui::ImageView::IsNPatchBorderOnly
+   */
+  bool IsNPatchBorderOnly() const;
+
+public: // Loading Status
+  /**
+   * @copydoc Dali::Ui::ImageView::GetLoadingStatus
+   */
+  Ui::Visual::ResourceStatus GetLoadingStatus() const;
+
+protected: // From ViewImpl
+  /**
+   * @copydoc ViewImpl::OnInitialize
+   */
+  void OnInitialize() override;
+
+  /**
+   * @copydoc ViewImpl::OnMeasure
+   */
+  MeasuredSize OnMeasure(float widthConstraint, float heightConstraint) override;
+
+  /**
+   * @copydoc ViewImpl::OnArrange
+   */
+  LayoutRect OnArrange(const LayoutRect& bounds) override;
+
+private: // Internal methods
+  /**
+   * @brief Creates or refreshes the image visual when its properties are dirty.
+   */
+  void EnsureVisualUpdated();
+
+  /**
+   * @brief Applies a resource URL without changing the stored ImageUrl attachment.
+   */
+  void SetResourceUrlInternal(const Dali::String& url);
+
+  /**
+   * @brief Rebuilds and re-registers the image visual from current property values.
+   */
+  void UpdateVisual();
+
+  /**
+   * @brief Rebuilds and re-registers the placeholder visual.
+   */
+  void UpdatePlaceholderVisual();
+
+  /**
+   * @brief Removes the placeholder when the main image finishes loading.
+   *
+   * @param[in] index The property index of the visual whose resource changed
+   */
+  void OnImageResourceReady(Dali::Property::Index index);
+
+  /**
+   * @brief Applies the resolved image color to the image visual.
+   *
+   * @param[in] color The resolved image color
+   */
+  void SetImageColorInternal(const Vector4& color);
+
+private:
+  // Not copyable or movable
+  ImageViewImpl(const ImageViewImpl&)            = delete;
+  ImageViewImpl(ImageViewImpl&&)                 = delete;
+  ImageViewImpl& operator=(const ImageViewImpl&) = delete;
+  ImageViewImpl& operator=(ImageViewImpl&&)      = delete;
+
+private: // Data
+  Ui::Integration::Visual::Base mVisual;
+
+  Dali::String mUrl;
+  Dali::String mPlaceholderUrl;
+  Dali::String mAlphaMaskUrl;
+
+  Vector4      mPixelArea;
+  Dali::Insets mNPatchBorder;
+
+  UiColor mImageColor;
+
+  Ui::Image::SamplingMode  mSamplingMode;
+  Ui::Image::FittingMode   mFittingMode;
+  Ui::Image::MaskingPolicy mMaskingPolicy;
+  Ui::Image::LoadPolicy    mLoadPolicy;
+  Ui::Image::ReleasePolicy mReleasePolicy;
+  int                      mDesiredWidth;
+  int                      mDesiredHeight;
+
+  bool mPreMultiplyAlphaOnLoad;
+  bool mImageLoadWithViewSize;
+  bool mCropToMask;
+  bool mSynchronousLoading;
+  bool mFastTrackUploading;
+  bool mOrientationCorrection;
+  bool mNPatchBorderOnly;
+  bool mVisualDirty;
+};
+
+} // namespace Integration
+} // namespace Ui
+} //namespace DALI_NAMESPACE

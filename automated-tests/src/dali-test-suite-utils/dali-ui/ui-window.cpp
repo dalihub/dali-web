@@ -1,0 +1,508 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include "ui-window-impl.h"
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/actors/layer.h>
+#include <dali/public-api/events/key-event.h>
+#include <dali/public-api/object/base-object.h>
+#include <dali/public-api/render-tasks/render-task-list.h>
+
+#define DALI_WINDOW_H
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+#include <dali-ui/ui-adaptor-impl.h>
+
+using AdaptorImpl = Dali::Internal::Adaptor::Adaptor;
+
+namespace DALI_NAMESPACE
+{
+class Window;
+
+/********************************************************************************
+ * Stub for Dali::Internal::Adaptor::Window
+ ********************************************************************************/
+
+namespace Internal
+{
+namespace Adaptor
+{
+Window::Window(const PositionSize& positionSize)
+: SceneHolder(positionSize),
+  mFocusChangedSignal(),
+  mResizedSignal(),
+  mMovedSignal(),
+  mMoveCompletedSignal(),
+  mResizeCompletedSignal(),
+  mRotationAngle(90), // dummy angle for test coverage
+  mVisible(true),
+  mVisibilityChangedSignal(),
+  mKeyEventSignal(),
+  mTouchEventSignal(),
+  mWheelEventSignal(),
+  mSlotDelegate(this)
+{
+  mSceneHolderKeyEventSignal.Connect(mSlotDelegate, &Window::OnKeyEvent);
+  mSceneHolderTouchEventSignal.Connect(mSlotDelegate, &Window::OnTouchEvent);
+}
+
+Window* Window::New(const PositionSize& positionSize, const Dali::String& name, const Dali::String& className, bool isTransparent)
+{
+  return new Window(positionSize);
+}
+
+PositionSize Window::GetPositionSize() const
+{
+  return mRenderSurface->GetPositionSize();
+}
+
+Dali::Window::KeyEventSignalType& Window::KeyEventSignal()
+{
+  return mKeyEventSignal;
+}
+
+Dali::Window::TouchEventSignalType& Window::TouchEventSignal()
+{
+  return mTouchEventSignal;
+}
+
+void Window::OnKeyEvent(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::KeyEvent event)
+{
+  Dali::Window window(this);
+  mKeyEventSignal.Emit(window, event);
+}
+
+void Window::OnTouchEvent(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::TouchEvent event)
+{
+  Dali::Window window(this);
+  mTouchEventSignal.Emit(window, event);
+}
+
+void Window::SetPositionSize(PositionSize positionSize)
+{
+  mRenderSurface->MoveResize(positionSize);
+
+  Int32Pair    newSize(positionSize.width, positionSize.height);
+  Dali::Window handle(this);
+  mResizedSignal.Emit(handle, newSize);
+}
+
+std::string Window::GetNativeResourceId() const
+{
+  return "123";
+}
+
+bool Window::IsMaximized() const
+{
+  return mMaximized;
+}
+
+void Window::Maximize(bool maximize)
+{
+  mMaximized = maximize;
+  if(maximize)
+  {
+    mMinimized = false;
+  }
+}
+
+bool Window::IsMinimized() const
+{
+  return mMinimized;
+}
+
+void Window::Minimize(bool minimize)
+{
+  mMinimized = minimize;
+}
+
+void Window::SetMinimumSize(Dali::Window::WindowSize size)
+{
+  mMinimumSize = size;
+}
+
+void Window::SetMaximumSize(Dali::Window::WindowSize size)
+{
+  mMaximumSize = size;
+}
+
+void Window::AddFramePresentedCallback(Dali::CallbackBase* callback, int32_t frameId)
+{
+  // The real window takes ownership, so the stub does too. Callbacks that are
+  // never presented are released with the window instead of leaking.
+  mFramePresentedCallbacks.emplace_back(std::unique_ptr<Dali::CallbackBase>(callback), frameId);
+}
+
+void Window::EmitFramePresented()
+{
+  std::vector<std::pair<std::unique_ptr<Dali::CallbackBase>, int32_t>> callbacks;
+  callbacks.swap(mFramePresentedCallbacks);
+  for(auto& entry : callbacks)
+  {
+    if(entry.first)
+    {
+      Dali::CallbackBase::Execute(*entry.first, entry.second);
+    }
+  }
+}
+
+void Window::KeepRendering(float durationSeconds)
+{
+  mScene.KeepRendering(durationSeconds);
+}
+
+} // namespace Adaptor
+} // namespace Internal
+
+inline Internal::Adaptor::Window& GetImplementation(Dali::Window& window)
+{
+  DALI_ASSERT_ALWAYS(window && "Window handle is empty");
+  BaseObject& object = window.GetBaseObject();
+  return static_cast<Internal::Adaptor::Window&>(object);
+}
+
+inline const Internal::Adaptor::Window& GetImplementation(const Dali::Window& window)
+{
+  DALI_ASSERT_ALWAYS(window && "Window handle is empty");
+  const BaseObject& object = window.GetBaseObject();
+  return static_cast<const Internal::Adaptor::Window&>(object);
+}
+
+Window::Window()
+{
+}
+
+Window::~Window()
+{
+}
+
+Window::Window(const Window& copy) = default;
+
+Window& Window::operator=(const Window& rhs) = default;
+
+Window::Window(Window&& rhs) = default;
+
+Window& Window::operator=(Window&& rhs) = default;
+
+Dali::Window Window::New(PositionSize windowPosition, const Dali::String& name, bool isTransparent)
+{
+  return New(windowPosition, name, "", isTransparent);
+}
+
+Dali::Window Window::New(PositionSize windowPosition, const Dali::String& name, const Dali::String& className, bool isTransparent)
+{
+  Internal::Adaptor::Window* window = Internal::Adaptor::Window::New(windowPosition, name, className, isTransparent);
+
+  Dali::Window result(window);
+
+  // This will also emit the window created signals
+  AdaptorImpl::GetImpl(AdaptorImpl::Get()).AddWindow(window);
+
+  return result;
+}
+
+Window Window::DownCast(BaseHandle handle)
+{
+  Internal::Adaptor::Window* windowImpl = nullptr;
+  if(Dali::Adaptor::IsAvailable())
+  {
+    windowImpl = dynamic_cast<Dali::Internal::Adaptor::Window*>(handle.GetObjectPtr());
+  }
+  return Dali::Window(windowImpl);
+}
+
+Window::Window(Internal::Adaptor::Window* window)
+: BaseHandle(window)
+{
+}
+
+void Window::SetPositionSize(PositionSize positionSize)
+{
+  GetImplementation(*this).SetPositionSize(positionSize);
+}
+
+void Window::RequestMoveToServer()
+{
+  GetImplementation(*this);
+}
+
+PositionSize Window::GetPositionSize() const
+{
+  return GetImplementation(*this).GetPositionSize();
+}
+
+Dali::Integration::Scene Window::GetScene()
+{
+  return GetImplementation(*this).GetScene();
+}
+
+Dali::Integration::RenderSurfaceInterface& Window::GetRenderSurface()
+{
+  return GetImplementation(*this).GetRenderSurface();
+}
+
+void Window::Add(Actor actor)
+{
+  GetImplementation(*this).Add(actor);
+}
+
+void Window::Remove(Actor actor)
+{
+  GetImplementation(*this).Remove(actor);
+}
+
+Dali::Layer Window::GetRootLayer() const
+{
+  return GetImplementation(*this).GetRootLayer();
+}
+
+int32_t Window::GetNativeId() const
+{
+  return GetImplementation(*this).GetNativeId();
+}
+
+Dali::Layer Window::GetOverlayLayer()
+{
+  return GetImplementation(*this).GetScene().GetOverlayLayer();
+}
+
+void Window::SetBackgroundColor(const Vector4& color)
+{
+  GetImplementation(*this).SetBackgroundColor(color);
+}
+
+Vector4 Window::GetBackgroundColor() const
+{
+  return GetImplementation(*this).GetBackgroundColor();
+}
+
+void Window::Raise()
+{
+  GetImplementation(*this).mFocused = true;
+  GetImplementation(*this).mFocusChangedSignal.Emit(*this, true);
+  GetImplementation(*this).FocusChanged(true);
+}
+
+void Window::Lower()
+{
+  GetImplementation(*this).mFocused = false;
+  GetImplementation(*this).mFocusChangedSignal.Emit(*this, false);
+  GetImplementation(*this).FocusChanged(false);
+}
+
+void Window::Show()
+{
+  GetImplementation(*this).mVisible = true;
+  GetImplementation(*this).GetScene().Show();
+  GetImplementation(*this).mVisibilityChangedSignal.Emit(*this, true);
+}
+
+void Window::Hide()
+{
+  GetImplementation(*this).mVisible = false;
+  GetImplementation(*this).GetScene().Hide();
+  GetImplementation(*this).mVisibilityChangedSignal.Emit(*this, false);
+}
+
+bool Window::IsVisible() const
+{
+  return GetImplementation(*this).mVisible;
+}
+
+bool Window::IsFocused() const
+{
+  return GetImplementation(*this).mFocused;
+}
+
+FocusChangedSignalType& Window::FocusChangedSignal()
+{
+  return GetImplementation(*this).mFocusChangedSignal;
+}
+
+ResizedSignalType& Window::ResizedSignal()
+{
+  return GetImplementation(*this).mResizedSignal;
+}
+
+Window::MovedSignalType& Window::MovedSignal()
+{
+  return GetImplementation(*this).mMovedSignal;
+}
+
+Window::MovedSignalType& Window::MoveCompletedSignal()
+{
+  return GetImplementation(*this).mMoveCompletedSignal;
+}
+
+Window::ResizedSignalType& Window::ResizeCompletedSignal()
+{
+  return GetImplementation(*this).mResizeCompletedSignal;
+}
+
+Window::KeyEventSignalType& Window::KeyEventSignal()
+{
+  return GetImplementation(*this).KeyEventSignal();
+}
+
+Window::TouchEventSignalType& Window::TouchEventSignal()
+{
+  return GetImplementation(*this).TouchEventSignal();
+}
+
+Window::WheelEventSignalType& Window::WheelEventSignal()
+{
+  return GetImplementation(*this).mWheelEventSignal;
+}
+Window::VisibilityChangedSignalType& Window::VisibilityChangedSignal()
+{
+  return GetImplementation(*this).mVisibilityChangedSignal;
+}
+
+bool Window::IsMaximized() const
+{
+  return GetImplementation(*this).IsMaximized();
+}
+
+void Window::Maximize(bool maximize)
+{
+  GetImplementation(*this).Maximize(maximize);
+}
+
+bool Window::IsMinimized() const
+{
+  return GetImplementation(*this).IsMinimized();
+}
+
+void Window::Minimize(bool minimize)
+{
+  GetImplementation(*this).Minimize(minimize);
+}
+unsigned int Window::AddAuxiliaryHint(const Dali::String& hint, const Dali::String& value)
+{
+  auto& implementation = GetImplementation(*this);
+  implementation.mAuxiliaryHintId = 1u;
+  implementation.mAuxiliaryHintName = hint;
+  implementation.mAuxiliaryHintValue = value;
+  return implementation.mAuxiliaryHintId;
+}
+
+bool Window::RemoveAuxiliaryHint(unsigned int id)
+{
+  auto& implementation = GetImplementation(*this);
+  if(id != implementation.mAuxiliaryHintId || id == 0u)
+  {
+    return false;
+  }
+  implementation.mAuxiliaryHintId = 0u;
+  implementation.mAuxiliaryHintName = Dali::String();
+  implementation.mAuxiliaryHintValue = Dali::String();
+  return true;
+}
+
+bool Window::SetAuxiliaryHintValue(unsigned int id, const Dali::String& value)
+{
+  auto& implementation = GetImplementation(*this);
+  if(id != implementation.mAuxiliaryHintId || id == 0u)
+  {
+    return false;
+  }
+  implementation.mAuxiliaryHintValue = value;
+  return true;
+}
+
+Dali::String Window::GetAuxiliaryHintValue(unsigned int id) const
+{
+  const auto& implementation = GetImplementation(*this);
+  return id == implementation.mAuxiliaryHintId ? implementation.mAuxiliaryHintValue : Dali::String();
+}
+
+unsigned int Window::GetAuxiliaryHintId(const Dali::String& hint) const
+{
+  const auto& implementation = GetImplementation(*this);
+  return hint == implementation.mAuxiliaryHintName ? implementation.mAuxiliaryHintId : 0u;
+}
+
+
+void Window::SetMinimumSize(WindowSize size)
+{
+  GetImplementation(*this).SetMinimumSize(size);
+}
+
+void Window::SetMaximumSize(WindowSize size)
+{
+  GetImplementation(*this).SetMaximumSize(size);
+}
+
+void Window::AddFramePresentedCallback(CallbackBase* callback, int32_t frameId)
+{
+  GetImplementation(*this).AddFramePresentedCallback(callback, frameId);
+}
+
+} // namespace Dali
+
+namespace Test
+{
+void EmitFramePresented(Dali::Window window)
+{
+  Dali::GetImplementation(window).EmitFramePresented();
+}
+
+} // namespace Test
+
+namespace DALI_NAMESPACE
+{
+
+Dali::RenderTaskList Window::GetRenderTaskList()
+{
+  return GetImplementation(*this).GetRenderTaskList();
+}
+
+void Window::KeepRendering(float durationSeconds)
+{
+  GetImplementation(*this).KeepRendering(durationSeconds);
+}
+
+Window Window::Get(Actor actor)
+{
+  Internal::Adaptor::Window* windowImpl = nullptr;
+
+  if(Dali::Adaptor::IsAvailable())
+  {
+    windowImpl = static_cast<Internal::Adaptor::Window*>(AdaptorImpl::GetImpl(AdaptorImpl::Get()).GetWindow(actor));
+  }
+
+  return Dali::Window(windowImpl);
+}
+
+namespace DevelWindow
+{
+void RequestResizeToServer(Window window, WindowResizeDirection)
+{
+  GetImplementation(window);
+}
+} // namespace DevelWindow
+
+namespace WindowSystem
+{
+Int32Pair GetMainScreenSize()
+{
+  return Int32Pair(480, 800);
+}
+} // namespace WindowSystem
+} // namespace Dali

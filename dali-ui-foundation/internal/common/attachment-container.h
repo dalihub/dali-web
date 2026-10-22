@@ -1,0 +1,142 @@
+#pragma once
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-ui-foundation/public-api/traits/attachment-id.h>
+#include <dali-ui-foundation/public-api/types/unique-any.h>
+#include <iterator>
+#include <utility>
+#include <vector>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Internal
+{
+
+/**
+ * @brief Stores attachments by AttachmentId.
+ */
+class AttachmentContainer
+{
+public:
+  /**
+   * @brief Sets a type-erased attachment.
+   *
+   * Replaces the existing attachment when @p id is already present.
+   */
+  void SetAttachment(AttachmentId id, UniqueAny attachment)
+  {
+    for(auto& entry : mAttachments)
+    {
+      if(entry.first == id)
+      {
+        entry.second = Dali::Move(attachment);
+        return;
+      }
+    }
+    mAttachments.emplace_back(id, Dali::Move(attachment));
+  }
+
+  /**
+   * @brief Removes an attachment.
+   *
+   * @return True if an attachment was removed
+   */
+  bool RemoveAttachment(AttachmentId id)
+  {
+    for(auto iter = mAttachments.rbegin(); iter != mAttachments.rend(); ++iter)
+    {
+      if(iter->first == id)
+      {
+        auto forwardIter = std::next(iter).base();
+        if(forwardIter != std::prev(mAttachments.end()))
+        {
+          *forwardIter = Dali::Move(mAttachments.back());
+        }
+        mAttachments.pop_back();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @brief Gets an attachment.
+   */
+  UniqueAny* GetAttachment(AttachmentId id)
+  {
+    for(auto& entry : mAttachments)
+    {
+      if(entry.first == id)
+      {
+        return &entry.second;
+      }
+    }
+    return nullptr;
+  }
+
+  /**
+   * @brief Gets a const attachment.
+   */
+  const UniqueAny* GetAttachment(AttachmentId id) const
+  {
+    for(auto& entry : mAttachments)
+    {
+      if(entry.first == id)
+      {
+        return &entry.second;
+      }
+    }
+    return nullptr;
+  }
+
+  /**
+   * @brief Detaches an attachment.
+   *
+   * @return The detached attachment, or an empty UniqueAny if missing
+   */
+  UniqueAny DetachAttachment(AttachmentId id)
+  {
+    for(auto iter = mAttachments.rbegin(); iter != mAttachments.rend(); ++iter)
+    {
+      if(iter->first == id)
+      {
+        auto      forwardIter = std::next(iter).base();
+        UniqueAny attachment  = Dali::Move(forwardIter->second);
+        if(forwardIter != std::prev(mAttachments.end()))
+        {
+          *forwardIter = Dali::Move(mAttachments.back());
+        }
+        mAttachments.pop_back();
+        return attachment;
+      }
+    }
+    return UniqueAny();
+  }
+
+private:
+  // This is expected to outperform a hash map for the common case of small
+  // attachment counts, roughly up to a few dozen entries.
+  std::vector<std::pair<AttachmentId, UniqueAny>> mAttachments;
+};
+
+} // namespace Internal
+} // namespace Ui
+} //namespace DALI_NAMESPACE
