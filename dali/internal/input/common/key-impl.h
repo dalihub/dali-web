@@ -1,0 +1,94 @@
+#ifndef DALI_KEY_IMPL_H
+#define DALI_KEY_IMPL_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/key-devel.h>
+#include <dali/devel-api/adaptor-framework/key-extension-plugin.h>
+#include <dali/public-api/adaptor-framework/key.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+/**
+ * Implementation of the Key matching
+ */
+namespace KeyLookup
+{
+struct KeyLookup
+{
+  const char*     keyName;      ///< XF86 key name
+  const Dali::Key daliKeyCode;  ///< Dali key code
+  const bool      deviceButton; ///< Whether the key is from a button on the device
+};
+
+extern KeyLookup         KeyLookupTable[];
+extern const std::size_t KEY_LOOKUP_COUNT;
+
+/**
+ * @copydoc Dali::IsKey()
+ */
+bool IsKey(const Dali::KeyEvent& keyEvent, Dali::Key daliKey);
+
+/**
+ * Check if a the given key name string is a button on the device itself.
+ * @param keyName A pointer to the key name
+ * @return true if the key is matched, false if not
+ */
+bool IsDeviceButton(const char* keyName);
+
+/**
+ * Get a key name from a dali key code.
+ * @param daliKey The dali key code
+ * @return The key name. NULL if the daliKey does not exist in the supported key lookup table.
+ */
+const char* GetKeyName(Dali::Key daliKey);
+
+/**
+ * @copydoc Dali::GetKeyCode()
+ */
+int GetKeyCode(const char* keyName);
+
+/**
+ * @copydoc Dali::Extension::SetKeyExtensionLookupTable()
+ */
+void SetKeyExtensionLookupTable(const Dali::KeyLookupEntry* table, uint32_t count);
+
+/**
+ * @copydoc Dali::DevelKey::SetSystemKeyCodePriority()
+ */
+void SetSystemKeyCodePriority(bool preferSystemKeyCode);
+
+/**
+ * @copydoc Dali::DevelKey::IsSystemKeyCodePriority()
+ */
+bool IsSystemKeyCodePriority();
+
+} // namespace KeyLookup
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_KEY_IMPL_H

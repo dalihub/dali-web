@@ -1,0 +1,179 @@
+
+# module: window-system, backend: common
+SET( adaptor_window_system_common_src_files
+    ${adaptor_window_system_dir}/common/display-connection.cpp
+    ${adaptor_window_system_dir}/common/event-handler.cpp
+    ${adaptor_window_system_dir}/common/native-render-surface-factory.cpp
+    ${adaptor_window_system_dir}/common/window-base.cpp
+    ${adaptor_window_system_dir}/common/window-impl.cpp
+    ${adaptor_window_system_dir}/common/window-render-surface.cpp
+    ${adaptor_window_system_dir}/common/window-system-impl.cpp
+)
+
+SET( adaptor_window_system_gl_window_src_files
+    ${adaptor_window_system_dir}/gl-window/gl-window-addon.cpp
+    ${adaptor_window_system_dir}/gl-window/gl-window-impl.cpp
+    ${adaptor_window_system_dir}/gl-window/gl-window-render-thread.cpp
+)
+
+# module: window-system, backend: common/dynamic
+SET( adaptor_window_system_common_dynamic_src_files
+    ${adaptor_window_system_dir}/common/native-image-surface-factory-dynamic.cpp
+    ${adaptor_window_system_dir}/common/render-surface-factory-dynamic.cpp
+)
+
+# module: window-system, backend: tizen
+IF(USE_TCORE_BACKEND)
+  SET( adaptor_window_system_tizen_wayland_src_files
+      ${adaptor_window_system_dir}/tizen/tcore/display-connection-factory-tcore-wl.cpp
+      ${adaptor_window_system_dir}/tizen/tcore/display-connection-impl-tcore-wl.cpp
+      ${adaptor_window_system_dir}/tizen/tcore/window-base-tcore-wl.cpp
+      ${adaptor_window_system_dir}/tizen/tcore/window-factory-tcore-wl.cpp
+      ${adaptor_window_system_dir}/tizen/tcore/window-system-tcore-wl.cpp
+  )
+ELSE()
+  SET( adaptor_window_system_tizen_wayland_src_files
+      ${adaptor_window_system_dir}/tizen/ecore/display-connection-factory-ecore-wl.cpp
+      ${adaptor_window_system_dir}/tizen/ecore/display-connection-impl-ecore-wl.cpp
+      ${adaptor_window_system_dir}/tizen/ecore/window-base-ecore-wl2.cpp
+      ${adaptor_window_system_dir}/tizen/ecore/window-factory-ecore-wl2.cpp
+      ${adaptor_window_system_dir}/tizen/ecore/window-system-ecore-wl2.cpp
+  )
+ENDIF()
+
+# module: window-system, backend: tizen/egl
+SET( adaptor_window_system_tizen_wayland_egl_src_files
+    ${adaptor_window_system_dir}/tizen/display-connection-native-types-egl.cpp
+    ${adaptor_window_system_dir}/tizen/native-image-surface-factory-tizen-egl.cpp
+    ${adaptor_window_system_dir}/tizen/native-image-surface-impl-tizen-egl.cpp
+    ${adaptor_window_system_dir}/tizen/native-render-surface-tizen-egl.cpp
+    ${adaptor_window_system_dir}/tizen/render-surface-factory-tizen-egl.cpp
+)
+
+# module: window-system, backend: tizen/vulkan
+SET( adaptor_window_system_tizen_wayland_vulkan_src_files
+    ${adaptor_window_system_dir}/tizen/display-connection-native-types-vulkan.cpp
+    ${adaptor_window_system_dir}/tizen/native-image-surface-factory-tizen-vulkan.cpp
+    ${adaptor_window_system_dir}/tizen/render-surface-factory-tizen-vulkan.cpp
+)
+
+# module: window-system, backend: tizen/dynamic
+SET( adaptor_window_system_tizen_wayland_dynamic_src_files
+    ${adaptor_window_system_dir}/tizen/display-connection-native-types-dynamic.cpp
+)
+
+# module: window-system, backend: tizen/graphics-library
+SET( adaptor_window_system_tizen_wayland_graphics_library_src_files
+    ${adaptor_window_system_dir}/tizen/graphics-library-functions-tizen-wayland.cpp
+)
+
+# module: window-system, backend: x11
+SET( adaptor_window_system_x11_src_files
+    ${adaptor_window_system_dir}/x11/display-connection-factory-x.cpp
+    ${adaptor_window_system_dir}/x11/display-connection-impl-x.cpp
+    ${adaptor_window_system_dir}/x11/native-image-surface-factory-x.cpp
+    ${adaptor_window_system_dir}/x11/native-image-surface-impl-x.cpp
+    ${adaptor_window_system_dir}/x11/window-base-x.cpp
+    ${adaptor_window_system_dir}/x11/window-factory-x.cpp
+    ${adaptor_window_system_dir}/x11/window-system-x.cpp
+)
+
+# module: window-system, backend: x11/egl
+SET( adaptor_window_system_x11_egl_src_files
+    ${adaptor_window_system_dir}/x11/display-connection-native-types-egl.cpp
+    ${adaptor_window_system_dir}/x11/pixmap-render-surface-x.cpp
+    ${adaptor_window_system_dir}/x11/render-surface-factory-x-egl.cpp
+)
+
+# module: window-system, backend: x11/vulkan
+SET( adaptor_window_system_x11_vulkan_src_files
+    ${adaptor_window_system_dir}/x11/display-connection-native-types-vulkan.cpp
+    ${adaptor_window_system_dir}/x11/render-surface-factory-x-vulkan.cpp
+)
+
+# module: window-system, backend: x11/dynamic
+SET( adaptor_window_system_x11_dynamic_src_files
+    ${adaptor_window_system_dir}/x11/display-connection-native-types-dynamic.cpp
+)
+
+# module: window-system, backend: x11/graphics-library
+SET( adaptor_window_system_x11_graphics_library_src_files
+    ${adaptor_window_system_dir}/x11/graphics-library-functions-x11.cpp
+)
+
+# module: window-system, backend: ubuntu-x11
+SET( adaptor_window_system_ubuntu_x11_src_files
+    ${adaptor_window_system_dir}/ubuntu-x11/display-connection-factory-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/display-connection-impl-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/window-interface-ecore-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/window-base-ecore-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/window-factory-ecore-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/window-system-ecore-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/native-image-surface-factory-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/native-image-surface-impl-x.cpp
+)
+
+# module: window-system, backend: ubuntu-x11/egl
+SET( adaptor_window_system_ubuntu_x11_egl_src_files
+    ${adaptor_window_system_dir}/ubuntu-x11/display-connection-native-types-egl.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/pixmap-render-surface-ecore-x.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/render-surface-factory-ecore-x-egl.cpp
+)
+
+# module: window-system, backend: ubuntu-x11/vulkan
+SET( adaptor_window_system_ubuntu_x11_vulkan_src_files
+    ${adaptor_window_system_dir}/ubuntu-x11/display-connection-native-types-vulkan.cpp
+    ${adaptor_window_system_dir}/ubuntu-x11/render-surface-factory-ecore-x-vulkan.cpp
+)
+
+# module: window-system, backend: ubuntu-x11/dynamic
+SET( adaptor_window_system_ubuntu_x11_dynamic_src_files
+    ${adaptor_window_system_dir}/ubuntu-x11/display-connection-native-types-dynamic.cpp
+)
+
+# module: window-system, backend: ubuntu-x11/graphics-library
+SET( adaptor_window_system_ubuntu_x11_graphics_library_src_files
+    ${adaptor_window_system_dir}/ubuntu-x11/graphics-library-functions-ubuntu-x11.cpp
+)
+
+# module: window-system, backend: android
+SET( adaptor_window_system_android_src_files
+    ${adaptor_window_system_dir}/android/display-connection-factory-android.cpp
+    ${adaptor_window_system_dir}/android/display-connection-impl-android.cpp
+    ${adaptor_window_system_dir}/android/window-base-android.cpp
+    ${adaptor_window_system_dir}/android/window-factory-android.cpp
+    ${adaptor_window_system_dir}/android/window-system-android.cpp
+    ${adaptor_window_system_dir}/android/native-image-surface-factory-android.cpp
+    ${adaptor_window_system_dir}/android/native-image-surface-impl-android.cpp
+)
+
+# module: window-system, backend: android/graphics-library
+SET( adaptor_window_system_android_graphics_backend_library_src_files
+    ${adaptor_window_system_dir}/android/render-surface-factory-android.cpp
+)
+
+# module: window-system, backend: windows
+SET( adaptor_window_system_windows_src_files
+    ${adaptor_window_system_dir}/windows/display-connection-factory-win.cpp
+    ${adaptor_window_system_dir}/windows/display-connection-impl-win.cpp
+    ${adaptor_window_system_dir}/windows/platform-implement-win.cpp
+    ${adaptor_window_system_dir}/windows/render-surface-factory-win.cpp
+    ${adaptor_window_system_dir}/windows/window-base-win.cpp
+    ${adaptor_window_system_dir}/windows/window-factory-win.cpp
+    ${adaptor_window_system_dir}/windows/window-system-win.cpp
+    ${adaptor_window_system_dir}/windows/native-image-surface-factory-win.cpp
+    ${adaptor_window_system_dir}/windows/native-image-surface-impl-win.cpp
+)
+
+# module: window-system, backend: macos
+SET( adaptor_window_system_macos_src_files
+    ${adaptor_window_system_dir}/macos/display-connection-factory-mac.cpp
+    ${adaptor_window_system_dir}/macos/display-connection-impl-mac.cpp
+    ${adaptor_window_system_dir}/macos/window-render-surface-cocoa.cpp
+    ${adaptor_window_system_dir}/macos/window-system-mac.mm
+    ${adaptor_window_system_dir}/macos/window-base-mac.mm
+    ${adaptor_window_system_dir}/macos/window-factory-mac.cpp
+    ${adaptor_window_system_dir}/macos/render-surface-factory-mac.cpp
+    ${adaptor_window_system_dir}/macos/native-image-surface-factory-mac.cpp
+    ${adaptor_window_system_dir}/macos/native-image-surface-impl-mac.cpp
+)

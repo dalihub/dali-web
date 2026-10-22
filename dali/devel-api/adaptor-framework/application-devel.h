@@ -1,0 +1,155 @@
+#ifndef DALI_APPLICATION_DEVEL_H
+#define DALI_APPLICATION_DEVEL_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/application.h>
+#include <dali/public-api/adaptor-framework/window.h>
+#include <dali/public-api/dali-adaptor-common.h>
+#include <string>
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/signals/dali-signal.h>
+
+namespace DALI_NAMESPACE
+{
+namespace DevelApplication
+{
+using CustomCommandReceivedSignalType = Signal<void(const std::string&)>; ///< Signal signature for CustomCommandReceivedSignal
+
+/**
+ * @brief Ensures that the function passed in is called from the main loop when it is idle.
+ * @param[in] application A handle to the Application
+ * @param[in] callback The function to call
+ * @return @c true if added successfully, @c false otherwise
+ *
+ * @note Function must be called from main event thread only
+ *
+ * A callback of the following type should be used:
+ * @code
+ *   bool MyFunction();
+ * @endcode
+ * This callback will be called repeatedly as long as it returns true. A return of 0 deletes this callback.
+ *
+ * @note Ownership of the callback is passed onto this class.
+ */
+DALI_ADAPTOR_API bool AddIdleWithReturnValue(Application application, CallbackBase* callback);
+
+/**
+ * @brief Gets the absolute path to the application's data directory which is used to store private data of the application.
+ * @return The absolute path to the application's data directory
+ */
+DALI_ADAPTOR_API std::string GetDataPath();
+
+/**
+ * @brief Downcasts a ref object to Application handle
+ *
+ * If handle points to an Application object, the downcast produces valid base handle
+ * If not, the returned base handle is left uninitialized
+ *
+ * @param[in] refObject to an Application
+ * @return handle to an Application object or an uninitialized base handle
+ */
+DALI_ADAPTOR_API Application DownCast(Dali::RefObject* refObject);
+
+/**
+ * @brief This signal will be triggered when a custom command is received.
+ *
+ * For this signal to be triggered, the adaptor must be built with -DENABLE_NETWORK_LOGGING=ON
+ * and when running, DALI_NETWORK_CONTROL=1 must also be set.
+ *
+ * A callback of the following type may be connected:
+ * @code
+ *   void YourCallbackName(const std::string&);
+ * @endcode
+ *
+ * @param[in] application A handle to the Application
+ * @return The signal when a custom command is received
+ */
+DALI_ADAPTOR_API CustomCommandReceivedSignalType& CustomCommandReceivedSignal(Application application);
+
+/**
+ * @brief Gets the render thread ID of DALi.
+ *
+ * @param[in] application A handle to the Application
+ * @return The render thread ID.
+ *
+ * @note Returns a valid thread ID only if the render thread has started and the system supports
+ *       thread ID retrieval. Otherwise, returns 0.
+ */
+DALI_ADAPTOR_API int32_t GetRenderThreadId(Application application);
+
+/**
+ * @brief Gets the UI thread ID of DALi.
+ *
+ * @param[in] application A handle to the Application
+ * @return The UI thread ID.
+ *
+ * @note Returns a valid thread ID only if the adaptor has been initialized and the system supports
+ *       thread ID retrieval. Otherwise, returns 0.
+ */
+DALI_ADAPTOR_API int32_t GetUiThreadId(Application application);
+
+/**
+ * @brief Gets the main thread ID of DALi.
+ *
+ * @param[in] application A handle to the Application
+ * @return The main thread ID.
+ *
+ * @note Returns a valid thread ID only if the system supports thread ID retrieval.
+ *       Otherwise, returns 0.
+ */
+DALI_ADAPTOR_API int32_t GetMainThreadId(Application application);
+
+/**
+ * @brief Relayout the application and ensure all pending operations are flushed to the update thread.
+ * @param application A handle to the Application
+ */
+DALI_ADAPTOR_API void FlushUpdateMessages(Application application);
+
+/**
+ * @brief Set the application's language independently of the system language.
+ * @param application A handle to the Application.
+ * @param[in] locale Specifies the application's language and region in BCP 47 format (e.g., "en_US", "ko_KR").
+ */
+DALI_ADAPTOR_API void SetApplicationLocale(Application application, const std::string& locale);
+
+/**
+ * @brief Get window from pre-initialized application.
+ * @note Only available pre-initialized application case. If application already created, it will return empty handle.
+ * @return Pre initialized window, or empty handle if no pre-initialized application exist.
+ */
+DALI_ADAPTOR_API Dali::Window GetPreInitializedWindow();
+
+} // namespace DevelApplication
+
+} //namespace DALI_NAMESPACE
+
+/**
+ * @brief This is used to improve application launch performance.
+ * Initializes some functions in advance and makes a window in advance.
+ * @param[in,out]  argc A pointer to the number of arguments
+ * @param[in,out]  argv A pointer to the argument list
+ *
+ * @note Declared in C style for calling from app-launcher.
+ *
+ */
+extern "C" DALI_ADAPTOR_API void ApplicationPreInitialize(int* argc, char** argv[]);
+
+#endif // DALI_APPLICATION_DEVEL_H

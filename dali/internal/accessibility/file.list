@@ -1,0 +1,83 @@
+
+# module: accessibility, backend: common
+SET( adaptor_accessibility_common_src_files
+    ${adaptor_accessibility_dir}/common/tts-player-factory.cpp
+    ${adaptor_accessibility_dir}/common/tts-player-impl.cpp
+)
+
+# module: accessibility, backend: tizen-wayland
+SET( adaptor_accessibility_tizen_src_files
+    ${adaptor_accessibility_dir}/tizen/tts-player-factory-tizen.cpp
+    ${adaptor_accessibility_dir}/tizen/tts-player-impl-tizen.cpp
+)
+
+# module: accessibility, backend: tizen-common profile
+SET( adaptor_accessibility_tizen_common_src_files
+)
+
+# module: accessibility, backend: tizen-mobile profile
+SET( adaptor_accessibility_tizen_mobile_src_files
+)
+
+# module: accessibility, backend: tizen-tv profile
+SET( adaptor_accessibility_tizen_tv_src_files
+)
+
+# module: accessibility, backend: ubuntu
+SET( adaptor_accessibility_ubuntu_src_files
+    ${adaptor_accessibility_dir}/generic/tts-player-factory-generic.cpp
+    ${adaptor_accessibility_dir}/generic/tts-player-impl-generic.cpp
+)
+
+# module: accessibility, backend: android
+SET( adaptor_accessibility_android_src_files
+    ${adaptor_accessibility_dir}/generic/tts-player-factory-generic.cpp
+    ${adaptor_accessibility_dir}/generic/tts-player-impl-generic.cpp
+)
+
+# module: accessibility, backend: libuv_x11 profile
+SET( adaptor_accessibility_libuv_x11_src_files
+    ${adaptor_accessibility_dir}/generic/tts-player-factory-generic.cpp
+    ${adaptor_accessibility_dir}/generic/tts-player-impl-generic.cpp
+)
+
+# module: accessibility, backend: glib_x11 profile
+SET( adaptor_accessibility_glib_x11_src_files
+    ${adaptor_accessibility_dir}/generic/tts-player-factory-generic.cpp
+    ${adaptor_accessibility_dir}/generic/tts-player-impl-generic.cpp
+)
+
+# module: accessibility, backend: windows
+SET( adaptor_accessibility_windows_src_files
+)
+
+SET( adaptor_accessibility_atspi_bridge_src_files
+    ${adaptor_accessibility_dir}/bridge/accessible.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-accessible.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-action.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-application.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-base.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-collection.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-component.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-editable-text.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-hyperlink.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-hypertext.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-impl.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-object.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-selection.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-socket.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-text.cpp
+    ${adaptor_accessibility_dir}/bridge/bridge-value.cpp
+    ${adaptor_accessibility_dir}/bridge/collection-impl.cpp
+    ${adaptor_accessibility_dir}/bridge/dbus/dbus-tizen.cpp
+)
+
+SET( adaptor_accessibility_atspi_dummy_src_files
+    ${adaptor_accessibility_dir}/bridge/dummy/dummy-atspi.cpp
+)
+
+# module: accessibility, backend: macos
+SET( adaptor_accessibility_macos_src_files
+    ${adaptor_accessibility_dir}/generic/tts-player-factory-generic.cpp
+    ${adaptor_accessibility_dir}/generic/tts-player-impl-generic.cpp
+)

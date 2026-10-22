@@ -1,0 +1,146 @@
+/*
+ * Copyright (c) 2015 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS  HEADER
+#include <dali/internal/text/text-abstraction/segmentation-impl.h>
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/common/singleton-service.h>
+#include <third-party/libunibreak/linebreak.h>
+#include <third-party/libunibreak/wordbreak.h>
+
+namespace DALI_NAMESPACE
+{
+namespace TextAbstraction
+{
+namespace Internal
+{
+struct Segmentation::Plugin
+{
+  void GetLineBreakPositionsUtf32(const Character* const text,
+                                  Length                 numberOfCharacters,
+                                  LineBreakInfo*         breakInfo)
+  {
+    set_linebreaks_utf32(text, numberOfCharacters, NULL, breakInfo);
+  }
+
+  void GetWordBreakPositionsUtf32(const Character* const text,
+                                  Length                 numberOfCharacters,
+                                  WordBreakInfo*         breakInfo)
+  {
+    set_wordbreaks_utf32(text, numberOfCharacters, NULL, breakInfo);
+  }
+
+  void GetLineBreakPositionsUtf8(const uint8_t* const text,
+                                 Length               numberOfCharacters,
+                                 LineBreakInfo*       breakInfo)
+  {
+    set_linebreaks_utf8(text, numberOfCharacters, NULL, breakInfo);
+  }
+
+  void GetWordBreakPositionsUtf8(const uint8_t* const text,
+                                 Length               numberOfCharacters,
+                                 WordBreakInfo*       breakInfo)
+  {
+    set_wordbreaks_utf8(text, numberOfCharacters, NULL, breakInfo);
+  }
+};
+
+Segmentation::Segmentation()
+: mPlugin(NULL)
+{
+}
+
+Segmentation::~Segmentation()
+{
+  delete mPlugin;
+}
+
+TextAbstraction::Segmentation Segmentation::Get()
+{
+  TextAbstraction::Segmentation segmentationHandle;
+
+  SingletonService service(SingletonService::Get());
+  if(service)
+  {
+    // Check whether the singleton is already created
+    Dali::BaseHandle handle = service.GetSingleton(typeid(TextAbstraction::Segmentation));
+    if(handle)
+    {
+      // If so, downcast the handle
+      Segmentation* impl = static_cast<Internal::Segmentation*>(handle.GetObjectPtr());
+      segmentationHandle = TextAbstraction::Segmentation(impl);
+    }
+    else // create and register the object
+    {
+      segmentationHandle = TextAbstraction::Segmentation(new Segmentation);
+      service.Register(typeid(segmentationHandle), segmentationHandle);
+    }
+  }
+
+  return segmentationHandle;
+}
+
+void Segmentation::GetLineBreakPositions(const Character* const text,
+                                         Length                 numberOfCharacters,
+                                         LineBreakInfo*         breakInfo)
+{
+  CreatePlugin();
+
+  mPlugin->GetLineBreakPositionsUtf32(text, numberOfCharacters, breakInfo);
+}
+
+void Segmentation::GetWordBreakPositions(const Character* const text,
+                                         Length                 numberOfCharacters,
+                                         WordBreakInfo*         breakInfo)
+{
+  CreatePlugin();
+
+  mPlugin->GetWordBreakPositionsUtf32(text, numberOfCharacters, breakInfo);
+}
+
+void Segmentation::GetLineBreakPositionsUtf8(const uint8_t* const text,
+                                             Length               numberOfCharacters,
+                                             LineBreakInfo*       breakInfo)
+{
+  CreatePlugin();
+
+  mPlugin->GetLineBreakPositionsUtf8(text, numberOfCharacters, breakInfo);
+}
+
+void Segmentation::GetWordBreakPositionsUtf8(const uint8_t* const text,
+                                             Length               numberOfCharacters,
+                                             WordBreakInfo*       breakInfo)
+{
+  CreatePlugin();
+
+  mPlugin->GetWordBreakPositionsUtf8(text, numberOfCharacters, breakInfo);
+}
+
+void Segmentation::CreatePlugin()
+{
+  if(!mPlugin)
+  {
+    mPlugin = new Plugin();
+  }
+}
+
+} // namespace Internal
+
+} // namespace TextAbstraction
+
+} //namespace DALI_NAMESPACE

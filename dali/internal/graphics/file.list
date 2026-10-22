@@ -1,0 +1,157 @@
+
+# module: graphics, common
+SET( adaptor_graphics_common_src_files
+    ${adaptor_graphics_dir}/common/graphics-backend-impl.cpp
+)
+
+# module: graphics, dynamic, common
+SET( adaptor_graphics_common_dynamic_src_files
+    ${adaptor_graphics_dir}/common/dynamic-graphics-factory.cpp
+    ${adaptor_graphics_dir}/common/dynamic-surface-factory.cpp
+    ${adaptor_graphics_dir}/common/graphics-library.cpp
+)
+
+# module: graphics, dynamic, backend: unix
+SET( adaptor_graphics_common_dynamic_unix_src_files
+    ${adaptor_graphics_dir}/unix/graphics-library-open-mode-unix.cpp
+)
+
+# module: graphics, dynamic, backend: android
+SET( adaptor_graphics_common_dynamic_android_src_files
+    ${adaptor_graphics_dir}/android/graphics-library-open-mode-android.cpp
+)
+
+# module: graphics, library
+SET( adaptor_graphics_library_common_src_files
+    ${adaptor_graphics_dir}/common/graphics-library-functions.cpp
+)
+
+# module: graphics, backend: gles
+SET( adaptor_graphics_gles_src_files
+    ${adaptor_graphics_dir}/gles/egl-debug.cpp
+    ${adaptor_graphics_dir}/gles/egl-implementation.cpp
+    ${adaptor_graphics_dir}/gles/gl-extensions.cpp
+    ${adaptor_graphics_dir}/gles/gl-extensions-support.cpp
+    ${adaptor_graphics_dir}/gles/gl-implementation.cpp
+    ${adaptor_graphics_dir}/gles/gl-proxy-implementation.cpp
+    ${adaptor_graphics_dir}/gles/egl-graphics-factory.cpp
+    ${adaptor_graphics_dir}/gles/egl-graphics.cpp
+    ${adaptor_graphics_dir}/gles/egl-surface-factory.cpp
+    ${adaptor_graphics_dir}/common/shader-parser.cpp
+    ${adaptor_graphics_dir}/common/shader-cache-path.cpp
+)
+
+INCLUDE( ${adaptor_graphics_dir}/gles-impl/file.list )
+
+SET( adaptor_graphics_vulkan_src_files
+    ${adaptor_graphics_dir}/common/shader-parser.cpp
+    ${adaptor_graphics_dir}/common/shader-cache-path.cpp
+    ${adaptor_graphics_dir}/vulkan/vulkan-graphics-impl.cpp
+    ${adaptor_graphics_dir}/vulkan/vulkan-graphics-factory.cpp
+    ${adaptor_graphics_dir}/vulkan/vulkan-memory-allocation.cpp
+    ${adaptor_graphics_dir}/vulkan/vulkan-device.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-graphics-controller.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-graphics-controller-debug.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-buffer.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-buffer-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-command-buffer-executor.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-command-buffer.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-command-buffer-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-command-pool-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-fence-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-framebuffer.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-framebuffer-attachment.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-framebuffer-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-image-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-image-view-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-memory.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-memory-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-pipeline.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-pipeline-cache-manager.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-pipeline-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-program.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-program-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-queue-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-reflection.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-render-pass.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-render-pass-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-render-target.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-resource-transfer.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-shader.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-shader-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-spirv.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-stored-command-buffer.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-surface-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-swapchain-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-sampler.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-sampler-impl.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-texture.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-texture-array.cpp
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-texture-dependency-checker.cpp
+)
+
+# module: graphics, backend: vulkan/x11
+SET( adaptor_graphics_vulkan_x11_src_files
+    ${adaptor_graphics_dir}/vulkan/x11/vk-surface-xlib2xcb.cpp
+)
+
+# module: graphics, backend: vulkan/wayland
+SET( adaptor_graphics_vulkan_wayland_src_files
+    ${adaptor_graphics_dir}/vulkan/wayland/vk-surface-wayland.cpp
+)
+
+# module: graphics, backend: tizen
+SET( adaptor_graphics_tizen_src_files
+    ${adaptor_graphics_dir}/tizen/egl-image-extensions-tizen.cpp
+    ${adaptor_graphics_dir}/tizen/egl-sync-implementation-tizen.cpp
+)
+
+# module: graphics, backend: ubuntu
+SET( adaptor_graphics_ubuntu_src_files
+    ${adaptor_graphics_dir}/linux/egl-image-extensions-linux.cpp
+    ${adaptor_graphics_dir}/linux/egl-image-extensions-linux-dma-buf.cpp
+    ${adaptor_graphics_dir}/linux/egl-sync-implementation-linux.cpp
+)
+
+# module: graphics, backend: libuv-x11
+SET( adaptor_graphics_x11_src_files
+    ${adaptor_graphics_dir}/linux/egl-image-extensions-linux.cpp
+    ${adaptor_graphics_dir}/linux/egl-image-extensions-linux-dma-buf.cpp
+    ${adaptor_graphics_dir}/linux/egl-sync-implementation-linux.cpp
+)
+
+# module: graphics, backend: android, egl
+SET( adaptor_graphics_egl_android_src_files
+    ${adaptor_graphics_dir}/android/egl-image-extensions-android.cpp
+    ${adaptor_graphics_dir}/android/egl-sync-implementation-android.cpp
+)
+
+# module: graphics, backend: android, vulkan
+SET( adaptor_graphics_vulkan_android_src_files
+    ${adaptor_graphics_dir}/vulkan/android/vk-surface-android.cpp
+)
+
+# module: graphics, backend: windows
+SET( adaptor_graphics_windows_src_files
+    ${adaptor_graphics_dir}/windows-gl/egl-image-extensions.cpp
+    ${adaptor_graphics_dir}/windows-gl/egl-sync-implementation-windows.cpp
+)
+
+# module: graphics, backend: macos
+SET( adaptor_graphics_macos_src_files
+    ${adaptor_graphics_dir}/macos/egl-image-extensions.cpp
+    ${adaptor_graphics_dir}/macos/egl-sync-implementation-macos.cpp
+)
+
+# Vulkan native image specific (non-tizen)
+SET( adaptor_graphics_vulkan_native_image_generic_src_files
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-native-image-handler-generic.cpp
+)
+
+# Vulkan native image specific (tizen only)
+SET( adaptor_graphics_vulkan_native_image_tizen_src_files
+    ${adaptor_graphics_dir}/vulkan-impl/vulkan-native-image-handler-tizen.cpp
+)
+
+# include GLES implementation
+# TODO: the implementaion should probably be dependent on the build flags

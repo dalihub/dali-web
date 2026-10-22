@@ -1,0 +1,307 @@
+#ifndef DALI_INTERNAL_ATSPI_ACCESSIBILITY_COMMON_H
+#define DALI_INTERNAL_ATSPI_ACCESSIBILITY_COMMON_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <iomanip>
+#include <locale>
+#include <sstream>
+#include <string>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/adaptor-framework/accessibility/accessibility-bridge.h>
+#include <dali/internal/accessibility/bridge/dbus/dbus-locators.h>
+#include <dali/internal/accessibility/bridge/dbus/dbus.h>
+#include <dali/public-api/dali-adaptor-common.h>
+
+// DBus names
+
+#define A11yDbusName "org.a11y.Bus"
+#define A11yDbusStatusInterface "org.a11y.Status"
+#define AtspiDbusNameRegistry "org.a11y.atspi.Registry"
+#define DirectReadingDBusName "org.tizen.ScreenReader"
+#define DirectReadingDBusInterface "org.tizen.DirectReading"
+
+// DBus paths
+
+#define A11yDbusPath "/org/a11y/bus"
+#define AtspiDbusPathCache "/org/a11y/atspi/cache"
+#define AtspiDbusPathDec "/org/a11y/atspi/registry/deviceeventcontroller"
+#define AtspiDbusPathRegistry "/org/a11y/atspi/registry"
+#define AtspiDbusPathRoot "/org/a11y/atspi/accessible/root"
+#define AtspiPath "/org/a11y/atspi/accessible"
+#define DirectReadingDBusPath "/org/tizen/DirectReading"
+
+struct ObjectPath;
+
+/**
+ * @brief Enumeration used for quering Accessibility objects
+ */
+enum class MatchType : int32_t
+{
+  INVALID,
+  ALL,
+  ANY,
+  NONE,
+  EMPTY
+};
+
+/**
+ * @brief Enumeration used for quering Accessibility objects
+ * SortOrder::Canonical uses breadth-first search and sort objects in order of indexes in parent
+ * SortOrder::ReverseCanonical uses SortOrder::Canonical and reverse collection
+ * The rest of orders is not supported.
+ */
+enum class SortOrder : uint32_t
+{
+  INVALID,
+  CANONICAL,
+  FLOW,
+  TAB,
+  REVERSE_CANONICAL,
+  REVERSE_FLOW,
+  REVERSE_TAB,
+  LAST_DEFINED
+};
+
+namespace DBus
+{
+/**
+ * @brief The CurrentBridgePtr class is to save the current Accessibility Bridge.
+ */
+class CurrentBridgePtr
+{
+  static Dali::Integration::Accessibility::Bridge*& Get()
+  {
+    static thread_local Dali::Integration::Accessibility::Bridge* bridge = nullptr;
+    return bridge;
+  }
+  Dali::Integration::Accessibility::Bridge* mPrev;
+  CurrentBridgePtr(const CurrentBridgePtr&)            = delete;
+  CurrentBridgePtr(CurrentBridgePtr&&)                 = delete;
+  CurrentBridgePtr& operator=(const CurrentBridgePtr&) = delete;
+  CurrentBridgePtr& operator=(CurrentBridgePtr&&)      = delete;
+
+public:
+  CurrentBridgePtr(Dali::Integration::Accessibility::Bridge* bridge)
+  : mPrev(Get())
+  {
+    Get() = bridge;
+  }
+
+  ~CurrentBridgePtr()
+  {
+    Get() = mPrev;
+  }
+
+  static Dali::Integration::Accessibility::Bridge* GetCurrentBridge()
+  {
+    return Get();
+  }
+}; // CurrentBridgePtr
+
+// Templates for setting and getting Accessible values
+namespace detail
+{
+template<>
+struct signature<Dali::Devel::Accessibility::Address> : signature_helper<signature<Dali::Devel::Accessibility::Address>>
+{
+  using subtype = std::pair<std::string, ObjectPath>;
+
+  static constexpr auto name_v = concat("AtspiAccessiblePtr");
+  static constexpr auto sig_v  = signature<subtype>::sig_v; // "(so)"
+
+  /**
+   * @brief Marshals value Dali::Devel::Accessibility::Address as marshalled type into message
+   */
+  static void set(const DBusWrapper::MessageIterPtr& iter, const Dali::Devel::Accessibility::Address& address)
+  {
+    if(address)
+    {
+      signature<subtype>::set(iter, {address.GetBus(), ObjectPath{std::string{ATSPI_PREFIX_PATH} + address.GetPath()}});
+    }
+    else
+    {
+      signature<subtype>::set(iter, {address.GetBus(), ObjectPath{ATSPI_NULL_PATH}});
+    }
+  }
+
+  /**
+   * @brief Marshals value from marshalled type into variable Dali::Devel::Accessibility::Address
+   */
+  static bool get(const DBusWrapper::MessageIterPtr& iter, Dali::Devel::Accessibility::Address& address)
+  {
+    subtype tmp;
+    if(!signature<subtype>::get(iter, tmp))
+    {
+      return false;
+    }
+
+    if(tmp.second.value == ATSPI_NULL_PATH)
+    {
+      address = {};
+      return true;
+    }
+    if(tmp.second.value.substr(0, strlen(ATSPI_PREFIX_PATH)) != ATSPI_PREFIX_PATH)
+    {
+      return false;
+    }
+
+    address = {std::move(tmp.first), tmp.second.value.substr(strlen(ATSPI_PREFIX_PATH))};
+    return true;
+  }
+};
+
+template<typename T>
+struct SignatureAccessibleImpl : signature_helper<SignatureAccessibleImpl<T>>
+{
+  using subtype = Dali::Devel::Accessibility::Address;
+
+  static constexpr auto name_v = signature<subtype>::name_v;
+  static constexpr auto sig_v  = signature<subtype>::sig_v;
+
+  /**
+   * @brief Marshals value Dali::Devel::Accessibility::Address as marshalled type into message
+   */
+  static void set(const DBusWrapper::MessageIterPtr& iter, T* accessible)
+  {
+    signature<subtype>::set(iter, accessible ? accessible->GetAddress() : subtype{});
+  }
+
+  /**
+   * @brief Marshals value from marshalled type into variable path
+   */
+  static bool get(const DBusWrapper::MessageIterPtr& iter, T*& path)
+  {
+    subtype address;
+
+    signature<subtype>::get(iter, address);
+
+    auto currentBridge = CurrentBridgePtr::GetCurrentBridge();
+    if(!currentBridge || currentBridge->GetBusName() != address.GetBus())
+    {
+      return false;
+    }
+
+    path = currentBridge->FindByPath(address.GetPath());
+    return path != nullptr;
+  }
+};
+
+template<>
+struct signature<Dali::Accessibility::Accessible*> : public SignatureAccessibleImpl<Dali::Accessibility::Accessible>
+{
+};
+
+template<>
+struct signature<Dali::Integration::Accessibility::States> : signature_helper<signature<Dali::Integration::Accessibility::States>>
+{
+  using subtype = std::array<uint32_t, 2>;
+
+  static constexpr auto name_v = signature<subtype>::name_v;
+  static constexpr auto sig_v  = signature<subtype>::sig_v;
+
+  /**
+   * @brief Marshals value state as marshalled type into message
+   */
+  static void set(const DBusWrapper::MessageIterPtr& iter, const Dali::Integration::Accessibility::States& states)
+  {
+    signature<subtype>::set(iter, states.GetRawData());
+  }
+
+  /**
+   * @brief Marshals value from marshalled type into variable state
+   */
+  static bool get(const DBusWrapper::MessageIterPtr& iter, Dali::Integration::Accessibility::States& state)
+  {
+    subtype tmp;
+    if(!signature<subtype>::get(iter, tmp))
+    {
+      return false;
+    }
+    state = Dali::Integration::Accessibility::States{tmp};
+    return true;
+  }
+};
+} // namespace detail
+} // namespace DBus
+
+struct _Logger
+{
+  const char*        mFile;
+  int                mLine;
+  std::ostringstream mTmp;
+
+  _Logger(const char* file, int line)
+  : mFile(file),
+    mLine(line)
+  {
+    mTmp.imbue(std::locale::classic());
+  }
+
+  ~_Logger()
+  {
+    std::string log = mTmp.str();
+    if(!log.empty() && log.back() == '\n')
+    {
+      log.pop_back();
+    }
+    Dali::Integration::Log::LogMessage(Dali::Integration::Log::INFO, "%s:%d: %s\n", mFile, mLine, log.c_str());
+  }
+
+  template<typename T>
+  _Logger& operator<<(T&& t)
+  {
+    mTmp << std::forward<T>(t);
+    return *this;
+  }
+};
+
+struct _LoggerEmpty
+{
+  template<typename T>
+  _LoggerEmpty& operator<<(T&& t)
+  {
+    return *this;
+  }
+};
+
+struct _LoggerScope
+{
+  const char* mFile;
+  int         mLine;
+
+  _LoggerScope(const char* file, int line)
+  : mFile(file),
+    mLine(line)
+  {
+    Dali::Integration::Log::LogMessage(Dali::Integration::Log::INFO, "%s:%d: +\n", mFile, mLine);
+  }
+
+  ~_LoggerScope()
+  {
+    Dali::Integration::Log::LogMessage(Dali::Integration::Log::INFO, "%s:%d: -\n", mFile, mLine);
+  }
+};
+
+#define LOG() _Logger(__FILE__, __LINE__)
+#define SCOPE() _LoggerScope _l##__LINE__(__FILE__, __LINE__)
+
+#endif // DALI_INTERNAL_ATSPI_ACCESSIBILITY_COMMON_H

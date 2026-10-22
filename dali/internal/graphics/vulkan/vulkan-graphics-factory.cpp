@@ -1,0 +1,115 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/graphics/vulkan/vulkan-graphics-factory.h>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/core-enumerations.h>
+#include <dali/internal/graphics/common/graphics-factory.h>
+#include <dali/internal/graphics/vulkan/vulkan-graphics-impl.h>
+#include <dali/internal/window-system/common/display-utils.h>
+
+namespace DALI_NAMESPACE::Internal::Adaptor
+{
+VulkanGraphicsFactory::VulkanGraphicsFactory(EnvironmentOptions& environmentOptions)
+: mEnvironmentOptions(environmentOptions)
+{
+}
+
+VulkanGraphicsFactory::~VulkanGraphicsFactory() = default;
+
+Graphics::GraphicsInterface& VulkanGraphicsFactory::Create()
+{
+  auto depthBufferRequired = (mEnvironmentOptions.DepthBufferRequired() ? Integration::DepthBufferAvailable::TRUE : Integration::DepthBufferAvailable::FALSE);
+
+  auto stencilBufferRequired = (mEnvironmentOptions.StencilBufferRequired() ? Integration::StencilBufferAvailable::TRUE : Integration::StencilBufferAvailable::FALSE);
+
+  auto partialUpdateRequired = (mEnvironmentOptions.PartialUpdateRequired() ? Integration::PartialUpdateAvailable::TRUE : Integration::PartialUpdateAvailable::FALSE);
+
+  uint32_t depthStencilMask = mEnvironmentOptions.StencilBufferRequired() ? 1u : 0u;
+  depthStencilMask |= uint32_t(mEnvironmentOptions.DepthBufferRequired()) ? 1u << 1u : 0u;
+
+  int multiSamplingLevel = mEnvironmentOptions.GetMultiSamplingLevel();
+
+  auto contextPriority = mEnvironmentOptions.GetGraphicsContextPriority();
+
+  Graphics::GraphicsCreateInfo info{};
+  info.surfaceWidth     = 0; // Not needed initially.
+  info.surfaceHeight    = 0;
+  info.depthStencilMode = std::function<Graphics::DepthStencilMode()>(
+    [depthStencilMask]()
+  {
+    switch(depthStencilMask)
+    {
+      case 1:
+      case 3:
+        return Graphics::DepthStencilMode::DEPTH_STENCIL_OPTIMAL;
+      case 2:
+        return Graphics::DepthStencilMode::DEPTH_OPTIMAL;
+      case 0:
+      default:
+        return Graphics::DepthStencilMode::NONE;
+    }
+  })();
+
+  info.swapchainBufferingMode = Graphics::SwapchainBufferingMode::OPTIMAL;
+
+  auto graphics = new Dali::Graphics::VulkanGraphics(info, depthBufferRequired, stencilBufferRequired, partialUpdateRequired, multiSamplingLevel, contextPriority);
+  return static_cast<Dali::Graphics::GraphicsInterface&>(*graphics);
+}
+
+void VulkanGraphicsFactory::Destroy()
+{
+}
+
+/// graphics-factory.h implemements
+Dali::Graphics::Backend GetCurrentGraphicsLibraryBackend()
+{
+  return Dali::Graphics::Backend::VULKAN;
+}
+
+namespace
+{
+GraphicsLibraryHandlePtr gGraphicsLibraryHandle;
+} // namespace
+
+void ResetGraphicsLibrary(bool /* not used */)
+{
+  // This function should not be called for dynamic library case.
+  // TODO : How can we check it?
+  gGraphicsLibraryHandle.reset();
+}
+
+GraphicsLibraryHandlePtr GetGraphicsLibraryHandle()
+{
+  // This function should not be called for dynamic library case.
+  // TODO : How can we check it?
+  return gGraphicsLibraryHandle;
+}
+
+std::unique_ptr<GraphicsFactoryInterface> CreateGraphicsFactory(EnvironmentOptions& environmentOptions)
+{
+  DALI_LOG_RELEASE_INFO("DALi Graphics Backend: VULKAN\n");
+  if(!gGraphicsLibraryHandle)
+  {
+    gGraphicsLibraryHandle.reset(new GraphicsLibraryHandleBase());
+  }
+  return Utils::MakeUnique<VulkanGraphicsFactory>(environmentOptions);
+}
+
+} //namespace DALI_NAMESPACE::Internal::Adaptor

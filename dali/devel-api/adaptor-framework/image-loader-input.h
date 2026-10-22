@@ -1,0 +1,82 @@
+#ifndef DALI_TIZEN_PLATFORM_IMAGE_LOADER_INPUT_H
+#define DALI_TIZEN_PLATFORM_IMAGE_LOADER_INPUT_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// EXTERNAL INCLUDES
+#include <cstdio>
+#include <vector>
+
+// INTERNAL INCLUDES
+#include <dali/public-api/adaptor-framework/image-options.h>
+#include <dali/public-api/adaptor-framework/pixel-buffer.h>
+
+namespace DALI_NAMESPACE
+{
+namespace ImageLoader
+{
+/**
+ * @brief A simple immutable struct to bundle together parameters for scaling an image.
+ */
+class ScalingParameters
+{
+public:
+  ScalingParameters(ImageDimensions dimensions = ImageDimensions(), SamplingMode::Type samplingMode = SamplingMode::DEFAULT)
+  : dimensions(dimensions),
+    samplingMode(samplingMode)
+  {
+  }
+  const ImageDimensions    dimensions;
+  const SamplingMode::Type samplingMode;
+};
+
+/**
+ * @brief Bundle-up the data pushed into an image loader.
+ */
+struct Input
+{
+  Input(FILE* file, ScalingParameters scalingParameters = ScalingParameters(), bool reorientationRequested = true)
+  : file(file),
+    scalingParameters(scalingParameters),
+    reorientationRequested(reorientationRequested)
+  {
+  }
+  FILE*             file;
+  ScalingParameters scalingParameters;
+  bool              reorientationRequested;
+};
+
+using LoadBitmapFunction       = bool (*)(const Dali::ImageLoader::Input& input, Dali::PixelBuffer& pixelData);
+using LoadPlanesFunction       = bool (*)(const Dali::ImageLoader::Input& input, std::vector<Dali::PixelBuffer>& pixelBuffers);
+using LoadBitmapHeaderFunction = bool (*)(const Dali::ImageLoader::Input& input, unsigned int& width, unsigned int& height);
+
+/**
+ * Stores the magic bytes, and the loader and header functions used for each image loader.
+ */
+struct BitmapLoader
+{
+  unsigned char            magicByte1;  ///< The first byte in the file should be this
+  unsigned char            magicByte2;  ///< The second byte in the file should be this
+  LoadBitmapFunction       loader;      ///< The function which decodes the file
+  LoadPlanesFunction       planeLoader; ///< The function which decodes the file to each plane
+  LoadBitmapHeaderFunction header;      ///< The function which decodes the header of the file
+};
+
+} // namespace ImageLoader
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_TIZEN_PLATFORM_IMAGE_LOADER_INPUT_H

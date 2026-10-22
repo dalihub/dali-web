@@ -1,0 +1,827 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.8.2)
+CMAKE_POLICY(SET CMP0012 NEW) # Prevent dereferencing of OFF/ON as variables
+IF(POLICY CMP0177)
+  CMAKE_POLICY(SET CMP0177 NEW) # install() DESTINATION paths are normalized.
+ENDIF()
+
+
+SET(CMAKE_C_STANDARD 99)
+SET(CMAKE_CXX_STANDARD 17)
+PROJECT(dali2-adaptor CXX C)
+SET(name "dali2-adaptor")
+SET(PKG_NAME ${name})
+
+SET(GCC_COMPILER_VERSION_REQUIRED "6")
+IF(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  IF(CMAKE_CXX_COMPILER_VERSION VERSION_LESS GCC_COMPILER_VERSION_REQUIRED)
+    MESSAGE(FATAL_ERROR "The GCC required compiler version is " ${GCC_COMPILER_VERSION_REQUIRED})
+  ENDIF()
+ENDIF()
+
+OPTION(ENABLE_PKG_CONFIGURE     "Use pkgconfig" ON)
+OPTION(ENABLE_LINK_TEST         "Enable the link test" ON)
+OPTION(ENABLE_ATSPI             "Enable AT-SPI accessibility" ON)
+OPTION(ENABLE_APPMODEL          "Enable AppModel" OFF)
+OPTION(ENABLE_ASAN              "Enable Asan" OFF)
+OPTION(ENABLE_TRACE             "Enable Trace" OFF)
+OPTION(ENABLE_TRACE_STREAMLINE  "Enable Trace (Streamline)" OFF)
+OPTION(ENABLE_WARNING_TO_ERROR  "Enable -Werror option" ON)
+OPTION(ENABLE_PREINITIALIZE_ADAPTOR "Enable PreInitialized Adaptor" ON)
+
+# deps-check.cmake is intentionally not loaded on Windows because it relies on
+# pkg-config and Tizen/Unix packages.  Keep the profile variables that it would
+# normally derive in sync with the documented Windows invocation.
+IF(WIN32)
+  IF(STATIC)
+    MESSAGE(FATAL_ERROR "Static Windows builds are not supported: the public ABI currently uses dllimport/dllexport")
+  ENDIF()
+
+  IF(DEFINED PROFILE_LCASE AND NOT PROFILE_LCASE STREQUAL "windows")
+    MESSAGE(FATAL_ERROR "Windows builds require PROFILE_LCASE=windows")
+  ENDIF()
+
+  IF(DEFINED ENABLE_PROFILE AND NOT ENABLE_PROFILE STREQUAL "WINDOWS")
+    MESSAGE(FATAL_ERROR "Windows builds require ENABLE_PROFILE=WINDOWS")
+  ENDIF()
+
+  SET(PROFILE_LCASE windows CACHE STRING "DALi platform profile" FORCE)
+  SET(ENABLE_PROFILE WINDOWS CACHE STRING "DALi platform profile" FORCE)
+  SET(enable_profile WINDOWS)
+  SET(WINDOWS_PROFILE ON)
+
+  IF(DEFINED ENABLE_GRAPHICS_BACKEND AND ENABLE_GRAPHICS_BACKEND)
+    STRING(TOUPPER "${ENABLE_GRAPHICS_BACKEND}" enable_graphics_backend)
+  ELSE()
+    SET(enable_graphics_backend GLES)
+  ENDIF()
+
+  # windows-profile.cmake currently supplies only the GLES/ANGLE source graph.
+  # Do not silently turn an explicitly requested backend into GLES.
+  IF(NOT enable_graphics_backend STREQUAL "GLES")
+    MESSAGE(FATAL_ERROR "The Windows profile currently supports only ENABLE_GRAPHICS_BACKEND=GLES")
+  ENDIF()
+
+  SET(DALI_PROFILE_CFLAGS -DDALI_PROFILE_WINDOWS)
+  ADD_DEFINITIONS(-DDALI_PROFILE_WINDOWS)
+
+  # deps-check.cmake normally initializes these deployment paths.  Windows
+  # does not load that Unix-only file, so provide equivalent values here and
+  # never allow an empty cachePath to turn into an absolute /.cache path.
+  IF(DEFINED ENV{DALI_DATA_RW_DIR})
+    FILE(TO_CMAKE_PATH "$ENV{DALI_DATA_RW_DIR}" dataReadWriteDir)
+  ELSE()
+    SET(dataReadWriteDir "${CMAKE_INSTALL_PREFIX}/share/dali")
+  ENDIF()
+
+  IF(DEFINED ENV{DALI_DATA_RO_DIR})
+    FILE(TO_CMAKE_PATH "$ENV{DALI_DATA_RO_DIR}" dataReadOnlyDir)
+  ELSE()
+    SET(dataReadOnlyDir "${CMAKE_INSTALL_PREFIX}/share/dali")
+  ENDIF()
+
+  IF(DEFINED ENV{LOCALAPPDATA})
+    FILE(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}" cachePath)
+  ELSEIF(DEFINED ENV{USERPROFILE})
+    FILE(TO_CMAKE_PATH "$ENV{USERPROFILE}" cachePath)
+  ELSE()
+    SET(cachePath "${CMAKE_INSTALL_PREFIX}")
+  ENDIF()
+
+  # The Glyphy path is not portable to MSVC yet.  Fail explicitly instead of
+  # selecting an incomplete implementation that builds but cannot render.
+  IF(DEFINED ENABLE_VECTOR_BASED_TEXT_RENDERING AND ENABLE_VECTOR_BASED_TEXT_RENDERING)
+    MESSAGE(FATAL_ERROR "ENABLE_VECTOR_BASED_TEXT_RENDERING is not supported by the Windows backend")
+  ENDIF()
+  SET(ENABLE_VECTOR_BASED_TEXT_RENDERING OFF)
+
+  IF(NOT DEFINED thorvg_support)
+    SET(thorvg_support OFF)
+  ENDIF()
+
+  IF(thorvg_support)
+    FIND_PATH( THORVG_INCLUDE_DIR NAMES thorvg.h PATH_SUFFIXES thorvg-1 REQUIRED )
+
+    FILE(STRINGS "${THORVG_INCLUDE_DIR}/thorvg.h" _THORVG_VERSION_DEFINES
+         REGEX "^#define[ \t]+TVG_VERSION_(MAJOR|MINOR|MICRO)[ \t]+[0-9]+")
+    FOREACH(_THORVG_COMPONENT MAJOR MINOR MICRO)
+      FOREACH(_THORVG_DEFINE ${_THORVG_VERSION_DEFINES})
+        IF(_THORVG_DEFINE MATCHES "TVG_VERSION_${_THORVG_COMPONENT}[ \t]+([0-9]+)")
+          SET(THORVG_VERSION_${_THORVG_COMPONENT} "${CMAKE_MATCH_1}")
+        ENDIF()
+      ENDFOREACH()
+    ENDFOREACH()
+
+    IF(DEFINED THORVG_VERSION_MAJOR AND
+       DEFINED THORVG_VERSION_MINOR AND
+       DEFINED THORVG_VERSION_MICRO)
+      SET(THORVG_VERSION
+          "${THORVG_VERSION_MAJOR}.${THORVG_VERSION_MINOR}.${THORVG_VERSION_MICRO}")
+    ELSE()
+      SET(THORVG_VERSION "pre-1.0")
+      SET(THORVG_VERSION_MAJOR 0)
+    ENDIF()
+  ELSE()
+    SET(THORVG_VERSION OFF)
+  ENDIF()
+ENDIF()
+
+# Backend selection: ECORE (default) or TCORE.
+# GBS resolves BUILD_TCORE_ENABLE in the spec and passes the selected backend.
+SET(TIZEN_WAYLAND_BACKEND "ECORE" CACHE STRING "Tizen Wayland backend: ECORE or TCORE")
+SET_PROPERTY(CACHE TIZEN_WAYLAND_BACKEND PROPERTY STRINGS TCORE ECORE)
+IF(NOT TIZEN_WAYLAND_BACKEND MATCHES "^(ECORE|TCORE)$")
+  MESSAGE(FATAL_ERROR "TIZEN_WAYLAND_BACKEND must be either ECORE or TCORE")
+ENDIF()
+IF(TIZEN_WAYLAND_BACKEND STREQUAL "TCORE")
+  SET(USE_TCORE_BACKEND ON)
+  ADD_DEFINITIONS(-DUSE_TCORE_BACKEND)
+  MESSAGE(STATUS "Using TCORE backend")
+ELSE()
+  SET(USE_TCORE_BACKEND OFF)
+  MESSAGE(STATUS "Using ECORE backend")
+ENDIF()
+
+# Include additional macros
+INCLUDE( common.cmake )
+
+IF(CMAKE_BUILD_TYPE MATCHES Debug)
+  MESSAGE( STATUS "CMAKE_BUILD_TYPE: " Debug )
+  SET( ENABLE_DEBUG "ON" CACHE STRING "" )
+  SET( ENABLE_EXPORTALL "ON" CACHE STRING "" )
+ELSE()
+  MESSAGE( STATUS "CMAKE_BUILD_TYPE: " Release )
+ENDIF()
+
+# from root/build/tizen, get back to root.
+# set the variable only if it's not set yet. it allows to access build script
+# from top-level directory
+IF( NOT ROOT_SRC_DIR )
+  SET(ROOT_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+ENDIF()
+# Make sure the path is absolute
+GET_FILENAME_COMPONENT(ROOT_SRC_DIR ${ROOT_SRC_DIR} ABSOLUTE)
+
+# API VERSION (Not DALi release version)
+SET(${name}_VERSION_MAJOR 2)
+SET(${name}_VERSION_MINOR 0)
+SET(${name}_VERSION_PATCH 0)
+SET(${name}_VERSION ${${name}_VERSION_MAJOR}.${${name}_VERSION_MINOR}.${${name}_VERSION_PATCH})
+
+SET(DALI_ADAPTOR_VERSION ${${name}_VERSION} )
+
+IF( WIN32 ) # WIN32 includes x64 as well according to the cmake doc.
+  FIND_PACKAGE( dali-windows-dependencies CONFIG REQUIRED)
+  FIND_PACKAGE( dali2-core REQUIRED)
+  GET_TARGET_PROPERTY(DALI_WINDOWS_DEPENDENCIES_INCLUDE_DIRS
+    dali-windows-dependencies::dali-windows-dependencies
+    INTERFACE_INCLUDE_DIRECTORIES)
+  LIST(GET DALI_WINDOWS_DEPENDENCIES_INCLUDE_DIRS 0 DALI_WINDOWS_DEPENDENCIES_INCLUDE_DIR)
+ENDIF()
+
+SET( VCPKG_INCLUDE_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+
+IF( UNIX )
+  ADD_DEFINITIONS(-DPLATFORM_TIZEN)
+  ADD_DEFINITIONS(-DPIC -DSTDC_HEADERS)
+
+  IF("${ARCH}" STREQUAL "arm")
+    ADD_DEFINITIONS("-DTARGET")
+  ENDIF("${ARCH}" STREQUAL "arm")
+ELSEIF( WIN32 ) # WIN32 includes x64 as well according to the cmake doc.
+  ADD_DEFINITIONS( "-D_NSIG=65" )
+ENDIF()
+
+# Deployment folder should come from spec file or command line:
+SET( PREFIX ${CMAKE_INSTALL_PREFIX})
+SET( EXEC_PREFIX ${CMAKE_INSTALL_PREFIX})
+
+# Set up the include dir
+SET( INCLUDE_DIR $ENV{includedir} )
+IF( NOT INCLUDE_DIR )
+  SET( INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR} )
+ENDIF()
+IF( NOT INCLUDE_DIR )
+  SET( INCLUDE_DIR ${PREFIX}/include )
+ENDIF()
+
+# Set up the lib dir
+SET( LIB_DIR $ENV{libdir} )
+IF( NOT LIB_DIR )
+  SET( LIB_DIR ${CMAKE_INSTALL_LIBDIR} )
+ENDIF()
+IF( NOT LIB_DIR )
+  SET( LIB_DIR ${PREFIX}/lib )
+ENDIF()
+
+# Set up the bin dir
+SET( BIN_DIR $ENV{bindir} )
+IF( NOT BIN_DIR )
+  SET( BIN_DIR ${CMAKE_INSTALL_BINDIR} )
+ENDIF()
+IF( NOT BIN_DIR )
+  SET( BIN_DIR ${PREFIX}/bin )
+ENDIF()
+
+IF( UNIX )
+  # Perform dependency checks (in an automake fashion)
+  INCLUDE( deps-check.cmake )
+ENDIF()
+
+IF( UBUNTU_PROFILE OR ANDROID_PROFILE OR WIN32 OR APPLE OR LIBUV_X11_PROFILE OR GLIB_X11_PROFILE)
+  SET( ENABLE_VCONF OFF )
+ELSE()
+  SET( ENABLE_VCONF ON )
+ENDIF()
+
+IF( NOT DALI_ELDBUS_AVAILABLE OR LIBUV_X11_PROFILE OR GLIB_X11_PROFILE)
+  SET( ENABLE_ATSPI OFF )
+ENDIF()
+
+IF( ENABLE_VCONF )
+  ADD_DEFINITIONS("-DVCONF_ENABLED")
+ENDIF()
+
+IF( ENABLE_ASAN )
+  ADD_DEFINITIONS("-DASAN_ENABLED")
+ENDIF()
+
+IF( ENABLE_TRACE OR ENABLE_TRACE_STREAMLINE )
+  ADD_DEFINITIONS("-DTRACE_ENABLED")
+  SET(ENABLE_TRACE_STRING ON)
+  IF( ENABLE_TRACE_STREAMLINE )
+    SET(ENABLE_TRACE_STRING "ON (Streamline)")
+  ENDIF()
+ELSE()
+  SET(ENABLE_TRACE_STRING OFF)
+ENDIF()
+
+IF( ENABLE_PREINITIALIZE_ADAPTOR )
+  ADD_DEFINITIONS("-DPREINITIALIZE_ADAPTOR_CREATION_ENABLED")
+ENDIF()
+
+# Set up compiler flags and warnings
+IF( UNIX )
+  ADD_COMPILE_OPTIONS( -Wall ${DALI_CFLAGS} )# -Wextra -Wno-unused-parameter )# -Wfloat-equal )
+  ADD_COMPILE_OPTIONS( -Wno-pragmas -Wno-unknown-pragmas )
+ELSEIF( WIN32 ) # WIN32 includes x64 as well according to the cmake doc.
+  ADD_COMPILE_OPTIONS( /W3 /WX )                       # Treat all level 3 warnings as errors.
+  # Use /Z7 (debug info embedded in .obj) instead of /Zi (shared .pdb) to avoid
+  # fatal error C1090: PDB API call failed during parallel compilation.
+  # Replace /Zi in CMake's default debug flags to avoid D9025 warning.
+  STRING(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+  STRING(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+  ADD_COMPILE_OPTIONS( /FI "${ROOT_SRC_DIR}/third-party/windows-platform/preprocessor-definitions.h" ) #
+  ADD_COMPILE_OPTIONS( /vmg )                           # Avoids a 'reinterpret_cast' compile error while compiling signals and callbacks.
+  ADD_COMPILE_OPTIONS( /wd4251 )                        # Ignores warning C4251: "'identifier' : class 'type' needs to have dll-interface to be used by clients of class 'type2'"
+  ADD_COMPILE_OPTIONS( /wd4275 )                        # Ignores warning C4275: non-dll-interface class used as base for dll-interface class
+  ADD_COMPILE_OPTIONS( /utf-8 )                         # Source files are UTF-8; avoids warning C4819 under non-UTF8 system code pages.
+ENDIF()
+
+ADD_DEFINITIONS( -DNON_POWER_OF_TWO_TEXTURES ${DEFINITIONS} )
+
+
+# from root/build/tizen, get back to root
+SET(ROOT_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../)
+
+# Make sure the path is absolute
+GET_FILENAME_COMPONENT(ROOT_SRC_DIR ${ROOT_SRC_DIR} ABSOLUTE)
+
+SET(SOURCE_DIR "${ROOT_SRC_DIR}/dali")
+SET(ADAPTOR_ROOT ${ROOT_SRC_DIR})
+SET(PACKAGE_DOXY_SRC_DIR "${ROOT_SRC_DIR}/doc")
+SET(SOURCES "")
+
+# Include list of modules
+INCLUDE( module-list.cmake )
+
+# Include profile specific setup
+INCLUDE( profiles/${PROFILE_LCASE}-profile.cmake )
+
+IF ( ENABLE_ATSPI )
+  SET( SOURCES ${SOURCES} ${adaptor_accessibility_atspi_bridge_src_files} )
+ELSE()
+  SET( SOURCES ${SOURCES} ${adaptor_accessibility_atspi_dummy_src_files} )
+ENDIF()
+
+IF( ENABLE_PKG_CONFIGURE )
+  # Configure the pkg-config file
+  # Requires the following variables to be setup:
+  # @PREFIX@ @EXEC_PREFIX@ @DALI_ADAPTOR_VERSION@ @LIB_DIR@ @DEV_INCLUDE_PATH@
+  SET( DEV_INCLUDE_PATH ${INCLUDE_DIR} )
+  SET( ADAPTOR_PKG_CFG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/dali2-adaptor.pc )
+  SET( ADAPTOR_INTEGRATION_PKG_CFG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/dali2-adaptor-integration.pc )
+  CONFIGURE_FILE( ${ADAPTOR_PKG_CFG_FILE}.in ${ADAPTOR_PKG_CFG_FILE} @ONLY )
+  CONFIGURE_FILE( ${ADAPTOR_INTEGRATION_PKG_CFG_FILE}.in ${ADAPTOR_INTEGRATION_PKG_CFG_FILE} @ONLY )
+ENDIF()
+
+CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/system-cache-path.in ${ADAPTOR_ROOT}/dali/internal/adaptor/common/system-cache-path.cpp @ONLY)
+CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/shader-cache-path.in ${ADAPTOR_ROOT}/dali/internal/graphics/common/shader-cache-path.cpp @ONLY)
+
+SET( THIRD_PARTY_WINDOWS_PLATFORM "" )
+IF( WIN32 )
+  SET( THIRD_PARTY_WINDOWS_PLATFORM ${ROOT_SRC_DIR}/third-party/windows-platform )
+ENDIF()
+
+SET( THIRD_PARTY_MACOS_PLATFORM "" )
+IF( APPLE )
+  SET( THIRD_PARTY_MACOS_PLATFORM ${ROOT_SRC_DIR}/third-party/macos-platform )
+ENDIF()
+
+INCLUDE_DIRECTORIES(
+  ${ROOT_SRC_DIR}
+  ${PROFILE_INCLUDE_DIRECTORIES}
+  ${THIRD_PARTY_WINDOWS_PLATFORM}
+  ${THIRD_PARTY_MACOS_PLATFORM}
+  ${VCPKG_INCLUDE_DIR}
+  ${INCLUDE_DIR}
+)
+
+SET(LIBTYPE SHARED)
+IF(STATIC)
+  SET(LIBTYPE STATIC)
+ENDIF()
+
+OPTION(ENABLE_INVOKE_METHOD_WRAPPERS "Generate InvokeMethod wrappers for exported public API handle methods" ON)
+
+IF(ENABLE_INVOKE_METHOD_WRAPPERS)
+  FIND_PACKAGE(Python3 COMPONENTS Interpreter REQUIRED)
+  FIND_PROGRAM(INVOKE_METHOD_GENERATOR
+               NAMES dali-invoke-method-generator dali-invoke-method-generator.py
+               PATHS ${BIN_DIR} $ENV{DESKTOP_PREFIX}/bin ${ROOT_SRC_DIR}/../dali-core/scripts)
+
+  IF(NOT INVOKE_METHOD_GENERATOR)
+    MESSAGE(FATAL_ERROR "dali-invoke-method-generator not found. Build and install dali-core first.")
+  ENDIF()
+
+  SET(INVOKE_METHOD_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/invoke-method)
+  SET(INVOKE_METHOD_PUBLIC_API_CPP ${INVOKE_METHOD_GENERATED_DIR}/public-api-invoke-methods.cpp)
+  SET(INVOKE_METHOD_CORE_PUBLIC_API_SOURCE_DIR ${ROOT_SRC_DIR}/../dali-core/dali/public-api)
+  SET(INVOKE_METHOD_CORE_PUBLIC_API_INSTALL_DIR ${INCLUDE_DIR}/dali/public-api)
+  IF(EXISTS ${INVOKE_METHOD_CORE_PUBLIC_API_SOURCE_DIR})
+    SET(INVOKE_METHOD_CORE_PUBLIC_API_DIR ${INVOKE_METHOD_CORE_PUBLIC_API_SOURCE_DIR})
+  ELSEIF(EXISTS ${INVOKE_METHOD_CORE_PUBLIC_API_INSTALL_DIR})
+    SET(INVOKE_METHOD_CORE_PUBLIC_API_DIR ${INVOKE_METHOD_CORE_PUBLIC_API_INSTALL_DIR})
+  ELSE()
+    MESSAGE(FATAL_ERROR "dali-core public API headers not found. Build and install dali-core first.")
+  ENDIF()
+  FILE(GLOB_RECURSE INVOKE_METHOD_PUBLIC_API_HEADERS CONFIGURE_DEPENDS ${ROOT_SRC_DIR}/dali/public-api/*.h)
+  FILE(GLOB_RECURSE INVOKE_METHOD_CORE_PUBLIC_API_HEADERS CONFIGURE_DEPENDS ${INVOKE_METHOD_CORE_PUBLIC_API_DIR}/*.h)
+  FILE(GLOB_RECURSE INVOKE_METHOD_REGISTRATION_SCAN_FILES CONFIGURE_DEPENDS
+       ${ROOT_SRC_DIR}/dali/*.cpp
+       ${ROOT_SRC_DIR}/dali/*.h
+       ${ROOT_SRC_DIR}/dali/*.hpp)
+
+  ADD_CUSTOM_COMMAND(
+    OUTPUT ${INVOKE_METHOD_PUBLIC_API_CPP}
+    COMMAND ${Python3_EXECUTABLE} ${INVOKE_METHOD_GENERATOR}
+            --scan-root ${ROOT_SRC_DIR}/dali/public-api
+            --include-prefix dali/public-api
+            --dependency-scan-root ${INVOKE_METHOD_CORE_PUBLIC_API_DIR}
+            --dependency-include-prefix dali/public-api
+            --dependency-export-api DALI_CORE_API
+            --registration-scan-root ${ROOT_SRC_DIR}/dali
+            --namespace Dali
+            --auto-export-api DALI_ADAPTOR_API
+            --allow-type Any
+            --allow-type Dali::Any
+            --allow-type Extents
+            --allow-type Dali::Extents
+            --allow-type Int32Pair
+            --allow-type Uint16Pair
+            --allow-type PositionSize
+            --allow-type Rect
+            --output ${INVOKE_METHOD_PUBLIC_API_CPP}
+    DEPENDS ${INVOKE_METHOD_GENERATOR}
+            ${INVOKE_METHOD_PUBLIC_API_HEADERS}
+            ${INVOKE_METHOD_CORE_PUBLIC_API_HEADERS}
+            ${INVOKE_METHOD_REGISTRATION_SCAN_FILES}
+    COMMENT "Generating DALi invoke-method wrappers for exported adaptor public API"
+    VERBATIM
+  )
+
+  LIST(APPEND SOURCES ${INVOKE_METHOD_PUBLIC_API_CPP})
+ENDIF()
+
+IF(DEFINED ADAPTOR_GRAPHICS_GLES_SOURCES AND DEFINED ADAPTOR_GRAPHICS_VULKAN_SOURCES)
+  IF(enable_graphics_backend MATCHES DYNAMIC)
+    MESSAGE(STATUS "Separating GLES and Vulkan graphics into their own libraries")
+
+    # Separate GLES Graphics Library
+    SET(ADAPTOR_GRAPHICS_GLES_NAME "${name}-gles")
+    ADD_LIBRARY(${ADAPTOR_GRAPHICS_GLES_NAME} ${LIBTYPE} ${ADAPTOR_GRAPHICS_GLES_SOURCES})
+    TARGET_COMPILE_OPTIONS(${ADAPTOR_GRAPHICS_GLES_NAME} PRIVATE ${DALI_CFLAGS} ${COVERAGE})
+    TARGET_LINK_LIBRARIES(${ADAPTOR_GRAPHICS_GLES_NAME}
+            ${name}
+            ${DALICORE_LDFLAGS}
+            ${DALIADAPTOR_LDFLAGS}
+            ${COVERAGE}
+            ${OPENGLES20_LDFLAGS}
+            ${EGL_LDFLAGS}
+    )
+    INSTALL(TARGETS ${ADAPTOR_GRAPHICS_GLES_NAME} DESTINATION ${LIB_DIR})
+
+    # Linker Test for GLES Graphics
+    SET(LINKER_TEST_GLES_NAME ${DALI_ADAPTOR_PREFIX}linker-test-gles)
+    ADD_EXECUTABLE(${LINKER_TEST_GLES_NAME} linker-test-graphics-library.cpp)
+    TARGET_COMPILE_OPTIONS(${LINKER_TEST_GLES_NAME} PRIVATE -I${ROOT_SRC_DIR} ${DALI_CFLAGS} ${COVERAGE})
+    TARGET_LINK_LIBRARIES(${LINKER_TEST_GLES_NAME} ${name} ${COVERAGE} ${DALI_LDFLAGS} ${ADAPTOR_GRAPHICS_GLES_NAME})
+
+    # Separate Vulkan Graphics Library
+    SET(ADAPTOR_GRAPHICS_VULKAN_NAME "${name}-vulkan")
+    ADD_LIBRARY(${ADAPTOR_GRAPHICS_VULKAN_NAME} ${LIBTYPE} ${ADAPTOR_GRAPHICS_VULKAN_SOURCES})
+    TARGET_COMPILE_OPTIONS(${ADAPTOR_GRAPHICS_VULKAN_NAME} PRIVATE -DVULKAN_HPP_NO_EXCEPTIONS ${DALI_CFLAGS} ${COVERAGE})
+    IF(ANDROID_PROFILE)
+      TARGET_COMPILE_OPTIONS(${ADAPTOR_GRAPHICS_VULKAN_NAME} PRIVATE -DVK_USE_PLATFORM_ANDROID_KHR=1)
+    ENDIF()
+    TARGET_LINK_LIBRARIES(${ADAPTOR_GRAPHICS_VULKAN_NAME}
+            ${name}
+            ${DALICORE_LDFLAGS}
+            ${DALIADAPTOR_LDFLAGS}
+            ${COVERAGE}
+            ${VULKAN_LDFLAGS}
+            ${GLSLANG_LDFLAGS}
+            ${SPIRVTOOLS_LDFLAGS}
+    )
+    INSTALL(TARGETS ${ADAPTOR_GRAPHICS_VULKAN_NAME} DESTINATION ${LIB_DIR})
+
+    # Linker Test for Vulkan Graphics
+    SET(LINKER_TEST_VULKAN_NAME ${DALI_ADAPTOR_PREFIX}linker-test-vulkan)
+    ADD_EXECUTABLE(${LINKER_TEST_VULKAN_NAME} linker-test-graphics-library.cpp)
+    TARGET_COMPILE_OPTIONS(${LINKER_TEST_VULKAN_NAME} PRIVATE -I${ROOT_SRC_DIR} ${DALI_CFLAGS} ${COVERAGE} )
+    TARGET_LINK_LIBRARIES(${LINKER_TEST_VULKAN_NAME} ${name} ${COVERAGE} ${VULKAN_LDFLAGS} ${DALI_LDFLAGS} ${ADAPTOR_GRAPHICS_VULKAN_NAME})
+
+    SET(GRAPHICS_BACKEND_TYPE "Dynamic (GLES/VULKAN)")
+  ELSEIF(enable_graphics_backend MATCHES GLES)
+    # Add GLES sources to main adaptor library
+    MESSAGE(STATUS "Integrating GLES graphics into main lib")
+    SET(GRAPHICS_BACKEND_TYPE "GLES")
+    SET(SOURCES ${SOURCES} ${ADAPTOR_GRAPHICS_GLES_SOURCES})
+    SET(OPTIONAL_LIBS ${OPTIONAL_LIBS}
+            ${OPENGLES20_LDFLAGS}
+            ${EGL_LDFLAGS}
+    )
+  ELSEIF(enable_graphics_backend MATCHES VULKAN)
+    # Add VULKAN sources to main adaptor library
+    SET(GRAPHICS_BACKEND_TYPE "VULKAN")
+    SET(SOURCES ${SOURCES} ${ADAPTOR_GRAPHICS_VULKAN_SOURCES})
+    MESSAGE(STATUS "Integrating Vulkan graphics into main lib")
+    IF(ANDROID_PROFILE)
+      ADD_DEFINITIONS(-DVK_USE_PLATFORM_ANDROID_KHR=1)
+    ENDIF()
+    SET(OPTIONAL_LIBS ${OPTIONAL_LIBS}
+            ${VULKAN_LDFLAGS}
+            ${GLSLANG_LDFLAGS}
+            ${SPIRVTOOLS_LDFLAGS}
+    )
+  ENDIF()
+ELSE()
+  # If variables are not defined then profile does not support VULKAN and assumed to have added GLES sources
+  SET(GRAPHICS_BACKEND_TYPE "GLES")
+ENDIF()
+
+ADD_LIBRARY( ${name} ${LIBTYPE} ${SOURCES} )
+TARGET_INCLUDE_DIRECTORIES(${name}
+  PUBLIC
+    $<BUILD_INTERFACE:${ROOT_SRC_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+
+IF(WIN32 AND NOT STATIC)
+  # Keep dllexport local to the adaptor DLL.  Directory-wide definitions leak
+  # into plugin subdirectories and incorrectly mark imported adaptor APIs as
+  # exports while those DLLs are being compiled.
+  TARGET_COMPILE_DEFINITIONS(${name} PRIVATE BUILDING_DALI_ADAPTOR)
+ENDIF()
+
+IF( UNIX )
+  # pthread required due to gcc issue
+  FIND_LIBRARY( PTHREAD pthread )
+  IF( PTHREAD AND NOT ANDROID_PROFILE )
+    SET( OPTIONAL_LIBS ${OPTIONAL_LIBS} -lpthread )
+  ENDIF()
+ENDIF()
+
+IF(WIN32)
+  SET(WINDOWS_PRIVATE_LIBS ${REQUIRED_LIBS})
+  LIST(REMOVE_ITEM WINDOWS_PRIVATE_LIBS
+    dali2-core::dali2-core
+    unofficial::angle::libEGL
+  )
+  TARGET_LINK_LIBRARIES(${name}
+    PUBLIC
+      dali2-core::dali2-core
+      unofficial::angle::libEGL
+    PRIVATE ${DALI_LDFLAGS} ${WINDOWS_PRIVATE_LIBS} ${OPTIONAL_LIBS} ${COVERAGE}
+  )
+ELSE()
+  TARGET_LINK_LIBRARIES(${name}
+                        ${DALI_LDFLAGS}
+                        ${REQUIRED_LIBS}
+                        ${OPTIONAL_LIBS}
+                        ${COVERAGE}
+  )
+ENDIF()
+
+SET_TARGET_PROPERTIES( ${name}
+  PROPERTIES
+  VERSION ${DALI_ADAPTOR_VERSION}
+  SOVERSION ${${name}_VERSION_MAJOR}
+  CLEAN_DIRECT_OUPUT 1
+)
+
+IF( INSTALL_CMAKE_MODULES )
+  # Install the library files.
+  INSTALL( TARGETS ${name}
+    EXPORT ${name}-targets
+    LIBRARY DESTINATION ${LIB_DIR}
+    ARCHIVE DESTINATION ${LIB_DIR}
+    RUNTIME DESTINATION ${BIN_DIR}
+  )
+
+  # Install the cmake modules.
+  INSTALL(
+    EXPORT ${name}-targets
+    NAMESPACE ${name}::
+    FILE ${name}-targets.cmake
+    DESTINATION share/${name}
+  )
+
+  IF(WIN32)
+    SET(PACKAGE_DEPENDENCIES "    find_dependency(dali2-core CONFIG REQUIRED)\n    find_dependency(unofficial-angle CONFIG REQUIRED)\n")
+  ELSE()
+    SET(PACKAGE_DEPENDENCIES "")
+  ENDIF()
+
+  FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${name}-config.cmake "
+    include(CMakeFindDependencyMacro)
+${PACKAGE_DEPENDENCIES}
+    include(\${CMAKE_CURRENT_LIST_DIR}/${name}-targets.cmake)
+  ")
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${name}-config.cmake DESTINATION share/${name})
+
+  # Install the pdb file.
+  # Use the TARGET_PDB_FILE generator expression so the path resolves correctly for both
+  # single-config (Ninja: <build>/${name}.pdb) and multi-config (VS: <build>/Debug/${name}.pdb) generators.
+  IF( ENABLE_DEBUG AND WIN32 )
+    install( FILES $<TARGET_PDB_FILE:${name}> DESTINATION ${BIN_DIR} )
+  ENDIF()
+ELSE()
+  INSTALL(TARGETS ${name}
+    LIBRARY DESTINATION ${LIB_DIR}
+    ARCHIVE DESTINATION ${LIB_DIR}
+    RUNTIME DESTINATION ${BIN_DIR}
+  )
+ENDIF()
+
+IF( ENABLE_PKG_CONFIGURE )
+  # Install the pkg-config file
+  INSTALL( FILES ${ADAPTOR_PKG_CFG_FILE} DESTINATION ${LIB_DIR}/pkgconfig )
+  INSTALL( FILES ${ADAPTOR_INTEGRATION_PKG_CFG_FILE} DESTINATION ${LIB_DIR}/pkgconfig )
+ENDIF()
+
+# macro for installing headers by replacing prefix. (TODO, investigate
+# if there is a CMAKE way of doing this automatically)
+MACRO(INSTALL_HEADERS_WITH_DIRECTORY HEADER_LIST STRIP_PREFIX REPLACE_PREFIX)
+  GET_FILENAME_COMPONENT( SPREFIX ${STRIP_PREFIX} ABSOLUTE )
+  FOREACH(HEADER ${${HEADER_LIST}})
+    STRING(REGEX MATCH "(.*)[/]" DIR ${HEADER})
+    STRING(REPLACE ${SPREFIX} ${REPLACE_PREFIX} NEWDIR ${DIR})
+    INSTALL(FILES ${HEADER} DESTINATION ${INCLUDE_DIR}/${NEWDIR})
+  ENDFOREACH(HEADER)
+ENDMACRO(INSTALL_HEADERS_WITH_DIRECTORY)
+
+# GlWindow Addon
+IF(DEFINED GL_WINDOW_ADDON_SOURCES)
+  SET(ADAPTOR_GL_WINDOW_ADDON_NAME "${name}-gl-window-addon")
+  ADD_LIBRARY(${ADAPTOR_GL_WINDOW_ADDON_NAME} ${LIBTYPE} ${GL_WINDOW_ADDON_SOURCES})
+  TARGET_LINK_LIBRARIES(${ADAPTOR_GL_WINDOW_ADDON_NAME}
+          ${name}
+          ${DALICORE_LDFLAGS}
+          ${DALIADAPTOR_LDFLAGS}
+          ${COVERAGE}
+          ${ADAPTOR_GRAPHICS_GLES_NAME}
+  )
+  INSTALL( TARGETS ${ADAPTOR_GL_WINDOW_ADDON_NAME} DESTINATION ${LIB_DIR})
+  SET(GLWINDOW_ADDON_ENABLED "ON")
+ELSE()
+  SET(GLWINDOW_ADDON_ENABLED "OFF")
+ENDIF()
+
+########################################################################################
+# INSTALL:
+# Set deployment directories
+# Due to complicated adaptor deployment the install section is pretty much converted from
+# the automake counterpart.
+SET( tizenadaptorpublicapidir ${INCLUDE_DIR}/dali/public-api )
+SET( tizenadaptordevelapidir ${INCLUDE_DIR}/dali/devel-api )
+SET( tizenadaptorextensionapidir ${INCLUDE_DIR}/dali/extension-api )
+SET( tizenadaptorintegrationapidir ${INCLUDE_DIR}/dali/integration-api/adaptor-framework )
+SET( tizenadaptorintegrationsystemapidir ${INCLUDE_DIR}/dali/integration-api/system )
+SET( tizenadaptorfiledownloadapidir ${tizenadaptorintegrationapidir}/file-download )
+SET( tizenadaptorapplicationapidir ${INCLUDE_DIR}/dali/internal/application-model )
+SET( tizenadaptorframeworkpublicapidir ${tizenadaptorpublicapidir}/adaptor-framework )
+SET( tizencanvasrendererpublicapidir ${tizenadaptorframeworkpublicapidir}/canvas-renderer )
+SET( tizenadaptortextabstractionpublicapidir ${tizenadaptorpublicapidir}/text-abstraction )
+SET( tizenadaptorframeworkdevelapidir ${tizenadaptordevelapidir}/adaptor-framework )
+SET( tizenwebenginedevelapidir ${tizenadaptorframeworkdevelapidir}/web-engine )
+SET( tizenatspiinterfacesdevelapidir ${tizenadaptordevelapidir}/atspi-interfaces )
+SET( tizentextabstractiondevelapidir ${tizenadaptordevelapidir}/text-abstraction )
+SET( tizenadaptordaliheaderdir ${INCLUDE_DIR}/dali )
+
+# Android framework headers for Android build
+SET( androidadaptorintegrationapidir ${INCLUDE_DIR}/dali/integration-api/adaptor-framework/android )
+
+# Install headers
+INSTALL( FILES ${public_api_header_files} DESTINATION ${tizenadaptorpublicapidir} )
+INSTALL_HEADERS_WITH_DIRECTORY( adaptor_extension_api_header_files ${adaptor_extension_api_dir} dali/extension-api )
+INSTALL_HEADERS_WITH_DIRECTORY( adaptor_integration_api_header_files ${adaptor_integration_api_dir} dali/integration-api )
+INSTALL( FILES ${adaptor_integration_api_system_header_files} DESTINATION ${tizenadaptorintegrationsystemapidir} )
+INSTALL( FILES ${adaptor_integration_api_file_download_plugin_header_files} DESTINATION ${tizenadaptorfiledownloadapidir} )
+INSTALL( FILES ${adaptor_application_api_header_files} DESTINATION ${tizenadaptorapplicationapidir} )
+INSTALL( FILES ${public_api_adaptor_framework_header_files} DESTINATION ${tizenadaptorframeworkpublicapidir} )
+INSTALL( FILES ${devel_api_adaptor_framework_widget_header_files} DESTINATION ${tizenadaptorframeworkdevelapidir} )
+INSTALL( FILES ${public_api_adaptor_framework_canvas_renderer_header_files} DESTINATION ${tizencanvasrendererpublicapidir} )
+INSTALL( FILES ${public_api_text_abstraction_header_files} DESTINATION ${tizenadaptortextabstractionpublicapidir} )
+INSTALL( FILES ${devel_api_adaptor_framework_header_files} DESTINATION ${tizenadaptorframeworkdevelapidir} )
+INSTALL( FILES ${devel_api_adaptor_framework_egl_header_files} DESTINATION ${tizenadaptorframeworkdevelapidir} )
+INSTALL( FILES ${devel_api_adaptor_framework_web_engine_header_files} DESTINATION ${tizenwebenginedevelapidir} )
+INSTALL( FILES ${devel_api_atspi_interfaces_header_files} DESTINATION ${tizenatspiinterfacesdevelapidir} )
+INSTALL( FILES ${devel_api_text_abstraction_header_files} DESTINATION ${tizentextabstractiondevelapidir} )
+
+# Install Android framework headers for Android build
+INSTALL( FILES ${adaptor_integration_api_android_header_files} DESTINATION ${androidadaptorintegrationapidir} )
+
+# Install DOXY
+SET( packagedoxydir ${INCLUDE_DIR}/dali/doc )
+SET( package_doxy_dir ${ADAPTOR_ROOT}/doc )
+INCLUDE( ${ADAPTOR_ROOT}/doc/file.list )
+INSTALL( FILES ${package_doxy_files} DESTINATION ${packagedoxydir} )
+
+IF( NOT UBUNTU_PROFILE AND NOT ANDROID_PROFILE AND NOT WINDOWS_PROFILE AND NOT MACOS_PROFILE )
+  INSTALL( FILES ${public_api_adaptor_tizen_header_files} DESTINATION ${tizenadaptorframeworkpublicapidir} )
+  IF( NOT WAYLAND )
+    INSTALL( FILES ${devel_api_adaptor_tizen_x11_header_files} DESTINATION ${tizenadaptorframeworkdevelapidir} )
+  ENDIF()
+ENDIF()
+
+INSTALL( FILES ${adaptor_dali_header_file} DESTINATION ${tizenadaptordaliheaderdir} )
+
+IF( ANDROID_PROFILE )
+  SET( daliShaderbinCacheDir ${CMAKE_INSTALL_PREFIX}/core/shaderbin/)
+  INSTALL( DIRECTORY DESTINATION ${daliShaderbinCacheDir} )
+ELSEIF( UNIX )
+  SET( daliShaderbinCacheDir ${CMAKE_BINARY_DIR}/${dataReadOnlyDir}/core/shaderbin/)
+  INSTALL( DIRECTORY DESTINATION ${dataReadOnlyDir}/core/shaderbin )
+ENDIF()
+
+IF(NOT WINDOWS_PROFILE)
+  # Existing Unix profiles create these deployment directories at install
+  # time.  Windows creates its per-user cache lazily at runtime instead.
+  SET( daliSystemCachedDir ${cachePath}/.cache/dali_common_caches/ )
+  INSTALL( DIRECTORY DESTINATION ${daliSystemCachedDir} )
+
+  SET( daliShaderCachedDir ${cachePath}/.cache/dali_common_caches/shader/ )
+  INSTALL( DIRECTORY DESTINATION ${daliShaderCachedDir} )
+
+  SET( daliInternalShaderCachedDir ${cachePath}/.cache/dali_common_caches/shader/internal/ )
+  INSTALL( DIRECTORY DESTINATION ${daliInternalShaderCachedDir} )
+
+  SET( daliCustomShaderCachedDir ${cachePath}/.cache/dali_common_caches/shader/custom/ )
+  INSTALL( DIRECTORY DESTINATION ${daliCustomShaderCachedDir} )
+ENDIF()
+
+INSTALL( FILES ${ADAPTOR_ROOT}/adaptors/scripts/dalireslog.sh DESTINATION ${CMAKE_INSTALL_PREFIX}/bin )
+
+########################################################################################
+
+# The DALI_ADAPTOR_PREFIX must be set if this CMakeLists.txt is executed
+# from the top-level CMake script using ADD_SUBDIRECTORY() to avoid
+# target names duplication with other DALi modules.
+IF( ENABLE_COVERAGE )
+  SET(FASTCOV_BIN "${PREFIX}/bin/fastcov.py")
+
+  IF( EXISTS ${FASTCOV_BIN} )
+
+    # Define custom rules for coverage
+    SET(COVERAGE_DIR .cov)
+    SET(COVERAGE_OUTPUT_DIR doc/coverage)
+
+    # fastcov.py doesn't need version detection or complex rc options
+    SET(FASTCOV_OPTS "--branch-coverage" "--lcov")
+
+    ADD_CUSTOM_TARGET( ${DALI_ADAPTOR_PREFIX}rename_cov_data ./rename-cov-data )
+
+    # fastcov.py combines capture and exclude into a single operation
+    ADD_CUSTOM_TARGET( ${DALI_ADAPTOR_PREFIX}cov_data
+      COMMAND ${FASTCOV_BIN} ${FASTCOV_OPTS}
+        -d .
+        --exclude /usr/include /usr/local/include automated-tests dali-env third-party generated
+        -o dali.info )
+
+    # genhtml works with fastcov.py output (lcov-compatible format)
+    ADD_CUSTOM_TARGET( ${DALI_ADAPTOR_PREFIX}coverage
+      COMMAND genhtml --branch-coverage -o ${COVERAGE_OUTPUT_DIR} dali.info
+      DEPENDS cov_data )
+
+    # Reset coverage using fastcov.py's zerocounters option
+    ADD_CUSTOM_TARGET( ${DALI_ADAPTOR_PREFIX}reset_coverage
+      COMMAND ${FASTCOV_BIN} -z -d . )
+
+    # Define custom rule for distclean
+    ADD_CUSTOM_TARGET( ${DALI_ADAPTOR_PREFIX}distclean @echo cleaning for source distribution )
+    ADD_CUSTOM_COMMAND(
+          DEPENDS clean
+          COMMENT "distribution clean"
+          COMMAND find
+          ARGS    .
+          -not -name config.cmake -and \(
+          -name tester.c -or
+          -name Testing -or
+          -name CMakeFiles -or
+          -name doc -or
+          -name cmake.depends -or
+          -name cmake.check_depends -or
+          -name CMakeCache.txt -or
+          -name cmake.check_cache -or
+          -name *.cmake -or
+          -name Makefile -or
+          -name core -or
+          -name core.* -or
+          -name gmon.out -or
+          -name install_manifest.txt -or
+          -name *.pc -or
+          -name *.gcov -or
+          -name *.gcno -or
+          -name *.gcda -or
+          -name *~ -or
+          -name libdali*.so* \)
+          | grep -v TC | xargs rm -rf
+          TARGET  ${DALI_ADAPTOR_PREFIX}distclean
+          VERBATIM
+          )
+  ELSE()
+    MESSAGE( WARNING "fastcov.py not found at ${FASTCOV_BIN}, coverage targets will not be available" )
+  ENDIF()
+ENDIF()
+
+IF( ENABLE_LINK_TEST )
+  # Linker Test
+  SET( DALI_TEST_SUITE_DIR ${ROOT_SRC_DIR}/automated-tests/src/dali/dali-test-suite-utils )
+  SET( LINKER_TEST_NAME ${DALI_ADAPTOR_PREFIX}linker-test )
+  SET( LINKER_TEST_SOURCES
+    linker-test.cpp
+  )
+  ADD_EXECUTABLE( ${LINKER_TEST_NAME} ${LINKER_TEST_SOURCES} )
+  MESSAGE(STATUS "libs: ${DALICORE_LDFLAGS}")
+  TARGET_COMPILE_OPTIONS( ${LINKER_TEST_NAME} PRIVATE -I${ROOT_SRC_DIR} ${DALICORE_CFLAGS} )
+  TARGET_LINK_LIBRARIES(${LINKER_TEST_NAME} ${name} ${COVERAGE} ${DALICORE_LDFLAGS} ${VCONF_LDFLAGS} ${HARFBUZZ_LDFLAGS} )
+  TARGET_INCLUDE_DIRECTORIES( ${LINKER_TEST_NAME} PRIVATE ${DALI_TEST_SUITE_DIR} )
+ENDIF()
+
+# Configuration Messages
+MESSAGE( STATUS "Configuration:\n" )
+MESSAGE( STATUS "Prefix:                           ${PREFIX}")
+MESSAGE( STATUS "Lib Dir:                          ${LIB_DIR}" )
+MESSAGE( STATUS "Include Dir:                      ${INCLUDE_DIR}" )
+MESSAGE( STATUS "Coverage:                         ${ENABLE_COVERAGE}" )
+MESSAGE( STATUS "Debug Build:                      ${ENABLE_DEBUG}")
+MESSAGE( STATUS "Freetype bitmap support (Emoji):  ${freetype_bitmap_support_ENABLED}")
+MESSAGE( STATUS "Profile:                          ${ENABLE_PROFILE}")
+MESSAGE( STATUS "Graphics Backend:                 ${GRAPHICS_BACKEND_TYPE}")
+MESSAGE( STATUS "Data Dir (Read/Write):            ${dataReadWriteDir}")
+MESSAGE( STATUS "Data Dir (Read Only):             ${dataReadOnlyDir}")
+MESSAGE( STATUS "WebP:                             ${webp_available_ENABLED}")
+MESSAGE( STATUS "Shader Binary Cache:              ${ENABLE_SHADERBINCACHE}")
+MESSAGE( STATUS "Network logging enabled:          ${ENABLE_NETWORK_LOGGING}")
+MESSAGE( STATUS "Font config file:                 ${fontConfigurationFile}")
+MESSAGE( STATUS "Using Tizen APP FW libraries:     ${ENABLE_APPFW}")
+MESSAGE( STATUS "Use pkg configure:                ${ENABLE_PKG_CONFIGURE}" )
+MESSAGE( STATUS "Use -Wall options:                ${ENABLE_WARNING_TO_ERROR}" )
+MESSAGE( STATUS "Enable link test:                 ${ENABLE_LINK_TEST}" )
+MESSAGE( STATUS "Enable AT-SPI:                    ${ENABLE_ATSPI}" )
+MESSAGE( STATUS "Enable AppModel:                  ${ENABLE_APPMODEL}" )
+MESSAGE( STATUS "Enable Asan:                      ${ENABLE_ASAN}" )
+MESSAGE( STATUS "Enable Trace:                     ${ENABLE_TRACE_STRING}" )
+MESSAGE( STATUS "Enable VConf:                     ${ENABLE_VCONF}" )
+MESSAGE( STATUS "Enable PreInitialized Adaptor:    ${ENABLE_PREINITIALIZE_ADAPTOR}" )
+MESSAGE( STATUS "GlWindow Addon:                   ${GLWINDOW_ADDON_ENABLED}")
+MESSAGE( STATUS "Tizen Platform Config supported   ${TIZEN_PLATFORM_CONFIG_SUPPORTED_LOGMSG}")
+MESSAGE( STATUS "ThorVG version:                   ${THORVG_VERSION}")
+MESSAGE( STATUS "Compile flags:                    ${CMAKE_CXX_FLAGS}")
+MESSAGE( STATUS "Compile flags:                    ${CMAKE_C_FLAGS}")
+MESSAGE( STATUS "CMAKE_SYSROOT:                    ${CMAKE_SYSROOT}")
+MESSAGE( STATUS "CMAKE_SYSTEM_INCLUDE_PATH:        ${CMAKE_SYSTEM_INCLUDE_PATH}")
+MESSAGE( STATUS "CMAKE_SYSTEM_LIBRARY_PATH:        ${CMAKE_SYSTEM_LIBRARY_PATH}")
+
+ADD_SUBDIRECTORY( plugins )
+
+IF( ENABLE_APPMODEL )
+IF (ROBOT_PROFILE)
+  ADD_SUBDIRECTORY( application-normal-model )
+ELSE()
+  ADD_SUBDIRECTORY( application-model )
+  ADD_SUBDIRECTORY( application-normal-model )
+ENDIF()
+ENDIF()
+
+#CLEAN_ARG_CACHE()

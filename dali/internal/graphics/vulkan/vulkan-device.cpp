@@ -1,0 +1,1448 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/graphics/vulkan/vulkan-device.h>
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/dali-utility.h>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/environment-variable.h>
+#include <dali/integration-api/debug.h>
+#include <dali/internal/graphics/common/graphics-backend-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-command-buffer-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-command-pool-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-fence-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-framebuffer-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-image-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-image-view-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-render-pass-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-surface-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-swapchain-impl.h>
+#include <dali/internal/graphics/vulkan/vulkan-memory-allocation.h>
+#include <dali/internal/graphics/vulkan/vulkan-surface-factory.h>
+
+#ifndef VK_KHR_XLIB_SURFACE_EXTENSION_NAME
+#define VK_KHR_XLIB_SURFACE_EXTENSION_NAME "VK_KHR_xlib_surface"
+#endif
+
+#ifndef VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
+#define VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME "VK_KHR_wayland_surface"
+#endif
+
+#ifndef VK_KHR_XCB_SURFACE_EXTENSION_NAME
+#define VK_KHR_XCB_SURFACE_EXTENSION_NAME "VK_KHR_xcb_surface"
+#endif
+
+#ifndef VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
+#define VK_KHR_ANDROID_SURFACE_EXTENSION_NAME "VK_KHR_android_surface"
+#endif
+
+#ifndef VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME
+#define VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME "VK_EXT_global_priority"
+#endif
+
+#ifndef VK_EXT_GLOBAL_PRIORITY_EXTENSION_QUERY_NAME
+#define VK_EXT_GLOBAL_PRIORITY_EXTENSION_QUERY_NAME "VK_EXT_global_priority_query"
+#endif
+
+#ifndef VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME
+#define VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME "VK_EXT_blend_operation_advanced"
+#endif
+
+#ifndef VK_EXT_MEMORY_BUDGET_EXTENSION_NAME
+#define VK_EXT_MEMORY_BUDGET_EXTENSION_NAME "VK_EXT_memory_budget"
+#endif
+
+#define DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT (VK_EXT_global_priority && VK_EXT_global_priority_query)
+
+// EXTERNAL INCLUDES
+#include <signal.h>
+#include <algorithm>
+#include <iostream>
+#include <locale>
+#include <utility>
+
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gVulkanFilter = Debug::Filter::New(Debug::Concise, false, "LOG_VULKAN");
+#endif
+
+namespace
+{
+const uint32_t INVALID_MEMORY_INDEX = -1u;
+} // Anonymous namespace
+
+namespace DALI_NAMESPACE::Graphics::Vulkan
+{
+class RenderPassImpl;
+
+auto reqLayers = std::vector<const char*>{
+  //"VK_LAYER_LUNARG_screenshot",           // screenshot
+  //"VK_LAYER_LUNARG_parameter_validation", // parameter
+  //"VK_LAYER_LUNARG_vktrace",              // vktrace ( requires vktrace connection )
+  //"VK_LAYER_LUNARG_monitor",             // monitor
+  //"VK_LAYER_LUNARG_swapchain",           // swapchain
+  //"VK_LAYER_GOOGLE_threading",           // threading
+  //"VK_LAYER_LUNARG_api_dump",            // api
+  //"VK_LAYER_LUNARG_object_tracker",      // objects
+  //"VK_LAYER_LUNARG_core_validation",     // core
+  //"VK_LAYER_GOOGLE_unique_objects",      // unique objects
+  //"VK_LAYER_LUNARG_standard_validation", // standard
+  // Don't add VK_LAYER_RENDERDOC_Capture, set ENABLE_VULKAN_RENDERDOC_CAPTURE=1 environment variable
+  "VK_LAYER_KHRONOS_validation"};
+
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+struct Device::GlobalPrioritySupportedInfo
+{
+  static constexpr uint32_t                   MAX_CONTEXT_PROIRITY_COUNT                                 = static_cast<uint32_t>(Dali::Graphics::ContextPriority::REALTIME) + 1;
+  static constexpr vk::QueueGlobalPriorityEXT gContextToGlobalPriortyConvert[MAX_CONTEXT_PROIRITY_COUNT] = {vk::QueueGlobalPriorityEXT::eLow, vk::QueueGlobalPriorityEXT::eMedium, vk::QueueGlobalPriorityEXT::eHigh, vk::QueueGlobalPriorityEXT::eRealtime};
+
+  GlobalPrioritySupportedInfo(Dali::Graphics::ContextPriority contextPriority)
+  : mContextPriority(contextPriority)
+  {
+  }
+
+  void ChangeContextPriority(Dali::Graphics::ContextPriority contextPriority)
+  {
+    mContextPriority = contextPriority;
+  }
+
+  /**
+   * @brief Prepare pre-calculated global priority supportness map per each queue family index.
+   * @note Should be called only 1 time when physical device decided.
+   * @param[in] physicalDevice The physical device.
+   */
+  void PrepareSupportedGlobalPriortyMap(const vk::PhysicalDevice& physicalDevice)
+  {
+    // Query global priority properties for the specific queue family
+    // We need to query all queue families and access the specific one
+    uint32_t queueFamilyProperties2Count = 0u;
+    physicalDevice.getQueueFamilyProperties2(&queueFamilyProperties2Count, nullptr);
+
+    std::vector<vk::QueueFamilyProperties2>                 queueFamilyProperties2(queueFamilyProperties2Count);
+    std::vector<vk::QueueFamilyGlobalPriorityPropertiesEXT> globalPriorityProperties(queueFamilyProperties2Count);
+
+    for(size_t i = 0; i < queueFamilyProperties2Count; ++i)
+    {
+      globalPriorityProperties[i].sType = vk::StructureType::eQueueFamilyGlobalPriorityPropertiesEXT;
+      globalPriorityProperties[i].pNext = nullptr;
+      queueFamilyProperties2[i].sType   = vk::StructureType::eQueueFamilyProperties2;
+      queueFamilyProperties2[i].pNext   = &globalPriorityProperties[i];
+    }
+
+    physicalDevice.getQueueFamilyProperties2(&queueFamilyProperties2Count, queueFamilyProperties2.data());
+
+    for(int32_t contextPriorityType = static_cast<int32_t>(Dali::Graphics::ContextPriority::LOW); contextPriorityType <= static_cast<int32_t>(Dali::Graphics::ContextPriority::REALTIME); ++contextPriorityType)
+    {
+      auto& priorityMap = mSupportedGlobalPriortyMap[contextPriorityType];
+      priorityMap.clear();
+      priorityMap.resize(queueFamilyProperties2Count, vk::QueueGlobalPriorityEXT::eMedium);
+
+      for(uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyProperties2Count; ++queueFamilyIndex)
+      {
+        const auto& props = globalPriorityProperties[queueFamilyIndex];
+        bool        found = false;
+        int32_t     preferredPriorityType;
+
+        // Try to found preferred priority top to bottom
+        for(preferredPriorityType = contextPriorityType; preferredPriorityType >= static_cast<int32_t>(Dali::Graphics::ContextPriority::LOW); --preferredPriorityType)
+        {
+          for(uint32_t i = 0; i < props.priorityCount; ++i)
+          {
+            if(props.priorities[i] == gContextToGlobalPriortyConvert[preferredPriorityType])
+            {
+              found = true;
+              break;
+            }
+          }
+          if(found)
+          {
+            priorityMap[queueFamilyIndex] = gContextToGlobalPriortyConvert[preferredPriorityType];
+            break;
+          }
+        }
+
+        if(preferredPriorityType < static_cast<int32_t>(Dali::Graphics::ContextPriority::LOW))
+        {
+          preferredPriorityType = static_cast<int32_t>(Dali::Graphics::ContextPriority::MEDIUM);
+        }
+
+        if(preferredPriorityType != contextPriorityType)
+        {
+          DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "queue family %u don't support priority %u. Use %u instead.\n", queueFamilyIndex, static_cast<uint32_t>(contextPriorityType), static_cast<uint32_t>(preferredPriorityType));
+        }
+      }
+    }
+  }
+
+  /**
+   * @brief Append global priority creation info as input's queueCreationInfo.
+   * @param[in] queueCreationInfo The device queue creation info to append priority info
+   * @param[in, out] globalPriorityCreationInfoReferenceHolder Memory blocks for global priority creation info.
+   */
+  void AppendGlobalPriorityInfo(vk::DeviceQueueCreateInfo& queueCreateInfo, std::vector<vk::DeviceQueueGlobalPriorityCreateInfoEXT>& globalPriorityCreationInfoReferenceHolder) const
+  {
+    auto queueFamilyIndex    = queueCreateInfo.queueFamilyIndex;
+    auto queueGlobalPriority = DALI_LIKELY(queueFamilyIndex < mSupportedGlobalPriortyMap[static_cast<uint32_t>(mContextPriority)].size()) ? mSupportedGlobalPriortyMap[static_cast<uint32_t>(mContextPriority)][queueFamilyIndex]
+                                                                                                                                          : vk::QueueGlobalPriorityEXT::eMedium;
+    if(queueGlobalPriority != vk::QueueGlobalPriorityEXT::eMedium)
+    {
+      assert(globalPriorityCreationInfoReferenceHolder.size() < globalPriorityCreationInfoReferenceHolder.capacity() && "reference holder memory pointer should not be changed!");
+      globalPriorityCreationInfoReferenceHolder.emplace_back();
+      auto& globalPriorityCreateInfo = globalPriorityCreationInfoReferenceHolder.back();
+
+      globalPriorityCreateInfo.sType = vk::StructureType::eDeviceQueueGlobalPriorityCreateInfoEXT;
+      globalPriorityCreateInfo.setGlobalPriority(queueGlobalPriority)
+        .setPNext(queueCreateInfo.pNext);
+      queueCreateInfo.setPNext(&globalPriorityCreateInfo);
+      DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "Applying global priority %u to queue family %u\n", static_cast<uint32_t>(queueGlobalPriority), queueFamilyIndex);
+    }
+    else
+    {
+      DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "Skip global priority set to queue family %u. (Default as eMedium)\n", queueFamilyIndex);
+    }
+  }
+
+private:
+  Dali::Graphics::ContextPriority mContextPriority; ///< Globaly defined context priority.
+
+  // Pre-calculated priority result map per [Dali::Graphics::ContextPriority][queueFamilyIndex].
+  std::vector<vk::QueueGlobalPriorityEXT> mSupportedGlobalPriortyMap[MAX_CONTEXT_PROIRITY_COUNT];
+};
+#else
+struct Device::GlobalPrioritySupportedInfo
+{
+};
+#endif
+
+Device::Device()
+{
+  mAllocator.reset(nullptr); // Don't provide any callbacks unless we're debugging.
+}
+
+Device::~Device()
+{
+  // Wait for everything to finish on the GPU
+  if(DALI_LIKELY(mLogicalDevice))
+  {
+    DeviceWaitIdle();
+  }
+
+  DALI_LOG_STREAM(gVulkanFilter, Debug::General, "DESTROYING GRAPHICS CONTEXT--------------------------------\n");
+
+  for(auto& surfaceSwapchain : mSurfaceMap)
+  {
+    surfaceSwapchain.second.swapchain->Destroy();
+    surfaceSwapchain.second.surface->Destroy();
+  }
+  mSurfaceMap.clear();
+
+  ReleaseCommandPools();
+
+  if(mVmaAllocator)
+  {
+    char* stats;
+    mVmaAllocator->buildStatsString(&stats, VK_TRUE);
+    DALI_LOG_STREAM(gVulkanFilter, Debug::General, stats);
+    mVmaAllocator->freeStatsString(stats);
+
+    mVmaAllocator->destroy();
+  }
+
+  // We are done with all resources (technically... . If not we will get a ton of validation layer errors)
+  // Kill the Vulkan logical device
+  mLogicalDevice.destroy(mAllocator.get());
+
+  // Kill the Vulkan instance
+  DestroyInstance();
+}
+
+// Create methods -----------------------------------------------------------------------------------------------
+void Device::Create(Dali::Graphics::ContextPriority contextPriority)
+{
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+  if(DALI_LIKELY(!mGlobalPrioritySupportedInfo))
+  {
+    mGlobalPrioritySupportedInfo.reset(new GlobalPrioritySupportedInfo(contextPriority));
+
+    if(DALI_UNLIKELY(mPhysicalDevice))
+    {
+      mGlobalPrioritySupportedInfo->PrepareSupportedGlobalPriortyMap(mPhysicalDevice);
+    }
+  }
+  else
+  {
+    mGlobalPrioritySupportedInfo->ChangeContextPriority(contextPriority);
+  }
+#endif
+
+  auto extensions     = PrepareDefaultInstanceExtensions();
+  auto instanceLayers = vk::enumerateInstanceLayerProperties();
+
+  std::vector<const char*> validationLayers;
+  if(!instanceLayers.value.empty())
+  {
+    for(auto&& prop : instanceLayers.value)
+    {
+      DALI_LOG_STREAM(gVulkanFilter, Debug::General, prop.layerName);
+      for(auto&& reqLayer : reqLayers)
+      {
+        if(std::string(prop.layerName) == reqLayer)
+        {
+          validationLayers.push_back(reqLayer);
+        }
+      }
+    }
+  }
+
+  CreateInstance(extensions, validationLayers);
+}
+
+void Device::CreateDevice(SurfaceImpl* surface)
+{
+  PreparePhysicalDevice(surface);
+
+  // Determine required device extensions for native image support
+  std::vector<const char*> extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                                      VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,        // For importing FD into Vulkan memory
+                                      VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,             // For binding multi-plane memory
+                                      VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, // For querying plane-specific requirements
+                                      VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,  // For hardware YUV->RGB conversion
+                                      VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME,         // For multi-format image views for multi-plane
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+                                      VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,       // For context priority
+                                      VK_EXT_GLOBAL_PRIORITY_EXTENSION_QUERY_NAME, // For context priority query
+#endif
+                                      VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME,   // For advanced blending operations
+                                      VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME, // For pipeline creation feedback
+                                      VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,   // For dynamic color blend advanced
+                                      VK_EXT_MEMORY_BUDGET_EXTENSION_NAME};             // For VMA memory budget tracking
+
+  // Query available extensions
+  auto availableExtensions = mPhysicalDevice.enumerateDeviceExtensionProperties().value;
+
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+  bool hasGlobalPriorityExtension      = false;
+  bool hasGlobalPriorityQueryExtension = false;
+#endif
+
+  bool hasAdvancedBlendExtension            = false;
+  bool hasPipelineCreationFeedbackExtension = false;
+  bool hasMemoryBudgetExtension             = false;
+
+  // Filter only those extensions actually supported by the device
+  std::vector<const char*> enabledExtensions;
+  for(auto const* extensionName : extensions)
+  {
+    bool found = false;
+
+    for(auto const& prop : availableExtensions)
+    {
+      if(std::strcmp(prop.extensionName, extensionName) == 0)
+      {
+        found = true;
+        break;
+      }
+    }
+
+    if(found)
+    {
+      enabledExtensions.push_back(extensionName);
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+      if(!hasGlobalPriorityExtension && std::strcmp(extensionName, VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME) == 0)
+      {
+        hasGlobalPriorityExtension = true;
+      }
+      if(!hasGlobalPriorityQueryExtension && std::strcmp(extensionName, VK_EXT_GLOBAL_PRIORITY_EXTENSION_QUERY_NAME) == 0)
+      {
+        hasGlobalPriorityQueryExtension = true;
+      }
+#endif
+      if(!hasAdvancedBlendExtension && std::strcmp(extensionName, VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME) == 0)
+      {
+        hasAdvancedBlendExtension = true;
+      }
+      if(!hasPipelineCreationFeedbackExtension && std::strcmp(extensionName, VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME) == 0)
+      {
+        hasPipelineCreationFeedbackExtension = true;
+      }
+      if(!hasMemoryBudgetExtension && std::strcmp(extensionName, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0)
+      {
+        hasMemoryBudgetExtension = true;
+      }
+    }
+    else
+    {
+      DALI_LOG_WARNING("Vulkan extension %s not supported\n", extensionName);
+    }
+  }
+
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+  hasGlobalPriorityExtension &= hasGlobalPriorityQueryExtension;
+#endif
+
+  // Set pipeline creation feedback support flag
+  mIsPipelineCreationFeedbackSupported = hasPipelineCreationFeedbackExtension;
+  if(mIsPipelineCreationFeedbackSupported)
+  {
+    DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_EXT_pipeline_creation_feedback supported\n");
+  }
+  else
+  {
+    DALI_LOG_WARNING("VK_EXT_pipeline_creation_feedback not supported; pipeline creation feedback unavailable\n");
+  }
+
+  auto deviceFeatures2 = mPhysicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2,
+                                                      vk::PhysicalDeviceSamplerYcbcrConversionFeatures,
+                                                      vk::PhysicalDeviceBlendOperationAdvancedFeaturesEXT,
+                                                      vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+                                                      ,
+                                                      vk::PhysicalDeviceGlobalPriorityQueryFeaturesEXT
+#endif
+                                                      >();
+
+  // Check whether samplerYcbcrConversion feature is supported
+  vk::PhysicalDeviceSamplerYcbcrConversionFeatures const& samplerYcbcrConversionFeatures =
+    deviceFeatures2.get<vk::PhysicalDeviceSamplerYcbcrConversionFeatures>();
+
+  if(samplerYcbcrConversionFeatures.samplerYcbcrConversion)
+  {
+    mIsKHRSamplerYCbCrConversionSupported = true;
+    DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_KHR_sampler_ycbcr_conversion supported\n");
+  }
+  else
+  {
+    mIsKHRSamplerYCbCrConversionSupported = false;
+    DALI_LOG_WARNING("VK_KHR_sampler_ycbcr_conversion not supported; YUV formats unavailable\n");
+  }
+
+  // Initialize advanced blending support flags
+  mIsAdvancedBlendingSupported              = false;
+  mIsAdvancedBlendingAllOperationsSupported = false;
+
+  if(hasAdvancedBlendExtension)
+  {
+    mIsAdvancedBlendingSupported = true;
+    DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_EXT_blend_operation_advanced supported\n");
+  }
+  else
+  {
+    DALI_LOG_WARNING("VK_EXT_blend_operation_advanced not supported; advanced blending unavailable\n");
+  }
+
+  // Query advanced blending properties to determine capability level
+  if(mIsAdvancedBlendingSupported)
+  {
+    vk::PhysicalDeviceBlendOperationAdvancedPropertiesEXT blendProps{};
+    blendProps.sType = vk::StructureType::ePhysicalDeviceBlendOperationAdvancedPropertiesEXT;
+    blendProps.pNext = nullptr;
+
+    vk::PhysicalDeviceProperties2 props{};
+    props.sType = vk::StructureType::ePhysicalDeviceProperties2;
+    props.pNext = &blendProps;
+
+    mPhysicalDevice.getProperties2(&props);
+
+    if(blendProps.advancedBlendAllOperations)
+    {
+      mIsAdvancedBlendingAllOperationsSupported = true;
+      DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_EXT_blend_operation_advanced: all operations supported\n");
+    }
+    else
+    {
+      DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_EXT_blend_operation_advanced: limited operations supported\n");
+    }
+  }
+
+  auto queueInfos = GetQueueCreateInfos();
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+  // Need to keep some memory of global priority creation info during queueInfos alive.
+  std::vector<vk::DeviceQueueGlobalPriorityCreateInfoEXT> globalInfoReferenceHolder;
+  globalInfoReferenceHolder.reserve(queueInfos.size());
+#endif
+  {
+    auto maxQueueCountPerFamily = 0u;
+    for(auto&& info : queueInfos)
+    {
+      maxQueueCountPerFamily = Max(info.queueCount, maxQueueCountPerFamily);
+    }
+
+    auto priorities = std::vector<float>(maxQueueCountPerFamily);
+    std::fill(priorities.begin(), priorities.end(), 1.0f);
+
+    for(auto& info : queueInfos)
+    {
+      info.setPQueuePriorities(priorities.data());
+    }
+
+    if(!mLogicalDevice)
+    {
+      vk::PhysicalDeviceFeatures featuresToEnable{};
+
+      if(mPhysicalDeviceFeatures.fillModeNonSolid)
+      {
+        featuresToEnable.fillModeNonSolid = VK_TRUE;
+      }
+
+      if(mPhysicalDeviceFeatures.textureCompressionASTC_LDR)
+      {
+        featuresToEnable.textureCompressionASTC_LDR = VK_TRUE;
+      }
+
+      if(mPhysicalDeviceFeatures.textureCompressionETC2)
+      {
+        featuresToEnable.textureCompressionETC2 = VK_TRUE;
+      }
+
+      auto info = vk::DeviceCreateInfo{};
+      info.setEnabledExtensionCount(U32(enabledExtensions.size()))
+        .setPpEnabledExtensionNames(enabledExtensions.data())
+        .setPEnabledFeatures(&featuresToEnable)
+        .setPQueueCreateInfos(queueInfos.data())
+        .setQueueCreateInfoCount(U32(queueInfos.size()));
+
+      void* pNextChain = nullptr;
+
+      if(mIsAdvancedBlendingSupported)
+      {
+        // Enable advanced blending features if supported
+        auto& advancedBlendFeatures = deviceFeatures2.get<vk::PhysicalDeviceBlendOperationAdvancedFeaturesEXT>();
+
+        DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "advancedBlendCoherentOperations: %s\n", advancedBlendFeatures.advancedBlendCoherentOperations ? "TRUE" : "FALSE");
+
+        advancedBlendFeatures.pNext = pNextChain;
+        pNextChain                  = &advancedBlendFeatures;
+      }
+
+      // Check for VK_EXT_extended_dynamic_state3
+      bool hasExtendedDynamicState3 = false;
+      for(const auto* ext : enabledExtensions)
+      {
+        if(strcmp(ext, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME) == 0)
+        {
+          hasExtendedDynamicState3 = true;
+          break;
+        }
+      }
+
+      if(hasExtendedDynamicState3)
+      {
+        auto& extendedDynamicState3Features = deviceFeatures2.get<vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT>();
+        if(extendedDynamicState3Features.extendedDynamicState3ColorBlendAdvanced)
+        {
+          DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "extendedDynamicState3ColorBlendAdvanced supported and enabled\n");
+          mIsExtendedDynamicState3Supported   = true;
+          extendedDynamicState3Features.pNext = pNextChain;
+          pNextChain                          = &extendedDynamicState3Features;
+        }
+      }
+
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+      if(hasGlobalPriorityExtension)
+      {
+        auto& extendedGlobalPriorityQueryFeatures = deviceFeatures2.get<vk::PhysicalDeviceGlobalPriorityQueryFeaturesEXT>();
+        if(extendedGlobalPriorityQueryFeatures.globalPriorityQuery)
+        {
+          DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "globalPriorityQuery supported and enabled\n");
+          extendedGlobalPriorityQueryFeatures.pNext = pNextChain;
+          pNextChain                                = &extendedGlobalPriorityQueryFeatures;
+
+          // Check each queue family for global priority support before applying
+          for(auto& info : queueInfos)
+          {
+            mGlobalPrioritySupportedInfo->AppendGlobalPriorityInfo(info, globalInfoReferenceHolder);
+          }
+        }
+        else
+        {
+          DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "globalPriorityQuery supported but disabled\n");
+        }
+      }
+      else
+      {
+        DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "globalPriorityQuery extension not supported\n");
+      }
+#else
+      DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "globalPriorityQuery not supported as source code level\n");
+#endif
+
+      info.setPNext(pNextChain);
+
+      mLogicalDevice = VkAssert(mPhysicalDevice.createDevice(info, *mAllocator));
+
+      // Vulkan memory allocator
+
+      auto allocatorInfo = ::vma::AllocatorCreateInfo{}
+                             .setInstance(mInstance)
+                             .setPhysicalDevice(mPhysicalDevice)
+                             .setDevice(mLogicalDevice)
+                             .setPreferredLargeHeapBlockSize(1 * 1024 * 1024) // Default pool size (TODO: could potentially be configured per app)
+                             .setVulkanApiVersion(VK_API_VERSION_1_3)         // This must match the API version used for creating Vulkan instance
+                             .setPAllocationCallbacks(reinterpret_cast<vk::AllocationCallbacks*>(mAllocator.get()));
+
+      // Allow certain buffers/images to have dedicated memory allocations to
+      // improve performance on some GPUs.
+      allocatorInfo.flags |= ::vma::AllocatorCreateFlagBits::eKhrDedicatedAllocation;
+
+      // Query for current memory usage and budget, which will probably be
+      // more accurate than an estimation (only if extension is supported)
+      if(hasMemoryBudgetExtension)
+      {
+        allocatorInfo.flags |= ::vma::AllocatorCreateFlagBits::eExtMemoryBudget;
+        DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_EXT_memory_budget extension enabled for VMA\n");
+      }
+      else
+      {
+        DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "VK_EXT_memory_budget extension not supported, VMA will use estimation\n");
+      }
+
+      mVmaAllocator = std::make_unique<::vma::Allocator>();
+      VkAssert(::vma::createAllocator(&allocatorInfo, mVmaAllocator.get()));
+    }
+
+    // create Queue objects
+    for(auto& queueInfo : queueInfos)
+    {
+      for(auto i = 0u; i < queueInfo.queueCount; ++i)
+      {
+        auto queue = mLogicalDevice.getQueue(queueInfo.queueFamilyIndex, i);
+
+        // based on family push queue instance into right array
+        auto flags        = mQueueFamilyProperties[queueInfo.queueFamilyIndex].queueFlags;
+        auto queueWrapper = std::unique_ptr<Queue>(new Queue(queue, queueInfo.queueFamilyIndex, i, flags));
+
+        if(flags & vk::QueueFlagBits::eGraphics)
+        {
+          mGraphicsQueues.emplace_back(queueWrapper.get());
+        }
+        if(flags & vk::QueueFlagBits::eTransfer)
+        {
+          mTransferQueues.emplace_back(queueWrapper.get());
+        }
+        if(flags & vk::QueueFlagBits::eCompute)
+        {
+          mComputeQueues.emplace_back(queueWrapper.get());
+        }
+        mAllQueues.emplace_back(std::move(queueWrapper));
+        // todo: present queue
+      }
+    }
+    if(mTransferQueues.empty() && (!mGraphicsQueues.empty() || !mComputeQueues.empty()))
+    {
+      if(!mGraphicsQueues.empty())
+      {
+        mTransferQueues.emplace_back(mGraphicsQueues.back());
+      }
+      else
+      {
+        mTransferQueues.emplace_back(mComputeQueues.back());
+      }
+    }
+    // if( !mVulkanPipelineCache )
+    // {
+    //   mVulkanPipelineCache = mLogicalDevice.createPipelineCache( vk::PipelineCacheCreateInfo{}, GetAllocator() ).value;
+    // }
+  }
+}
+
+Graphics::SurfaceId Device::CreateSurface(
+  Dali::Graphics::SurfaceFactory&           surfaceFactory,
+  const Dali::Graphics::GraphicsCreateInfo& createInfo)
+{
+  auto vulkanSurfaceFactory = dynamic_cast<Dali::Graphics::Vulkan::SurfaceFactory*>(&surfaceFactory);
+
+  if(!vulkanSurfaceFactory)
+  {
+    return -1; // fail
+  }
+
+  // create surface from the factory
+  auto surfaceVkHandle = vulkanSurfaceFactory->Create(mInstance, mAllocator.get());
+  if(!surfaceVkHandle)
+  {
+    return -1; // fail
+  }
+
+  auto* surface = new SurfaceImpl(*this, surfaceVkHandle);
+
+  // Find a device that can support this surface.
+  CreateDevice(surface);
+
+  VkBool32 supported(VK_FALSE);
+  for(auto i = 0u; i < mQueueFamilyProperties.size(); ++i)
+  {
+    auto result = mPhysicalDevice.getSurfaceSupportKHR(i, surface->GetVkHandle(), &supported);
+    if(result == vk::Result::eSuccess && supported)
+    {
+      break;
+    }
+  }
+  assert(supported && "There is no queue family supporting presentation!");
+
+  surface->GetCapabilities() = VkAssert(mPhysicalDevice.getSurfaceCapabilitiesKHR(surface->GetVkHandle()));
+
+  // If width (and height) equals the special value 0xFFFFFFFF, the size of the surface will be set by the swapchain
+  if(surface->GetCapabilities().currentExtent.width == std::numeric_limits<uint32_t>::max())
+  {
+    surface->GetCapabilities().currentExtent.width = Max(surface->GetCapabilities().minImageExtent.width,
+                                                         Min(surface->GetCapabilities().maxImageExtent.width, createInfo.surfaceWidth));
+
+    surface->GetCapabilities().currentExtent.height = Max(surface->GetCapabilities().minImageExtent.height,
+                                                          Min(surface->GetCapabilities().maxImageExtent.height, createInfo.surfaceHeight));
+  }
+
+  mSurfaceResized = false;
+
+  // map surface to SurfaceId
+  auto surfaceId = ++mBaseSurfaceId;
+
+  mSurfaceMap[surfaceId] = DeviceWindow{surface, nullptr};
+
+  if(createInfo.depthStencilMode == Dali::Graphics::DepthStencilMode::DEPTH_OPTIMAL ||
+     createInfo.depthStencilMode == Dali::Graphics::DepthStencilMode::DEPTH_STENCIL_OPTIMAL)
+  {
+    mHasDepth = true;
+  }
+  else
+  {
+    mHasDepth = false;
+  }
+
+  if(createInfo.depthStencilMode == Dali::Graphics::DepthStencilMode::DEPTH_STENCIL_OPTIMAL)
+  {
+    mHasStencil = true;
+  }
+
+  return surfaceId;
+}
+
+void Device::DestroySurface(Dali::Graphics::SurfaceId surfaceId)
+{
+  if(auto match = mSurfaceMap.find(surfaceId); match != mSurfaceMap.end())
+  {
+    DeviceWaitIdle();
+    match->second.swapchain->Destroy();
+    match->second.surface->Destroy();
+    mSurfaceMap.erase(match);
+  }
+}
+
+void Device::CreateSwapchainForSurface(SurfaceId surfaceId)
+{
+  // store swapchain in the correct pair
+  if(auto match = mSurfaceMap.find(surfaceId); match != mSurfaceMap.end())
+  {
+    match->second.swapchain = CreateSwapchain(match->second.surface,
+                                              vk::Format::eB8G8R8A8Unorm,
+                                              vk::PresentModeKHR::eFifo,
+                                              nullptr);
+  }
+  else
+  {
+    DALI_LOG_ERROR("Can't find surface: %d\n", surfaceId);
+  }
+}
+
+Swapchain* Device::ReplaceSwapchainForSurface(SurfaceId surfaceId)
+{
+  if(auto match = mSurfaceMap.find(surfaceId); match != mSurfaceMap.end())
+  {
+    mSurfaceResized         = false;
+    auto oldSwapchain       = match->second.swapchain;
+    match->second.swapchain = CreateSwapchain(match->second.surface,
+                                              vk::Format::eB8G8R8A8Unorm,
+                                              vk::PresentModeKHR::eFifo,
+                                              std::move(oldSwapchain));
+    return match->second.swapchain;
+  }
+
+  DALI_LOG_ERROR("Can't find surface: %d\n", surfaceId);
+  return nullptr;
+}
+
+Swapchain* Device::CreateSwapchain(SurfaceImpl*       surface,
+                                   vk::Format         requestedFormat,
+                                   vk::PresentModeKHR presentMode,
+                                   Swapchain*&&       oldSwapchain)
+{
+  auto newSwapchain = Swapchain::NewSwapchain(*this, GetPresentQueue(), oldSwapchain ? oldSwapchain->GetVkHandle() : nullptr, surface, requestedFormat, presentMode, mBufferCount);
+
+  DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "Creating new swapchain with buffer count: %u\n", mBufferCount);
+  vk::Format depthStencilFormat{vk::Format::eUndefined};
+  if(oldSwapchain)
+  {
+    depthStencilFormat = oldSwapchain->GetDepthStencilFormat();
+    for(auto&& i : mSurfaceMap)
+    {
+      if(i.second.swapchain == oldSwapchain)
+      {
+        i.second.swapchain = nullptr;
+        break;
+      }
+    }
+  }
+  else
+  {
+    depthStencilFormat = DEPTH_STENCIL_FORMATS[GetDepthStencilState(mHasDepth, mHasStencil)];
+  }
+
+  if(oldSwapchain)
+  {
+    auto khr = oldSwapchain->GetVkHandle();
+    oldSwapchain->SetVkHandle(nullptr);
+    oldSwapchain->Destroy();
+    delete oldSwapchain;
+
+    mLogicalDevice.destroySwapchainKHR(khr, *mAllocator);
+  }
+
+  if(depthStencilFormat != vk::Format::eUndefined)
+  {
+    DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "Creating new depth buffer: %u\n", depthStencilFormat);
+    newSwapchain->SetDepthStencil(depthStencilFormat);
+  }
+  else
+  {
+    FramebufferAttachmentHandle empty;
+    newSwapchain->CreateFramebuffers(empty); // Note, this may destroy vk swapchain if invalid.
+  }
+  return newSwapchain;
+}
+
+void Device::AcquireNextImage(SurfaceId surfaceId)
+{
+  auto swapchain = mSurfaceMap[surfaceId].swapchain;
+
+  DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "swapchain::%p\n", swapchain);
+
+  if(swapchain != nullptr)
+  {
+    FramebufferImpl* framebuffer = swapchain->AcquireNextFramebuffer(true);
+
+    DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "  framebuffer::%p  isValid:%s\n", framebuffer, swapchain->IsValid() ? "T" : "F");
+
+    // In case something went wrong we will try to replace swapchain once
+    // before calling it a day.
+    if(!framebuffer || !swapchain->IsValid())
+    {
+      // make sure device doesn't do any work before replacing swapchain
+      DeviceWaitIdle();
+
+      // replace swapchain (only once)
+      swapchain = ReplaceSwapchainForSurface(surfaceId);
+      // get new valid framebuffer
+      if(swapchain)
+      {
+        framebuffer = swapchain->AcquireNextFramebuffer(true);
+      }
+      DALI_ASSERT_ALWAYS(framebuffer && "Replacing invalid swapchain unsuccessful! Goodbye!");
+    }
+  }
+}
+
+vk::Result Device::Present(Queue& queue, vk::PresentInfoKHR& presentInfo)
+{
+  auto lock(queue.Lock());
+  return queue.Present(presentInfo);
+}
+
+vk::Result Device::QueueWaitIdle(Queue& queue)
+{
+  auto lock(queue.Lock());
+  return queue.WaitIdle();
+}
+
+vk::Result Device::DeviceWaitIdle()
+{
+  return mLogicalDevice.waitIdle();
+}
+
+const vk::AllocationCallbacks& Device::GetAllocator(const char* tag)
+{
+  // if(mAllocator)
+  // {
+  //   mAllocator->setPUserData( CreateMemoryAllocationTag( tag ) );
+  // }
+  return *mAllocator;
+}
+
+Queue& Device::GetGraphicsQueue(uint32_t index) const
+{
+  return *mGraphicsQueues[index];
+}
+
+Queue& Device::GetTransferQueue(uint32_t index) const
+{
+  return *mTransferQueues[index];
+}
+
+Queue& Device::GetComputeQueue(uint32_t index) const
+{
+  return *mComputeQueues[index];
+}
+
+Queue& Device::GetPresentQueue() const
+{
+  return GetGraphicsQueue(0);
+}
+
+void Device::DiscardResource(std::function<void()> deleter)
+{
+  // For now, just call immediately.
+  deleter();
+}
+
+Image* Device::CreateImageFromExternal(vk::Image externalImage, vk::Format imageFormat, vk::Extent2D extent)
+{
+  auto imageCreateInfo = vk::ImageCreateInfo{}
+                           .setFormat(imageFormat)
+                           .setSamples(vk::SampleCountFlagBits::e1)
+                           .setInitialLayout(vk::ImageLayout::eUndefined)
+                           .setSharingMode(vk::SharingMode::eExclusive)
+                           .setUsage(vk::ImageUsageFlagBits::eColorAttachment)
+                           .setExtent({extent.width, extent.height, 1})
+                           .setArrayLayers(1)
+                           .setImageType(vk::ImageType::e2D)
+                           .setTiling(vk::ImageTiling::eOptimal)
+                           .setMipLevels(1);
+
+  return new Image(*this, imageCreateInfo, externalImage);
+}
+
+// -------------------------------------------------------------------------------------------------------
+// Getters------------------------------------------------------------------------------------------------
+SurfaceImpl* Device::GetSurface(Graphics::SurfaceId surfaceId)
+{
+  // Note, surface ID == 0 means main window
+  if(surfaceId == 0)
+  {
+    return mSurfaceMap.begin()->second.surface;
+  }
+  return mSurfaceMap[surfaceId].surface;
+}
+
+Swapchain* Device::GetSwapchainForSurface(SurfaceImpl* surface)
+{
+  for(auto&& val : mSurfaceMap)
+  {
+    if(val.second.surface == surface)
+    {
+      return val.second.swapchain;
+    }
+  }
+  return nullptr;
+}
+
+Swapchain* Device::GetSwapchainForSurfaceId(Graphics::SurfaceId surfaceId)
+{
+  if(surfaceId == 0)
+  {
+    return mSurfaceMap.begin()->second.swapchain;
+  }
+  return mSurfaceMap[surfaceId].swapchain;
+}
+
+vk::Device Device::GetLogicalDevice() const
+{
+  return mLogicalDevice;
+}
+
+vk::PhysicalDevice Device::GetPhysicalDevice() const
+{
+  return mPhysicalDevice;
+}
+
+vk::Instance Device::GetInstance() const
+{
+  return mInstance;
+}
+
+::vma::Allocator* Device::GetVulkanMemoryAllocator() const
+{
+  return mVmaAllocator.get();
+};
+
+Platform Device::GetDefaultPlatform() const
+{
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+  mPlatform = Platform::WAYLAND;
+#elif VK_USE_PLATFORM_XCB_KHR
+  mPlatform = Platform::XCB;
+#elif VK_USE_PLATFORM_XLIB_KHR
+  mPlatform = Platform::XLIB;
+#else
+  return mPlatform;
+#endif
+}
+
+CommandPool* Device::GetCommandPool(std::thread::id threadId)
+{
+  CommandPool* commandPool = nullptr;
+  {
+    std::lock_guard<std::mutex> lock{mMutex};
+    commandPool = mCommandPools.find(threadId) == mCommandPools.end() ? nullptr : mCommandPools[threadId];
+  }
+  if(!commandPool)
+  {
+    vk::CommandPoolCreateInfo createInfo{};
+    createInfo.setFlags(vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
+    commandPool = CommandPool::New(*this, createInfo);
+    {
+      std::lock_guard<std::mutex> lock{mMutex};
+      mCommandPools[std::this_thread::get_id()] = commandPool;
+    }
+  }
+  return commandPool;
+}
+
+void Device::ReleaseCommandPools()
+{
+  for(auto& commandPool : mCommandPools)
+  {
+    commandPool.second->Reset(true);
+    delete commandPool.second;
+  }
+}
+
+void Device::SurfaceResized(unsigned int width, unsigned int height)
+{
+  // Get main window's surface
+  // At first, check to empty about mSurfaceMap
+  if(!mSurfaceMap.empty())
+  {
+    auto surface = mSurfaceMap.begin()->second.surface;
+    if(surface)
+    {
+      auto surfaceCapabilities = surface->GetCapabilities();
+      if(surfaceCapabilities.currentExtent.width != width || surfaceCapabilities.currentExtent.height != height)
+      {
+        surface->UpdateSize(width, height);
+        mSurfaceResized = true;
+      }
+    }
+  }
+}
+
+uint32_t Device::GetCurrentBufferIndex() const
+{
+  uint32_t bufferIndex = 0;
+  if(!mSurfaceMap.empty())
+  {
+    // Use the main window's buffer index.
+    bufferIndex = mSurfaceMap.begin()->second.swapchain->GetCurrentBufferIndex();
+  }
+  return bufferIndex;
+}
+
+uint32_t Device::GetBufferCount() const
+{
+  return mBufferCount;
+}
+
+void Device::CreateInstance(const std::vector<const char*>& extensions,
+                            const std::vector<const char*>& validationLayers)
+{
+  auto info    = vk::InstanceCreateInfo{};
+  auto appInfo = vk::ApplicationInfo{};
+  appInfo.setApiVersion(VK_API_VERSION_1_3);
+  info
+    .setPApplicationInfo(&appInfo)
+    .setEnabledExtensionCount(U32(extensions.size()))
+    .setPpEnabledExtensionNames(extensions.data())
+    .setEnabledLayerCount(U32(validationLayers.size()))
+    .setPpEnabledLayerNames(validationLayers.data());
+
+  const char* log_level = Dali::EnvironmentVariable::GetEnvironmentVariable("LOG_VULKAN");
+  int         intValue  = log_level ? std::atoi(log_level) : 0;
+  if(!intValue)
+  {
+    info.setEnabledLayerCount(0);
+  }
+
+  mInstance = VkAssert(vk::createInstance(info, *mAllocator));
+}
+
+void Device::DestroyInstance()
+{
+  if(mInstance)
+  {
+    mInstance.destroy(*mAllocator);
+    mInstance = nullptr;
+  }
+}
+
+void Device::PreparePhysicalDevice(SurfaceImpl* surface)
+{
+  if(mPhysicalDevice)
+  {
+    return;
+  }
+  auto devices = VkAssert(mInstance.enumeratePhysicalDevices());
+  assert(!devices.empty() && "No Vulkan supported device found!");
+
+  DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "Device count: %d\n", devices.size());
+
+  // if only one, pick first
+  mPhysicalDevice = nullptr;
+#if defined(DEBUG_ENABLED)
+  int gpuId = 0;
+#endif
+  if(devices.size() == 1)
+  {
+    mPhysicalDevice = devices[0];
+  }
+  else // otherwise look for one which is a graphics device
+  {
+    auto vkSurface = surface ? surface->GetVkHandle() : nullptr;
+
+    for(auto& device : devices)
+    {
+      auto properties = device.getProperties();
+
+      // We only want to choose a device that supports Vulkan 1.2 or above.
+      if(properties.apiVersion < VK_API_VERSION_1_2)
+      {
+        continue;
+      }
+
+      if(properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu ||
+         properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu)
+      {
+        auto queueFamilyProperties = device.getQueueFamilyProperties();
+        int  queueIndex            = 0;
+        for(const auto& queueFamily : queueFamilyProperties)
+        {
+          if(queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
+          {
+            VkBool32 presentSupported = false;
+            if(vkSurface)
+            {
+              auto result = device.getSurfaceSupportKHR(queueIndex, vkSurface, &presentSupported);
+              if((result == vk::Result::eSuccess) && presentSupported)
+              {
+                mPhysicalDevice = device;
+                break;
+              }
+            }
+            else if(!surface)
+            {
+              // Don't care about present. Use the first device
+              mPhysicalDevice = device;
+              break;
+            }
+            else
+            {
+              // Choose first graphics queue
+              break;
+            }
+          }
+          ++queueIndex;
+        }
+      }
+      if(mPhysicalDevice)
+      {
+        break;
+      }
+#if defined(DEBUG_ENABLED)
+      gpuId++;
+#endif
+    }
+  }
+
+  assert(mPhysicalDevice && "No suitable Physical Device found!");
+
+  InitializePhysicalDeviceProperties();
+  GetQueueFamilyProperties();
+
+#if DALI_VK_EXT_GLOBAL_PRIORITY_SUPPORT
+  if(DALI_LIKELY(mGlobalPrioritySupportedInfo))
+  {
+    mGlobalPrioritySupportedInfo->PrepareSupportedGlobalPriortyMap(mPhysicalDevice);
+  }
+#endif
+
+  Integration::Log::LogMessage(Integration::Log::INFO,
+                               "Vulkan information:\n"
+                               "  Vulkan version: %d.%d.%d\n"
+                               "  Device name:    %s\n"
+                               "  Driver Version: %x\n",
+                               VK_API_VERSION_MAJOR(mPhysicalDeviceProperties.apiVersion),
+                               VK_API_VERSION_MINOR(mPhysicalDeviceProperties.apiVersion),
+                               VK_API_VERSION_PATCH(mPhysicalDeviceProperties.apiVersion),
+                               (const char*)mPhysicalDeviceProperties.deviceName,
+                               mPhysicalDeviceProperties.driverVersion);
+
+  std::ostringstream backendInformation;
+  backendInformation.imbue(std::locale::classic());
+  backendInformation << "Vulkan Information:" << std::endl
+                     << "Version: " << VK_API_VERSION_MAJOR(mPhysicalDeviceProperties.apiVersion) << "."
+                     << VK_API_VERSION_MINOR(mPhysicalDeviceProperties.apiVersion) << "."
+                     << VK_API_VERSION_PATCH(mPhysicalDeviceProperties.apiVersion) << std::endl
+                     << "Device Name: " << (const char*)mPhysicalDeviceProperties.deviceName << std::endl
+                     << "Driver Version: " << std::hex << mPhysicalDeviceProperties.driverVersion;
+  Graphics::Internal::SetBackendInformation(backendInformation.str());
+
+  DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "GPU ID:%d\n", gpuId);
+
+  std::ostringstream imageProps;
+  imageProps.imbue(std::locale::classic());
+  imageProps << "Device image properties:\n maxImageArrayLayers:" << mPhysicalDeviceProperties.limits.maxImageArrayLayers << "\n";
+
+  DALI_LOG_RELEASE_INFO("%s", imageProps.str().c_str());
+}
+
+void Device::InitializePhysicalDeviceProperties()
+{
+  mPhysicalDeviceProperties       = mPhysicalDevice.getProperties();
+  mPhysicalDeviceMemoryProperties = mPhysicalDevice.getMemoryProperties();
+  mPhysicalDeviceFeatures         = mPhysicalDevice.getFeatures();
+}
+
+void Device::GetQueueFamilyProperties()
+{
+  mQueueFamilyProperties = mPhysicalDevice.getQueueFamilyProperties();
+}
+
+std::vector<vk::DeviceQueueCreateInfo> Device::GetQueueCreateInfos()
+{
+  std::vector<vk::DeviceQueueCreateInfo> queueInfos{};
+
+  constexpr uint8_t MAX_QUEUE_TYPES = 4;
+
+  // find suitable family for each type of queue
+  auto           familyIndexTypes = std::array<uint32_t, MAX_QUEUE_TYPES>{};
+  const uint32_t UNFILLED         = std::numeric_limits<uint32_t>::max();
+  familyIndexTypes.fill(UNFILLED);
+
+  // Device
+  auto& graphicsFamily = familyIndexTypes[0];
+
+  // Transfer
+  auto& transferFamily = familyIndexTypes[1];
+
+  // Present
+  auto& presentFamily = familyIndexTypes[2];
+
+  // Present
+  auto& computeFamily = familyIndexTypes[3];
+
+  auto queueFamilyIndex = 0u;
+  for(auto& prop : mQueueFamilyProperties)
+  {
+    DALI_LOG_INFO(gVulkanFilter, Debug::Concise, "QueuePropCount:%d  queueFlags:%0x\n", queueFamilyIndex, prop.queueFlags);
+
+    if((prop.queueFlags & vk::QueueFlagBits::eGraphics) && graphicsFamily == UNFILLED)
+    {
+      graphicsFamily = queueFamilyIndex;
+      presentFamily  = queueFamilyIndex;
+    }
+    if((prop.queueFlags & vk::QueueFlagBits::eTransfer) && transferFamily == UNFILLED)
+    {
+      transferFamily = queueFamilyIndex;
+    }
+    if((prop.queueFlags & vk::QueueFlagBits::eCompute) && computeFamily == UNFILLED)
+    {
+      computeFamily = queueFamilyIndex;
+    }
+    ++queueFamilyIndex;
+  }
+
+  // Reporting the transfer queue is OPTIONAL if the device supports graphics or compute queues.
+  if(transferFamily == UNFILLED)
+  {
+    if(graphicsFamily != UNFILLED)
+    {
+      transferFamily = graphicsFamily;
+    }
+    else if(computeFamily != UNFILLED)
+    {
+      transferFamily = computeFamily;
+    }
+  }
+
+  assert(graphicsFamily != UNFILLED && "No queue family that supports graphics operations!");
+  assert(transferFamily != UNFILLED && "No queue family that supports transfer operations!");
+
+  // todo: we may require that the family must be same for all type of operations, it makes
+  // easier to handle synchronisation related issues.
+
+  // sort queues
+  std::sort(familyIndexTypes.begin(), familyIndexTypes.end());
+
+  // allocate all queues from graphics family
+  auto prevQueueFamilyIndex = std::numeric_limits<uint32_t>::max();
+
+  for(const auto& familyIndex : familyIndexTypes)
+  {
+    if(prevQueueFamilyIndex == familyIndex)
+    {
+      continue;
+    }
+
+    auto& queueCount = mQueueFamilyProperties[familyIndex].queueCount;
+
+    // fill queue create info for the family.
+    // note the priorities are not being set as local pointer will out of scope, this
+    // will be fixed by the caller function
+    auto info = vk::DeviceQueueCreateInfo{}
+                  .setPQueuePriorities(nullptr)
+                  .setQueueCount(queueCount)
+                  .setQueueFamilyIndex(familyIndex);
+    queueInfos.push_back(info);
+    prevQueueFamilyIndex = familyIndex;
+  }
+
+  return queueInfos;
+}
+
+std::vector<const char*> Device::PrepareDefaultInstanceExtensions()
+{
+  auto availableExtensions = vk::enumerateInstanceExtensionProperties();
+
+  std::string extensionName;
+
+  bool xlibAvailable{false};
+  bool xcbAvailable{false};
+  bool waylandAvailable{false};
+  bool androidAvailable{false};
+  bool debugReportExtensionAvailable{false};
+
+  for(auto&& ext : availableExtensions.value)
+  {
+    extensionName = std::string(ext.extensionName);
+    if(extensionName == VK_KHR_XCB_SURFACE_EXTENSION_NAME)
+    {
+      xcbAvailable = true;
+    }
+    else if(extensionName == VK_KHR_XLIB_SURFACE_EXTENSION_NAME)
+    {
+      xlibAvailable = true;
+    }
+    else if(extensionName == VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME)
+    {
+      waylandAvailable = true;
+    }
+    else if(extensionName == VK_KHR_ANDROID_SURFACE_EXTENSION_NAME)
+    {
+      androidAvailable = true;
+    }
+    else if(extensionName == VK_EXT_DEBUG_REPORT_EXTENSION_NAME)
+    {
+      debugReportExtensionAvailable = true;
+    }
+  }
+
+  std::vector<const char*> extensions{};
+
+  // depending on the platform validate availableExtensions
+  auto platform = GetDefaultPlatform();
+
+  if(platform != Platform::UNDEFINED)
+  {
+    if(platform == Platform::XCB && xcbAvailable)
+    {
+      extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+    }
+    else if(platform == Platform::XLIB && xlibAvailable)
+    {
+      extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+    }
+    else if(platform == Platform::WAYLAND && waylandAvailable)
+    {
+      extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+      /* For native image, check these exist first:
+       *  VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
+       *  VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME
+       */
+    }
+    else if(platform == Platform::PLATFORM_ANDROID && androidAvailable)
+    {
+      extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+    }
+  }
+  else // try to determine the platform based on available extensions
+  {
+    if(xcbAvailable)
+    {
+      mPlatform = Platform::XCB;
+      extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+    }
+    else if(xlibAvailable)
+    {
+      mPlatform = Platform::XLIB;
+      extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+    }
+    else if(waylandAvailable)
+    {
+      mPlatform = Platform::WAYLAND;
+      extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+      /* For native image, check these exist first:
+       *  VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
+       *  VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME
+       */
+    }
+    else if(androidAvailable)
+    {
+      mPlatform = Platform::PLATFORM_ANDROID;
+      extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+    }
+    else
+    {
+      // can't determine the platform!
+      mPlatform = Platform::UNDEFINED;
+    }
+  }
+
+  // other essential extensions
+  extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+
+  if(debugReportExtensionAvailable)
+  {
+    extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+  }
+
+  return extensions;
+}
+
+/**
+ * Helper function which returns GPU heap index that can be used to allocate
+ * particular type of resource
+ */
+uint32_t Device::GetMemoryIndex(
+  const vk::PhysicalDeviceMemoryProperties& memoryProperties,
+  uint32_t                                  memoryTypeBits,
+  vk::MemoryPropertyFlags                   properties)
+{
+  for(uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+  {
+    if((memoryTypeBits & (1u << i)) &&
+       ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
+    {
+      return i;
+    }
+  }
+  return INVALID_MEMORY_INDEX;
+}
+
+const vk::PhysicalDeviceProperties& Device::GetPhysicalDeviceProperties() const
+{
+  return mPhysicalDeviceProperties;
+}
+
+} //namespace DALI_NAMESPACE::Graphics::Vulkan

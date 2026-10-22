@@ -1,0 +1,6 @@
+
+# module: video, backend: common
+SET( adaptor_video_common_src_files 
+    ${adaptor_video_dir}/common/video-player-impl.cpp
+)
+

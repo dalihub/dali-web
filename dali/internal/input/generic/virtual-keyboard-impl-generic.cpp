@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/input/common/virtual-keyboard-impl.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace VirtualKeyboard
+{
+namespace
+{
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_INPUT_METHOD_CONTEXT");
+#endif
+} // namespace
+
+void Show()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::Show\n");
+}
+
+void Hide()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::Hide\n");
+}
+
+bool IsVisible()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::IsVisible\n");
+
+  return false;
+}
+
+void ApplySettings(const Property::Map& settingsMap)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::ApplySettings\n");
+}
+
+void SetReturnKeyType(const InputMethod::ReturnKeyType type)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::SetReturnKeyType\n");
+}
+
+Dali::InputMethod::ReturnKeyType GetReturnKeyType()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::GetReturnKeyType\n");
+
+  return Dali::InputMethod::ReturnKeyType::DEFAULT;
+}
+
+void EnablePrediction(const bool enable)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::EnablePrediction\n");
+}
+
+bool IsPredictionEnabled()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::IsPredictionEnabled\n");
+
+  return false;
+}
+
+BoundsInteger GetSizeAndPosition()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::GetSizeAndPosition\n");
+
+  BoundsInteger ret;
+  return ret;
+}
+
+void RotateTo(int angle)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::RotateTo\n");
+}
+
+Dali::VirtualKeyboard::TextDirection GetTextDirection()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "VirtualKeyboard::GetTextDirection\n");
+
+  return Dali::VirtualKeyboard::LEFT_TO_RIGHT;
+}
+
+} // namespace VirtualKeyboard
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

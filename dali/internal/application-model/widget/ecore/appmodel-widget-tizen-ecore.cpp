@@ -1,0 +1,475 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/application-model/widget/ecore/appmodel-widget-tizen-ecore.h>
+
+// EXTERNAL INCLUDES
+#include <bundle.h>
+#include <bundle_internal.h>
+#include <dali/internal/system/tizen/tizen-dlog.h>
+#include <glib.h>
+#include <system_info.h>
+#include <tizen.h>
+#include <widget_base.h>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/environment-variable.h>
+#include <dali/integration-api/debug.h>
+#include <dali/internal/adaptor/common/framework.h>
+#include <dali/internal/adaptor/tizen/framework-tizen.h>
+#include <dali/internal/system/common/event-loop.h>
+#include <dali/internal/system/common/system-factory.h>
+
+#define DEBUG_PRINTF(fmt, arg...) LOGD(" " fmt, ##arg)
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+extern "C" DALI_ADAPTOR_API AppModelWidget* Create()
+{
+  DALI_TIZEN_DLOG(DLOG_INFO, "DALIWidgetAPP, AppModelWidget is created");
+  return new AppModelWidget();
+}
+
+extern "C" DALI_ADAPTOR_API void Destroy(void* p)
+{
+  AppModelWidget* appWidget = static_cast<AppModelWidget*>(p);
+  delete appWidget;
+}
+
+extern "C" DALI_ADAPTOR_API int AppMain(bool isUiThread, void* data, void* pData)
+{
+  DALI_TIZEN_DLOG(DLOG_INFO, "DALIWidgetAPP, AppMain is called for appWidget");
+  AppModelWidget* appWidget = static_cast<AppModelWidget*>(pData);
+  int             ret       = 0;
+  if(appWidget != nullptr)
+  {
+    ret = appWidget->AppMain(data);
+  }
+  else
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "appWidget is nullptr");
+  }
+  return ret;
+}
+
+extern "C" DALI_ADAPTOR_API void AppExit(AppModelWidget* p)
+{
+  p->AppExit();
+}
+
+namespace
+{
+AppModelWidget* gAppModelWidget = nullptr;
+} // anonymous namespace
+
+namespace AppCoreWidget
+{
+typedef enum
+{
+  LOW_MEMORY,                 //< The low memory event
+  LOW_BATTERY,                //< The low battery event
+  LANGUAGE_CHANGED,           //< The system language changed event
+  DEVICE_ORIENTATION_CHANGED, //< The device orientation changed event
+  REGION_FORMAT_CHANGED,      //< The region format changed event
+  SUSPENDED_STATE_CHANGED,    //< The suspended state changed event of the application
+  UPDATE_REQUESTED,           //< The update requested event. This event can occur when an app needs to be updated. It is dependent on target devices.
+} AppEventType;
+
+static int AppEventConverter[APPCORE_BASE_EVENT_MAX] =
+  {
+    [LOW_MEMORY]                 = APPCORE_BASE_EVENT_LOW_MEMORY,
+    [LOW_BATTERY]                = APPCORE_BASE_EVENT_LOW_BATTERY,
+    [LANGUAGE_CHANGED]           = APPCORE_BASE_EVENT_LANG_CHANGE,
+    [DEVICE_ORIENTATION_CHANGED] = APPCORE_BASE_EVENT_DEVICE_ORIENTATION_CHANGED,
+    [REGION_FORMAT_CHANGED]      = APPCORE_BASE_EVENT_REGION_CHANGE,
+    [SUSPENDED_STATE_CHANGED]    = APPCORE_BASE_EVENT_SUSPENDED_STATE_CHANGE,
+};
+
+struct AppEventInfo
+{
+  AppEventType type;
+  void*        value;
+};
+
+typedef struct AppEventInfo* AppEventInfoPtr;
+
+typedef void (*AppEventCallback)(AppEventInfoPtr eventInfo, void* userData);
+
+struct AppEventHandler
+{
+  AppEventType     type;
+  AppEventCallback cb;
+  void*            data;
+  void*            raw;
+};
+
+typedef struct AppEventHandler* AppEventHandlerPtr;
+
+int EventCallback(void* event, void* data)
+{
+  DALI_TIZEN_DLOG(DLOG_INFO, "DALIWidgetAPP, EventCallback is called");
+  AppEventHandlerPtr handler = static_cast<AppEventHandlerPtr>(data);
+
+  struct AppEventInfo appEvent;
+
+  appEvent.type  = handler->type;
+  appEvent.value = event;
+
+  if(handler->cb)
+    handler->cb(&appEvent, handler->data);
+
+  return 0;
+}
+
+int AppAddEventHandler(AppEventHandlerPtr* eventHandler, AppEventType eventType, AppEventCallback callback, void* userData)
+{
+  DALI_TIZEN_DLOG(DLOG_INFO, "DALIWidgetAPP, AppAddEventHandler is called");
+  AppEventHandlerPtr handler;
+
+  handler = static_cast<AppEventHandlerPtr>(calloc(1, sizeof(struct AppEventHandler)));
+  if(DALI_UNLIKELY(!handler))
+  {
+    DALI_LOG_ERROR("failed to create handler. calloc size : %zu\n", sizeof(struct AppEventHandler));
+    return TIZEN_ERROR_UNKNOWN;
+  }
+  handler->type = eventType;
+  handler->cb   = callback;
+  handler->data = userData;
+  handler->raw  = appcore_base_add_event(static_cast<appcore_base_event>(AppEventConverter[static_cast<int>(eventType)]), EventCallback, handler);
+
+  *eventHandler = handler;
+
+  return TIZEN_ERROR_NONE;
+}
+} // namespace AppCoreWidget
+
+struct DALI_ADAPTOR_API AppModelWidget::Impl
+{
+  bool IsWidgetFeatureEnabled()
+  {
+    static bool feature   = false;
+    static bool retrieved = false;
+    int         ret;
+
+    if(retrieved == true)
+    {
+      return feature;
+    }
+
+    ret = system_info_get_platform_bool("http://tizen.org/feature/shell.appwidget", &feature);
+    if(ret != SYSTEM_INFO_ERROR_NONE)
+    {
+      DALI_LOG_ERROR("failed to get system info");
+      return false;
+    }
+
+    retrieved = true;
+    return feature;
+  }
+
+  void AppExit()
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppExit() emitted", __MODULE__, __func__, __LINE__);
+    widget_base_exit();
+  }
+
+  static int WidgetAppCreate(void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > WidgetAppCreate() emitted", __MODULE__, __func__, __LINE__);
+    auto* impl = static_cast<AppModelWidget*>(data)->mImpl;
+    widget_base_on_create();
+    return static_cast<int>(impl->mFramework->Create());
+  }
+
+  static int WidgetAppTerminate(void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > WidgetAppTerminate() emitted", __MODULE__, __func__, __LINE__);
+    auto*                impl     = static_cast<AppModelWidget*>(data)->mImpl;
+    Framework::Observer* observer = &impl->mFramework->GetObserver();
+    observer->OnTerminate();
+
+    widget_base_on_terminate();
+    return 0;
+  }
+
+  static void AppInit(int argc, char** argv, void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppInit() emitted", __MODULE__, __func__, __LINE__);
+    auto* impl       = static_cast<AppModelWidget*>(data)->mImpl;
+    impl->mEventLoop = Dali::Internal::Adaptor::GetSystemFactory()->CreateEventLoop();
+    if(impl->mEventLoop)
+    {
+      impl->mEventLoop->Initialize(argc, argv);
+    }
+    else
+    {
+      DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > Failed to create EventLoop", __MODULE__, __func__, __LINE__);
+    }
+  }
+
+  static void AppFinish(void)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppFinish() emitted", __MODULE__, __func__, __LINE__);
+    if(gAppModelWidget->mImpl->mEventLoop)
+    {
+      gAppModelWidget->mImpl->mEventLoop->Shutdown();
+      gAppModelWidget->mImpl->mEventLoop.reset();
+    }
+    else
+    {
+      DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > EventLoop is not created", __MODULE__, __func__, __LINE__);
+    }
+  }
+
+  static void AppRun(void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppRun() emitted", __MODULE__, __func__, __LINE__);
+    auto* impl = static_cast<AppModelWidget*>(data)->mImpl;
+    if(impl->mEventLoop)
+    {
+      impl->mEventLoop->Run();
+    }
+    else
+    {
+      DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > EventLoop is not created", __MODULE__, __func__, __LINE__);
+    }
+  }
+
+  static void AppExit(void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppExit() emitted", __MODULE__, __func__, __LINE__);
+    auto* impl = static_cast<AppModelWidget*>(data)->mImpl;
+    if(impl->mEventLoop)
+    {
+      impl->mEventLoop->Quit();
+    }
+    else
+    {
+      DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > EventLoop is not created", __MODULE__, __func__, __LINE__);
+    }
+  }
+
+  static void AppLanguageChanged(AppCoreWidget::AppEventInfoPtr event, void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppLanguageChanged() emitted", __MODULE__, __func__, __LINE__);
+    FrameworkTizen*      framework = static_cast<FrameworkTizen*>(data);
+    Framework::Observer* observer  = &framework->GetObserver();
+
+    if(event && event->value)
+    {
+      framework->SetLanguage(std::string(static_cast<const char*>(event->value)));
+      observer->OnLanguageChanged();
+    }
+    else
+    {
+      DALI_LOG_ERROR("NULL pointer in Language changed event\n");
+    }
+  }
+
+  static void AppRegionChanged(AppCoreWidget::AppEventInfoPtr event, void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppRegionChanged() emitted", __MODULE__, __func__, __LINE__);
+    FrameworkTizen*      framework = static_cast<FrameworkTizen*>(data);
+    Framework::Observer* observer  = &framework->GetObserver();
+
+    if(event && event->value)
+    {
+      framework->SetRegion(std::string(static_cast<const char*>(event->value)));
+      observer->OnRegionChanged();
+    }
+    else
+    {
+      DALI_LOG_ERROR("NULL pointer in Region changed event\n");
+    }
+  }
+
+  static void AppBatteryLow(AppCoreWidget::AppEventInfoPtr event, void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppBatteryLow() emitted", __MODULE__, __func__, __LINE__);
+    Framework::Observer*                observer = &static_cast<FrameworkTizen*>(data)->GetObserver();
+    int                                 status   = *static_cast<int*>(event->value);
+    Dali::DeviceStatus::Battery::Status result   = Dali::DeviceStatus::Battery::Status::NORMAL;
+
+    // convert to dali battery status
+    switch(status)
+    {
+      case 1:
+      {
+        result = Dali::DeviceStatus::Battery::POWER_OFF;
+        break;
+      }
+      case 2:
+      {
+        result = Dali::DeviceStatus::Battery::CRITICALLY_LOW;
+        break;
+      }
+      default:
+        break;
+    }
+    observer->OnBatteryLow(result);
+  }
+
+  static void AppMemoryLow(AppCoreWidget::AppEventInfoPtr event, void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppMemoryLow() emitted", __MODULE__, __func__, __LINE__);
+    Framework::Observer*               observer = &static_cast<FrameworkTizen*>(data)->GetObserver();
+    int                                status   = *static_cast<int*>(event->value);
+    Dali::DeviceStatus::Memory::Status result   = Dali::DeviceStatus::Memory::Status::NORMAL;
+
+    // convert to dali memmory status
+    switch(status)
+    {
+      case 1:
+      {
+        result = Dali::DeviceStatus::Memory::NORMAL;
+        break;
+      }
+      case 2:
+      {
+        result = Dali::DeviceStatus::Memory::LOW;
+        break;
+      }
+      case 4:
+      {
+        result = Dali::DeviceStatus::Memory::CRITICALLY_LOW;
+        break;
+      }
+      default:
+        break;
+    }
+    observer->OnMemoryLow(result);
+  }
+
+  static void AppDeviceOrientationChanged(AppCoreWidget::AppEventInfoPtr event, void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "%s: %s(%d) > AppDeviceOrientationChanged() emitted", __MODULE__, __func__, __LINE__);
+    Framework::Observer*                    observer = &static_cast<FrameworkTizen*>(data)->GetObserver();
+    int                                     status   = *static_cast<int*>(event->value);
+    Dali::DeviceStatus::Orientation::Status result   = Dali::DeviceStatus::Orientation::Status::ORIENTATION_0;
+
+    switch(status)
+    {
+      case APP_DEVICE_ORIENTATION_0:
+      {
+        result = Dali::DeviceStatus::Orientation::Status::ORIENTATION_0;
+        break;
+      }
+      case APP_DEVICE_ORIENTATION_90:
+      {
+        result = Dali::DeviceStatus::Orientation::Status::ORIENTATION_90;
+        break;
+      }
+      case APP_DEVICE_ORIENTATION_180:
+      {
+        result = Dali::DeviceStatus::Orientation::Status::ORIENTATION_180;
+        break;
+      }
+      case APP_DEVICE_ORIENTATION_270:
+      {
+        result = Dali::DeviceStatus::Orientation::Status::ORIENTATION_270;
+        break;
+      }
+
+      default:
+        break;
+    }
+    observer->OnDeviceOrientationChanged(result);
+  }
+
+  int AppMain(void* data)
+  {
+    DALI_TIZEN_DLOG(DLOG_INFO, "AppModelWidget AppMain 3");
+    if(!IsWidgetFeatureEnabled())
+    {
+      DALI_LOG_ERROR("widget feature is not supported");
+      return TIZEN_ERROR_NOT_SUPPORTED;
+    }
+    mFramework      = static_cast<FrameworkTizen*>(data);
+    gAppModelWidget = mAppModelWidget;
+
+    AppCoreWidget::AppAddEventHandler(&mHandlers[AppCoreWidget::LOW_BATTERY], AppCoreWidget::LOW_BATTERY, AppBatteryLow, mFramework);
+    AppCoreWidget::AppAddEventHandler(&mHandlers[AppCoreWidget::LOW_MEMORY], AppCoreWidget::LOW_MEMORY, AppMemoryLow, mFramework);
+    AppCoreWidget::AppAddEventHandler(&mHandlers[AppCoreWidget::DEVICE_ORIENTATION_CHANGED], AppCoreWidget::DEVICE_ORIENTATION_CHANGED, AppDeviceOrientationChanged, mFramework);
+    AppCoreWidget::AppAddEventHandler(&mHandlers[AppCoreWidget::LANGUAGE_CHANGED], AppCoreWidget::LANGUAGE_CHANGED, AppLanguageChanged, mFramework);
+    AppCoreWidget::AppAddEventHandler(&mHandlers[AppCoreWidget::REGION_FORMAT_CHANGED], AppCoreWidget::REGION_FORMAT_CHANGED, AppRegionChanged, mFramework);
+
+    widget_base_ops ops = widget_base_get_default_ops();
+    DALI_TIZEN_DLOG(DLOG_INFO, "AppModelWidget AppMain 4");
+    /* override methods */
+    ops.create    = WidgetAppCreate;
+    ops.terminate = WidgetAppTerminate;
+    ops.init      = AppInit;
+    ops.finish    = AppFinish;
+    ops.run       = AppRun;
+    ops.exit      = AppExit;
+
+    DALI_TIZEN_DLOG(DLOG_INFO, "AppModelWidget AppMain 5");
+    int result = widget_base_init(ops, *mFramework->GetArgc(), *mFramework->GetArgv(), mAppModelWidget);
+
+    widget_base_fini();
+    DALI_TIZEN_DLOG(DLOG_INFO, "AppModelWidget AppMain 6");
+    return result;
+  }
+
+  Impl(void* data)
+  : mHandlers{nullptr, nullptr, nullptr, nullptr, nullptr},
+    mEventLoop(),
+    mAppModelWidget(static_cast<AppModelWidget*>(data)),
+    mFramework(nullptr)
+  {
+  }
+
+  ~Impl()
+  {
+  }
+
+  AppCoreWidget::AppEventHandlerPtr mHandlers[5];
+  std::unique_ptr<EventLoop>        mEventLoop;
+  AppModelWidget*                   mAppModelWidget;
+  FrameworkTizen*                   mFramework;
+}; // Impl
+
+AppModelWidget::AppModelWidget()
+{
+  mImpl = new Impl(this);
+}
+
+AppModelWidget::~AppModelWidget()
+{
+  delete mImpl;
+}
+
+int AppModelWidget::AppMain(void* data)
+{
+  return mImpl->AppMain(data);
+}
+
+void AppModelWidget::AppExit()
+{
+  mImpl->AppExit();
+}
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

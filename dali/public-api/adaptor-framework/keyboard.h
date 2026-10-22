@@ -1,0 +1,121 @@
+#ifndef DALI_KEYBOARD_H
+#define DALI_KEYBOARD_H
+
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/public-api/dali-adaptor-common.h>
+#include <dali/public-api/signals/dali-signal.h>
+
+namespace DALI_NAMESPACE
+{
+/**
+ * @addtogroup dali_adaptor_framework
+ * @{
+ */
+
+/**
+ * @brief Keyboard functions.
+ */
+namespace Keyboard
+{
+/**
+ * @brief Sets keyboard repeat information.
+ *
+ * @param[in] rate The key repeat rate value in seconds
+ * @param[in] delay The key repeat delay value in seconds
+ * @return true if setting the keyboard repeat succeeds
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API bool SetRepeatInfo(float rate, float delay);
+
+/**
+ * @brief Gets keyboard repeat information.
+ *
+ * @param[in] rate The key repeat rate value in seconds
+ * @param[in] delay The key repeat delay value in seconds
+ * @return true if getting the keyboard repeat succeeds, false otherwise
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API bool GetRepeatInfo(float& rate, float& delay);
+
+/**
+ * @brief Sets keyboard repeat information of horizontal way.
+ *
+ * @param[in] rate The key repeat rate value in seconds
+ * @param[in] delay The key repeat delay value in seconds
+ * @return true if setting the keyboard repeat succeeds
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API bool SetHorizontalRepeatInfo(float rate, float delay);
+
+/**
+ * @brief Gets keyboard repeat information of horizontal way.
+ *
+ * @param[in] rate The key repeat rate value in seconds
+ * @param[in] delay The key repeat delay value in seconds
+ * @return true if getting the keyboard repeat succeeds, false otherwise
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API bool GetHorizontalRepeatInfo(float& rate, float& delay);
+
+/**
+ * @brief Sets keyboard repeat information of vertical way.
+ *
+ * @param[in] rate The key repeat rate value in seconds
+ * @param[in] delay The key repeat delay value in seconds
+ * @return true if setting the keyboard repeat succeeds
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API bool SetVerticalRepeatInfo(float rate, float delay);
+
+/**
+ * @brief Gets keyboard repeat information of vertical way.
+ *
+ * @param[in] rate The key repeat rate value in seconds
+ * @param[in] delay The key repeat delay value in seconds
+ * @return true if getting the keyboard repeat succeeds, false otherwise
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API bool GetVerticalRepeatInfo(float& rate, float& delay);
+
+/**
+ * @brief Keyboard repeat settings changed signal
+ */
+using RepeatSettingsChangedSignalType = Dali::Signal<void()>;
+
+/**
+ * @brief This signal is emitted just after the keyboard repeat settings are changed globally.
+ *
+ * A callback of the following type may be connected:
+ * @code
+ *   void YourCallbackName();
+ * @endcode
+ * @return The signal to connect to
+ * @SINCE_2_5.28
+ */
+DALI_ADAPTOR_API RepeatSettingsChangedSignalType& RepeatSettingsChangedSignal();
+
+} // namespace Keyboard
+
+/**
+ * @}
+ */
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_KEYBOARD_H

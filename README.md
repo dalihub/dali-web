@@ -1,0 +1,186 @@
+<img src="https://dalihub.github.io/images/DaliLogo320x200.png">
+
+# Table of Contents
+
+   * [Build Instructions](#build-instructions)
+      * [1. Building for Ubuntu desktop](#1-building-for-ubuntu-desktop)
+         * [Minimum Requirements](#minimum-requirements)
+         * [Building the Repository](#building-the-repository)
+         * [Build target options](#build-target-options)
+         * [Building and executing test cases](#building-and-executing-test-cases)
+      * [2. GBS Builds](#2-gbs-builds)
+         * [DEBUG Builds](#debug-builds)
+         * [DS-5 Streamline Trace Builds](#ds-5-streamline-trace-builds)
+      * [3. Building for MS Windows](#3-building-for-ms-windows)
+         * [Build with the Visual Studio project](#build-with-the-visual-studio-project)
+         * [Build with CMake](#build-with-cmake)
+      * [4. Building for MacOS](#4-building-for-macos)
+
+# Build Instructions
+
+## 1. Building for Ubuntu desktop
+
+### Minimum Requirements
+
+ - Ubuntu 16.04 or later
+ - Environment created using dali_env script in dali-core repository
+ - GCC version 9
+ - Cmake version 3.8.2 or later
+
+DALi requires a compiler supporting C++17 features.
+
+### Building the Repository
+
+To build the repository enter the 'build/tizen' folder:
+
+         $ cd dali-adaptor/build/tizen
+
+Then run the following command to set up the build:
+
+         $ cmake -DCMAKE_INSTALL_PREFIX=$DESKTOP_PREFIX .
+
+If a Debug build is required, then add -DCMAKE_BUILD_TYPE=Debug
+
+To build run:
+
+         $ make install -j8
+
+### Building and executing test cases
+
+See the README.md in dali-adaptor/automated-tests.
+
+## 2. GBS Builds
+
+         $ gbs build -A [TARGET_ARCH]
+
+### DEBUG Builds
+
+         $ gbs build -A [TARGET_ARCH] --define "%enable_debug 1"
+
+
+### DS-5 Streamline Trace Builds
+
+By default, when using a GBS build, trace is enabled but Ttrace is used.
+If you want to use DS-5 Streamline instead then do the following:
+
+         $ gbs build -A [TARGET_ARCH] --define "%enable_streamline 1"
+
+## 3. Building for MS Windows
+
+Third party dependencies are built using vcpkg. Instructions on how to install vcpkg can be found in the
+vcpkg-script folder in the windows-dependencies repository.
+
+- Download the windows-dependencies repository from DaliHub
+
+         $ git clone https://github.com/dalihub/windows-dependencies.git
+
+- Read the windows-dependencies/vcpkg-script/Readme.md file for more instructions on how to build and install the third-party dependencies.
+
+### Build with PowerShell
+
+For Windows development, use the repository-local PowerShell script which handles
+configuration, building, and installation automatically:
+
+```powershell
+cd <workspace>\dali-adaptor
+.\build\windows\build.ps1
+```
+
+See the [windows-dependencies README](https://github.com/dalihub/windows-dependencies/blob/master/README.md)
+for complete Windows build and runtime instructions.
+
+## 4. Building for MacOS
+
+It is assumed that the DALi environment has been set up & that DALi Core has been built accordingly.
+
+To build the repository enter the 'build/tizen' folder:
+```zsh
+% cd dali-adaptor/build/tizen
+```
+Then run the following command to set up the build:
+```zsh
+% cmake -DCMAKE_INSTALL_PREFIX=$DESKTOP_PREFIX -DCMAKE_TOOLCHAIN_FILE=$VCPKG_FOLDER/scripts/buildsystems/vcpkg.cmake -DINSTALL_CMAKE_MODULES=ON -DENABLE_PROFILE=MACOS -DPROFILE_LCASE=macos .
+```
+If a Debug build is required, then add `-DCMAKE_BUILD_TYPE=Debug -DENABLE_DEBUG=ON`
+
+To build, run:
+```zsh
+% make install -j8
+```
+
+## Apendix : How to build TizenVG for Ubuntu
+
+### Environment setup
+- Need environment created using dali_env script in dali-core repository
+- Also need to prepare meson & ninja for build TizenVG
+
+```sh
+sudo apt-get install meson ninja-build
+```
+
+### Dali
+- Install Dali libraries with reference to dali-core/README.md
+    - https://review.tizen.org/gerrit/#/admin/projects/platform/core/uifw/dali-core
+
+### TizenVG
+- TizenVG is DALi's ThorVG-compatible vector graphics backend.
+- The `tizen` branch is based on ThorVG 1.0.7 and carries the Tizen extensions
+  used by DALi. Pin the verified revision for a reproducible environment.
+```sh
+git clone --branch tizen git://git.tizen.org/platform/core/graphics/tizenvg.git
+cd tizenvg
+git checkout ae039a6154a258a8fa19f23b25285acd73d2f6c1
+```
+#### TizenVG Build & Install for DALi
+- Build as debug with optimized level 2 (default)
+```sh
+meson setup builddir --prefix $DESKTOP_PREFIX --libdir $DESKTOP_PREFIX/lib
+```
+- Build as release with optimized level s (same option as Tizen platform)
+```sh
+meson setup builddir --buildtype custom --optimization s --prefix $DESKTOP_PREFIX --libdir $DESKTOP_PREFIX/lib
+```
+- Install
+```sh
+ninja -C builddir install
+```
+
+#### TizenVG Install check
+- See `$DESKTOP_PREFIX/lib` has a `libthorvg.so` file.
+- Check the installed package version with
+  `PKG_CONFIG_PATH=$DESKTOP_PREFIX/lib/pkgconfig pkg-config --modversion thorvg`.
+- Check `-- ThorVG version` result at build summary.
+  - `1.0.7` is shown when the verified TizenVG revision is installed.
+  - `OFF` shown if you don't support thorvg.
+
+
+## Apendix : How to run Vulkan backend for Ubuntu
+
+### Environment setup
+- Need environment created using dali_env script in dali-core repository, with -v option
+```sh
+dali-core/build/scripts/dali_env -v -c
+dali-env/opt/bin/dali_env -s > setenv
+. setenv
+```
+
+- Success if you see `dali-env/vulkan/1.3.280.1/` directory exist.
+- Also, if `setenv` file has `export VULKAN_VERSION=1.3.280.1`, setting completed.
+
+### Build
+- Follow `Building for Ubuntu desktop` guides.
+- Check `-- Graphics Backend` result at build summary is `Dynamic (GLES/VULKAN)`
+
+### Execute
+- Set environment value for graphics backend
+```sh
+export DALI_GRAPHICS_BACKEND=VULKAN
+```
+
+- Execute DALi application, and check dali log print vulkan infomations. For example,
+```
+INFO: DALI: Vulkan information:
+  Vulkan version: 1.3.242
+  Device name:    NVIDIA GeForce GT 1030
+  Driver Version: 85edc040
+```

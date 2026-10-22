@@ -1,0 +1,87 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/input/common/virtual-keyboard-impl.h>
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/common/vector-wrapper.h>
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+#include <dali/integration-api/debug.h>
+#include <tizen_core_imf.h>
+#include <algorithm>
+
+// INTERNAL INCLUDES
+#include <dali/internal/system/common/locale-utils.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace VirtualKeyboard
+{
+Dali::InputMethod::ReturnKeyType gButtonActionFunction = Dali::InputMethod::ReturnKeyType::DEFAULT;
+
+tizen_core_imf_input_panel_return_key_type_e buttonActionMapping(Dali::InputMethod::ReturnKeyType buttonAction)
+{
+  switch(buttonAction)
+  {
+    case InputMethod::ReturnKeyType::DEFAULT:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_DEFAULT;
+    case InputMethod::ReturnKeyType::DONE:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_DONE;
+    case InputMethod::ReturnKeyType::GO:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_GO;
+    case InputMethod::ReturnKeyType::JOIN:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_JOIN;
+    case InputMethod::ReturnKeyType::LOGIN:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_LOGIN;
+    case InputMethod::ReturnKeyType::NEXT:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_NEXT;
+    case InputMethod::ReturnKeyType::SEARCH:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_SEARCH;
+    case InputMethod::ReturnKeyType::SEND:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_SEND;
+    case InputMethod::ReturnKeyType::SIGNIN:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_SIGNIN;
+    default:
+      return TIZEN_CORE_IMF_INPUT_PANEL_RETURN_KEY_TYPE_DEFAULT;
+  }
+}
+
+void RotateTo(int angle)
+{
+}
+
+void SetReturnKeyType(const InputMethod::ReturnKeyType type)
+{
+}
+
+Dali::InputMethod::ReturnKeyType GetReturnKeyType()
+{
+  return gButtonActionFunction;
+}
+
+} // namespace VirtualKeyboard
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

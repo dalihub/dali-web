@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/devel-api/adaptor-framework/widget-application.h>
+
+// INTERNAL INCLUDES
+#include <dali/public-api/common/dali-string-view.h>
+
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/internal/system/common/widget-application-impl.h>
+
+using Dali::Integration::ToStdString;
+
+namespace DALI_NAMESPACE
+{
+WidgetApplication WidgetApplication::New(int* argc, char** argv[], Dali::StringView stylesheet)
+{
+  DALI_LOG_RELEASE_INFO("DALIWidgetAPP, New is called\n");
+  WindowData                              windowData;
+  Internal::Adaptor::WidgetApplicationPtr internal = Internal::Adaptor::WidgetApplication::New(argc, argv, ToStdString(stylesheet), windowData);
+  return WidgetApplication(internal.Get());
+}
+
+WidgetApplication::~WidgetApplication()
+{
+}
+
+WidgetApplication::WidgetApplication()
+{
+}
+
+WidgetApplication::WidgetApplication(const WidgetApplication& copy) = default;
+
+WidgetApplication& WidgetApplication::operator=(const WidgetApplication& rhs) = default;
+
+WidgetApplication::WidgetApplication(WidgetApplication&& rhs) noexcept = default;
+
+WidgetApplication& WidgetApplication::operator=(WidgetApplication&& rhs) noexcept = default;
+
+void WidgetApplication::RegisterWidgetCreatingFunction(const Dali::String& widgetName, CreateWidgetFunction createFunction)
+{
+  DALI_LOG_RELEASE_INFO("DALIWidgetAPP, RegisterWidgetCreatingFunction is called\n");
+  DALI_LOG_RELEASE_INFO("DALIWidgetAPP, RegisterWidgetCreatingFunction: widgetName: %s\n", ToStdString(widgetName).c_str());
+  DALI_LOG_RELEASE_INFO("DALIWidgetAPP, RegisterWidgetCreatingFunction: createFunction: %s\n", createFunction ? "non-null" : "null");
+  Internal::Adaptor::GetImplementation(*this).RegisterWidgetCreatingFunction(ToStdString(widgetName), createFunction);
+}
+
+WidgetApplication::WidgetApplication(Internal::Adaptor::WidgetApplication* widgetApplication)
+: Application(widgetApplication)
+{
+}
+
+} //namespace DALI_NAMESPACE

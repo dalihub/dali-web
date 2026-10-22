@@ -1,0 +1,32 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/extension-api/adaptor-framework/key-extension.h>
+#include <dali/internal/input/common/key-impl.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Extension
+{
+void SetKeyExtensionLookupTable(const Dali::Extension::KeyLookupEntry* table, uint32_t count)
+{
+  Internal::Adaptor::KeyLookup::SetKeyExtensionLookupTable(reinterpret_cast<const Dali::KeyLookupEntry*>(table), count);
+}
+
+} // namespace Extension
+} //namespace DALI_NAMESPACE

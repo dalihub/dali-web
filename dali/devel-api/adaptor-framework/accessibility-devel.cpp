@@ -1,0 +1,673 @@
+/*
+ * Copyright 2022  Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/object/type-info.h>
+#include <dali/devel-api/object/type-registry-helper.h>
+#include <dali/integration-api/debug.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/actors/layer.h>
+#include <dali/public-api/object/base-object.h>
+#include <string_view>
+#include <unordered_map>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/actor-accessible.h>
+#include <dali/devel-api/adaptor-framework/proxy-accessible.h>
+#include <dali/devel-api/atspi-interfaces/accessible.h>
+#include <dali/devel-api/atspi-interfaces/action.h>
+#include <dali/devel-api/atspi-interfaces/application.h>
+#include <dali/devel-api/atspi-interfaces/collection.h>
+#include <dali/devel-api/atspi-interfaces/editable-text.h>
+#include <dali/devel-api/atspi-interfaces/hyperlink.h>
+#include <dali/devel-api/atspi-interfaces/hypertext.h>
+#include <dali/devel-api/atspi-interfaces/selection.h>
+#include <dali/devel-api/atspi-interfaces/socket.h>
+#include <dali/devel-api/atspi-interfaces/text.h>
+#include <dali/devel-api/atspi-interfaces/value.h>
+#include <dali/integration-api/adaptor-framework/accessibility/accessibility-bridge.h>
+#include <dali/integration-api/adaptor-framework/trigger-event-factory.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/internal/adaptor/common/adaptor-impl.h>
+#include <dali/internal/window-system/common/window-impl.h>
+#include <dali/public-api/dali-adaptor-common.h>
+
+using Dali::Integration::ToStdString;
+using Role = Dali::Integration::Accessibility::Role;
+
+const std::string& Dali::Devel::Accessibility::Address::GetBus() const
+{
+  return mBus.empty() && Dali::Integration::Accessibility::Bridge::GetCurrentBridge() ? Dali::Integration::Accessibility::Bridge::GetCurrentBridge()->GetBusName() : mBus;
+}
+
+namespace DALI_NAMESPACE::Accessibility
+{
+
+std::string Accessible::GetLocalizedRoleName() const
+{
+  return GetRoleName();
+}
+
+std::string Accessible::GetRoleName() const
+{
+  static const std::unordered_map<Role, std::string_view> roleMap{
+    {Role::INVALID, "invalid"},
+    {Role::ACCELERATOR_LABEL, "accelerator label"},
+    {Role::ALERT, "alert"},
+    {Role::ANIMATION, "animation"},
+    {Role::ARROW, "arrow"},
+    {Role::CALENDAR, "calendar"},
+    {Role::CANVAS, "canvas"},
+    {Role::CHECK_BOX, "check box"},
+    {Role::CHECK_MENU_ITEM, "check menu item"},
+    {Role::COLOR_CHOOSER, "color chooser"},
+    {Role::COLUMN_HEADER, "column header"},
+    {Role::COMBO_BOX, "combo box"},
+    {Role::DATE_EDITOR, "date editor"},
+    {Role::DESKTOP_ICON, "desktop icon"},
+    {Role::DESKTOP_FRAME, "desktop frame"},
+    {Role::DIAL, "dial"},
+    {Role::DIALOG, "dialog"},
+    {Role::DIRECTORY_PANE, "directory pane"},
+    {Role::DRAWING_AREA, "drawing area"},
+    {Role::FILE_CHOOSER, "file chooser"},
+    {Role::FILLER, "filler"},
+    {Role::FOCUS_TRAVERSABLE, "focus traversable"},
+    {Role::FONT_CHOOSER, "font chooser"},
+    {Role::FRAME, "frame"},
+    {Role::GLASS_PANE, "glass pane"},
+    {Role::HTML_CONTAINER, "html container"},
+    {Role::ICON, "icon"},
+    {Role::IMAGE, "image"},
+    {Role::INTERNAL_FRAME, "internal frame"},
+    {Role::LABEL, "label"},
+    {Role::LAYERED_PANE, "layered pane"},
+    {Role::LIST, "list"},
+    {Role::LIST_ITEM, "list item"},
+    {Role::MENU, "menu"},
+    {Role::MENU_BAR, "menu bar"},
+    {Role::MENU_ITEM, "menu item"},
+    {Role::OPTION_PANE, "option pane"},
+    {Role::PAGE_TAB, "page tab"},
+    {Role::PAGE_TAB_LIST, "page tab list"},
+    {Role::PANEL, "panel"},
+    {Role::PASSWORD_TEXT, "password text"},
+    {Role::POPUP_MENU, "popup menu"},
+    {Role::PROGRESS_BAR, "progress bar"},
+    {Role::PUSH_BUTTON, "push button"},
+    {Role::RADIO_BUTTON, "radio button"},
+    {Role::RADIO_MENU_ITEM, "radio menu item"},
+    {Role::ROOT_PANE, "root pane"},
+    {Role::ROW_HEADER, "row header"},
+    {Role::SCROLL_BAR, "scroll bar"},
+    {Role::SCROLL_PANE, "scroll pane"},
+    {Role::SEPARATOR, "separator"},
+    {Role::SLIDER, "slider"},
+    {Role::SPIN_BUTTON, "spin button"},
+    {Role::SPLIT_PANE, "split pane"},
+    {Role::STATUS_BAR, "status bar"},
+    {Role::TABLE, "table"},
+    {Role::TABLE_CELL, "table cell"},
+    {Role::TABLE_COLUMN_HEADER, "table column header"},
+    {Role::TABLE_ROW_HEADER, "table row header"},
+    {Role::TEAROFF_MENU_ITEM, "tearoff menu item"},
+    {Role::TERMINAL, "terminal"},
+    {Role::TEXT, "text"},
+    {Role::TOGGLE_BUTTON, "toggle button"},
+    {Role::TOOL_BAR, "tool bar"},
+    {Role::TOOL_TIP, "tool tip"},
+    {Role::TREE, "tree"},
+    {Role::TREE_TABLE, "tree table"},
+    {Role::UNKNOWN, "unknown"},
+    {Role::VIEWPORT, "viewport"},
+    {Role::WINDOW, "window"},
+    {Role::EXTENDED, "extended"},
+    {Role::HEADER, "header"},
+    {Role::FOOTER, "footer"},
+    {Role::PARAGRAPH, "paragraph"},
+    {Role::RULER, "ruler"},
+    {Role::APPLICATION, "application"},
+    {Role::AUTOCOMPLETE, "autocomplete"},
+    {Role::EDITBAR, "edit bar"},
+    {Role::EMBEDDED, "embedded"},
+    {Role::ENTRY, "entry"},
+    {Role::CHART, "chart"},
+    {Role::CAPTION, "caution"},
+    {Role::DOCUMENT_FRAME, "document frame"},
+    {Role::HEADING, "heading"},
+    {Role::PAGE, "page"},
+    {Role::SECTION, "section"},
+    {Role::REDUNDANT_OBJECT, "redundant object"},
+    {Role::FORM, "form"},
+    {Role::LINK, "link"},
+    {Role::INPUT_METHOD_WINDOW, "input method window"},
+    {Role::TABLE_ROW, "table row"},
+    {Role::TREE_ITEM, "tree item"},
+    {Role::DOCUMENT_SPREADSHEET, "document spreadsheet"},
+    {Role::DOCUMENT_PRESENTATION, "document presentation"},
+    {Role::DOCUMENT_TEXT, "document text"},
+    {Role::DOCUMENT_WEB, "document web"},
+    {Role::DOCUMENT_EMAIL, "document email"},
+    {Role::COMMENT, "comment"},
+    {Role::LIST_BOX, "list box"},
+    {Role::GROUPING, "grouping"},
+    {Role::IMAGE_MAP, "image map"},
+    {Role::NOTIFICATION, "notification"},
+    {Role::INFO_BAR, "info bar"},
+    {Role::LEVEL_BAR, "level bar"},
+    {Role::TITLE_BAR, "title bar"},
+    {Role::BLOCK_QUOTE, "block quote"},
+    {Role::AUDIO, "audio"},
+    {Role::VIDEO, "video"},
+    {Role::DEFINITION, "definition"},
+    {Role::ARTICLE, "article"},
+    {Role::LANDMARK, "landmark"},
+    {Role::LOG, "log"},
+    {Role::MARQUEE, "marquee"},
+    {Role::MATH, "math"},
+    {Role::RATING, "rating"},
+    {Role::TIMER, "timer"},
+    {Role::STATIC, "static"},
+    {Role::MATH_FRACTION, "math fraction"},
+    {Role::MATH_ROOT, "math root"},
+    {Role::SUBSCRIPT, "subscript"},
+    {Role::SUPERSCRIPT, "superscript"},
+    {Role::DESCRIPTION_LIST, "description list"},
+    {Role::DESCRIPTION_TERM, "description term"},
+    {Role::DESCRIPTION_VALUE, "description value"},
+    {Role::FOOTNOTE, "footnote"},
+    {Role::CONTENT_DELETION, "content deletion"},
+    {Role::CONTENT_INSERTION, "content insertion"},
+    {Role::MARK, "mark"},
+    {Role::SUGGESTION, "suggestion"},
+    {Role::PUSH_BUTTON_MENU, "push button menu"},
+    {Role::SWITCH, "switch"},
+  };
+
+  auto it = roleMap.find(GetRole());
+
+  if(it == roleMap.end())
+  {
+    return {};
+  }
+
+  return std::string{it->second};
+}
+
+Dali::Integration::Accessibility::AccessibilityInterfaces Accessible::GetInterfaces() const
+{
+  if(!mInterfaces)
+  {
+    mInterfaces = DoGetInterfaces();
+    DALI_ASSERT_DEBUG(mInterfaces); // There has to be at least Dali::Integration::Accessibility::AccessibilityInterface::ACCESSIBLE
+  }
+
+  return mInterfaces;
+}
+
+std::vector<std::string> Accessible::GetInterfacesAsStrings() const
+{
+  std::vector<std::string>                                  ret;
+  Dali::Integration::Accessibility::AccessibilityInterfaces interfaces = GetInterfaces();
+
+  for(std::size_t i = 0u; i < static_cast<std::size_t>(Dali::Integration::Accessibility::AccessibilityInterface::MAX_COUNT); ++i)
+  {
+    auto interface = static_cast<Dali::Integration::Accessibility::AccessibilityInterface>(i);
+
+    if(interfaces[interface])
+    {
+      auto name = GetInterfaceName(interface);
+
+      DALI_ASSERT_DEBUG(!name.empty());
+      ret.emplace_back(std::move(name));
+    }
+  }
+
+  return ret;
+}
+
+Dali::Integration::Accessibility::AccessibilityInterfaces Accessible::DoGetInterfaces() const
+{
+  Dali::Integration::Accessibility::AccessibilityInterfaces interfaces;
+
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::ACCESSIBLE]    = true; // always true
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::ACTION]        = !GetFeature<Action>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::APPLICATION]   = !GetFeature<Application>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::COLLECTION]    = !GetFeature<Collection>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::COMPONENT]     = true; // always true
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::EDITABLE_TEXT] = !GetFeature<EditableText>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::HYPERLINK]     = !GetFeature<Hyperlink>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::HYPERTEXT]     = !GetFeature<Hypertext>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::SELECTION]     = !GetFeature<Selection>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::SOCKET]        = !GetFeature<Socket>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::TABLE]         = false;
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::TABLE_CELL]    = false;
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::TEXT]          = !GetFeature<Text>().IsEmpty();
+  interfaces[Dali::Integration::Accessibility::AccessibilityInterface::VALUE]         = !GetFeature<Value>().IsEmpty();
+
+  return interfaces;
+}
+
+std::string Accessible::GetInterfaceName(Dali::Integration::Accessibility::AccessibilityInterface interface)
+{
+  static const std::unordered_map<Dali::Integration::Accessibility::AccessibilityInterface, std::string_view> interfaceMap{
+    {Dali::Integration::Accessibility::AccessibilityInterface::ACCESSIBLE, "org.a11y.atspi.Accessible"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::ACTION, "org.a11y.atspi.Action"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::APPLICATION, "org.a11y.atspi.Application"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::CACHE, "org.a11y.atspi.Cache"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::COLLECTION, "org.a11y.atspi.Collection"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::COMPONENT, "org.a11y.atspi.Component"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::DEVICE_EVENT_CONTROLLER, "org.a11y.atspi.DeviceEventController"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::DEVICE_EVENT_LISTENER, "org.a11y.atspi.DeviceEventListener"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::DOCUMENT, "org.a11y.atspi.Document"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EDITABLE_TEXT, "org.a11y.atspi.EditableText"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_DOCUMENT, "org.a11y.atspi.Event.Document"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_FOCUS, "org.a11y.atspi.Event.Focus"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_KEYBOARD, "org.a11y.atspi.Event.Keyboard"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_MOUSE, "org.a11y.atspi.Event.Mouse"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_OBJECT, "org.a11y.atspi.Event.Object"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_TERMINAL, "org.a11y.atspi.Event.Terminal"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::EVENT_WINDOW, "org.a11y.atspi.Event.Window"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::HYPERLINK, "org.a11y.atspi.Hyperlink"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::HYPERTEXT, "org.a11y.atspi.Hypertext"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::IMAGE, "org.a11y.atspi.Image"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::REGISTRY, "org.a11y.atspi.Registry"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::SELECTION, "org.a11y.atspi.Selection"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::SOCKET, "org.a11y.atspi.Socket"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::TABLE, "org.a11y.atspi.Table"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::TABLE_CELL, "org.a11y.atspi.TableCell"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::TEXT, "org.a11y.atspi.Text"},
+    {Dali::Integration::Accessibility::AccessibilityInterface::VALUE, "org.a11y.atspi.Value"},
+  };
+
+  auto it = interfaceMap.find(interface);
+
+  if(it == interfaceMap.end())
+  {
+    return {};
+  }
+
+  return std::string{it->second};
+}
+
+Dali::Actor Accessible::GetCurrentlyHighlightedActor()
+{
+  return Dali::Integration::Accessibility::IsUp() ? Dali::Integration::Accessibility::Bridge::GetCurrentBridge()->mData->mCurrentlyHighlightedActor : Dali::Actor{};
+}
+
+void Accessible::SetCurrentlyHighlightedActor(Dali::Actor actor)
+{
+  if(Dali::Integration::Accessibility::IsUp())
+  {
+    Dali::Integration::Accessibility::Bridge::GetCurrentBridge()->mData->mCurrentlyHighlightedActor = actor;
+  }
+}
+
+bool Accessible::IsHighlighted() const
+{
+  Dali::Actor self = GetInternalActor();
+
+  return self && self == GetCurrentlyHighlightedActor();
+}
+
+Dali::Actor Accessible::GetHighlightActor()
+{
+  return Dali::Integration::Accessibility::IsUp() ? Dali::Integration::Accessibility::Bridge::GetCurrentBridge()->mData->mHighlightActor : Dali::Actor{};
+}
+
+void Accessible::SetHighlightActor(Dali::Actor actor)
+{
+  if(Dali::Integration::Accessibility::IsUp())
+  {
+    Dali::Integration::Accessibility::Bridge::GetCurrentBridge()->mData->mHighlightActor = actor;
+  }
+}
+
+} //namespace DALI_NAMESPACE::Accessibility
+
+void Dali::Integration::Accessibility::Bridge::ForceDown()
+{
+  auto highlighted = Dali::Accessibility::Accessible::GetCurrentlyHighlightedActor();
+  if(highlighted)
+  {
+    auto accessible = Dali::Accessibility::Accessible::Get(highlighted);
+    if(accessible)
+    {
+      accessible->ClearHighlight();
+    }
+  }
+  mData = {};
+}
+
+void Dali::Integration::Accessibility::Bridge::SetIsOnRootLevel(Dali::Accessibility::Accessible* owner)
+{
+  owner->mIsOnRootLevel = true;
+}
+
+namespace DALI_NAMESPACE::Accessibility
+{
+
+namespace
+{
+class AdaptorAccessible : public ActorAccessible
+{
+private:
+  Dali::TriggerEventFactory::TriggerEventPtr mRenderNotification{nullptr};
+  bool                                       mRoot{false};
+
+public:
+  AdaptorAccessible(Dali::Actor actor, bool isRoot)
+  : ActorAccessible(actor),
+    mRoot(isRoot)
+  {
+  }
+
+  ~AdaptorAccessible() override
+  {
+    if(mRoot)
+    {
+      if(auto bridge = Integration::Accessibility::Bridge::GetCurrentBridge())
+      {
+        bridge->RemoveTopLevelWindow(this);
+      }
+    }
+  }
+
+  bool GrabFocus() override
+  {
+    return false;
+  }
+
+  bool GrabHighlight() override
+  {
+    if(!Dali::Integration::Accessibility::IsUp())
+    {
+      return false;
+    }
+
+    // Only window accessible is able to grab and clear highlight
+    if(!mRoot)
+    {
+      return false;
+    }
+
+    auto self                = Self();
+    auto oldHighlightedActor = GetCurrentlyHighlightedActor();
+    if(self == oldHighlightedActor)
+    {
+      return true;
+    }
+
+    // Clear the old highlight.
+    if(oldHighlightedActor)
+    {
+      auto oldHighlightedObject = Accessible::Get(oldHighlightedActor);
+      if(oldHighlightedObject)
+      {
+        oldHighlightedObject->ClearHighlight();
+      }
+    }
+
+    SetCurrentlyHighlightedActor(self);
+
+    auto                             window     = Dali::Window::Get(self);
+    Dali::Internal::Adaptor::Window& windowImpl = Dali::GetImplementation(window);
+    windowImpl.EmitAccessibilityHighlightSignal(true);
+
+    return true;
+  }
+
+  bool ClearHighlight() override
+  {
+    if(!Dali::Integration::Accessibility::IsUp())
+    {
+      return false;
+    }
+
+    // Only window accessible is able to grab and clear highlight
+    if(!mRoot)
+    {
+      return false;
+    }
+
+    if(!IsHighlighted())
+    {
+      return false;
+    }
+
+    SetCurrentlyHighlightedActor({});
+
+    auto                             window     = Dali::Window::Get(Self());
+    Dali::Internal::Adaptor::Window& windowImpl = Dali::GetImplementation(window);
+    windowImpl.EmitAccessibilityHighlightSignal(false);
+
+    return true;
+  }
+
+  Role GetRole() const override
+  {
+    if(!mRoot)
+    {
+      return Role::REDUNDANT_OBJECT;
+    }
+
+    return IsImeWindow() ? Role::INPUT_METHOD_WINDOW : Role::WINDOW;
+  }
+
+  std::string GetName() const override
+  {
+    // A Window is not an Actor, so its accessibility name is exposed through the root layer.
+    if(!mRoot)
+    {
+      return ActorAccessible::GetName();
+    }
+
+    return IsImeWindow() ? "keyboard" : "window";
+  }
+
+  Dali::Integration::Accessibility::States GetStates() override
+  {
+    Dali::Integration::Accessibility::States state;
+    if(mRoot)
+    {
+      auto window                                               = Dali::Window::Get(Self());
+      auto visible                                              = window.IsVisible();
+      state[Dali::Integration::Accessibility::State::ENABLED]   = true;
+      state[Dali::Integration::Accessibility::State::SENSITIVE] = true;
+      state[Dali::Integration::Accessibility::State::SHOWING]   = visible;
+      state[Dali::Integration::Accessibility::State::VISIBLE]   = true;
+      state[Dali::Integration::Accessibility::State::ACTIVE]    = visible;
+    }
+    else if(GetParent())
+    {
+      auto parentState                                        = GetParent()->GetStates();
+      state[Dali::Integration::Accessibility::State::SHOWING] = parentState[Dali::Integration::Accessibility::State::SHOWING];
+      state[Dali::Integration::Accessibility::State::VISIBLE] = parentState[Dali::Integration::Accessibility::State::VISIBLE];
+    }
+    else
+    {
+      state[Dali::Integration::Accessibility::State::SHOWING] = false;
+      state[Dali::Integration::Accessibility::State::VISIBLE] = false;
+    }
+    return state;
+  }
+
+  Dali::Devel::Accessibility::Attributes GetAttributes() const override
+  {
+    Dali::Devel::Accessibility::Attributes attributes;
+
+    if(mRoot)
+    {
+      Dali::Window                     window     = Dali::Window::Get(Self());
+      Dali::Internal::Adaptor::Window& windowImpl = Dali::GetImplementation(window);
+      attributes["resID"]                         = windowImpl.GetNativeResourceId();
+    }
+
+    // Deliberately checks the raw Actor name, not GetName(), which reports the window name.
+    if(mRoot && ActorAccessible::GetName() == "RootLayer")
+    {
+      attributes["reading_info_type"] = "none";
+    }
+
+    Dali::TypeInfo type;
+    Self().GetTypeInfo(type);
+    attributes["class"] = ToStdString(type.GetName());
+
+    return attributes;
+  }
+
+  bool DoGesture(const Dali::Devel::Accessibility::GestureInfo& gestureInfo) override
+  {
+    return false;
+  }
+
+  std::vector<Dali::Devel::Accessibility::Relation> GetRelationSet() override
+  {
+    return {};
+  }
+
+  void SetListenPostRender(bool enabled) override
+  {
+    if(!mRoot)
+    {
+      return;
+    }
+
+    auto                             window     = Dali::Window::Get(Self());
+    Dali::Internal::Adaptor::Window& windowImpl = Dali::GetImplementation(window);
+
+    if(!mRenderNotification)
+    {
+      mRenderNotification = TriggerEventFactory::CreateTriggerEvent(MakeCallback(this, &AdaptorAccessible::OnPostRender));
+      DALI_LOG_DEBUG_INFO("mRenderNotification Trigger Id(%u)\n", mRenderNotification->GetId());
+    }
+
+    if(enabled)
+    {
+      windowImpl.SetRenderNotification(mRenderNotification.get());
+    }
+    else
+    {
+      windowImpl.SetRenderNotification(nullptr);
+    }
+  }
+
+  void OnPostRender()
+  {
+    if(auto bridge = Integration::Accessibility::Bridge::GetCurrentBridge())
+    {
+      bridge->EmitPostRender(SharedFromThis());
+    }
+    else
+    {
+      DALI_LOG_ERROR("SharedFromThis() returned null - object not managed by SharedPtr");
+    }
+  }
+
+private:
+  /**
+   * @brief Tells whether the window owning this root layer is an IME (virtual keyboard) window.
+   *
+   * Only meaningful when mRoot is true; a non-root Actor does not represent a window.
+   */
+  bool IsImeWindow() const
+  {
+    Dali::Window window = Dali::Window::Get(Self());
+    if(!window)
+    {
+      return false;
+    }
+
+    return Dali::GetImplementation(window).GetType() == Dali::WindowType::IME;
+  }
+}; // AdaptorAccessible
+
+using ConvertingResult = std::pair<SharedPtr<Accessible>, bool>;
+
+std::function<ConvertingResult(Dali::Actor)> convertingFunctor = [](Dali::Actor) -> ConvertingResult
+{
+  return {{}, true};
+};
+
+} // namespace
+
+void Accessible::RegisterExternalAccessibleGetter(std::function<ConvertingResult(Dali::Actor)> functor)
+{
+  convertingFunctor = functor;
+}
+
+SharedPtr<Accessible> Accessible::GetOwningPtr(Dali::Actor actor)
+{
+  if(!actor)
+  {
+    return {};
+  }
+
+  auto bridge = Dali::Integration::Accessibility::Bridge::GetCurrentBridge();
+  if(DALI_UNLIKELY(!bridge))
+  {
+    return {};
+  }
+
+  // Try finding exsiting accessible object.
+  auto accessible = bridge->GetAccessible(actor);
+  if(accessible)
+  {
+    return accessible;
+  }
+
+  // No acessible object created, let's create one.
+  auto result                = convertingFunctor(actor);
+  accessible                 = result.first;
+  const bool creationEnabled = result.second;
+  if(!accessible && creationEnabled)
+  {
+    bool                     isRoot = false;
+    Dali::Integration::Scene scene  = Dali::Integration::Scene::Get(actor);
+    if(scene)
+    {
+      isRoot = (actor == scene.GetRootLayer());
+    }
+    accessible = MakeShared<AdaptorAccessible>(actor, isRoot);
+  }
+
+  if(accessible)
+  {
+    uint32_t actorId = actor.GetProperty<int>(Dali::Actor::Property::ID);
+    if(bridge->AddAccessible(actorId, accessible))
+    {
+      if(auto actorAccesible = DynamicPointerCast<ActorAccessible>(accessible))
+      {
+        actorAccesible->StartObservingDestruction();
+      }
+      accessible->InitDefaultFeatures();
+    }
+    else
+    {
+      return {};
+    }
+  }
+
+  return accessible;
+}
+
+Accessible* Accessible::Get(Dali::Actor actor)
+{
+  auto accessible = Accessible::GetOwningPtr(actor);
+  return accessible ? accessible.Get() : nullptr;
+}
+
+} //namespace DALI_NAMESPACE::Accessibility

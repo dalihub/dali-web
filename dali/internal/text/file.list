@@ -1,0 +1,30 @@
+
+# module: text, backend: common
+SET( adaptor_text_common_src_files
+    ${adaptor_text_dir}/text-abstraction/bidirectional-support-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/font-client-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/font-file-manager-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/segmentation-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/shaping-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/text-renderer-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/hyphenation-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/icu-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/bitmap-font-cache-item.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/embedded-item.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/font-client-utils.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/font-client-plugin-cache-handler.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/font-client-plugin-impl.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/font-face-cache-item.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/font-face-manager.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/font-face-glyph-cache-manager.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-common.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-cpal.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-composite.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-gradient.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-bounds.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-outline.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-paint-graph.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-colr-rasterizer.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/color-glyph/color-glyph-cpal-parser.cpp
+    ${adaptor_text_dir}/text-abstraction/plugin/harfbuzz-proxy-font.cpp
+)

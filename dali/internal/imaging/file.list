@@ -1,0 +1,113 @@
+
+# module: imaging, backend: common
+SET( adaptor_imaging_common_src_files
+    ${adaptor_imaging_dir}/common/pixel-buffer-impl.cpp
+    ${adaptor_imaging_dir}/common/alpha-mask.cpp
+    ${adaptor_imaging_dir}/common/encoded-image-buffer-impl.cpp
+    ${adaptor_imaging_dir}/common/gaussian-blur.cpp
+    ${adaptor_imaging_dir}/common/http-utils.cpp
+    ${adaptor_imaging_dir}/common/image-loader.cpp
+    ${adaptor_imaging_dir}/common/image-loader-plugin-proxy.cpp
+    ${adaptor_imaging_dir}/common/image-operations.cpp
+    ${adaptor_imaging_dir}/common/loader-astc.cpp
+    ${adaptor_imaging_dir}/common/loader-bmp.cpp
+    ${adaptor_imaging_dir}/common/loader-gif.cpp
+    ${adaptor_imaging_dir}/common/loader-ico.cpp
+    ${adaptor_imaging_dir}/common/loader-jpeg-turbo.cpp
+    ${adaptor_imaging_dir}/common/loader-ktx.cpp
+    ${adaptor_imaging_dir}/common/loader-pkm.cpp
+    ${adaptor_imaging_dir}/common/loader-png.cpp
+    ${adaptor_imaging_dir}/common/loader-wbmp.cpp
+    ${adaptor_imaging_dir}/common/loader-webp.cpp
+    ${adaptor_imaging_dir}/common/pixel-manipulation.cpp
+    ${adaptor_imaging_dir}/common/gif-loading.cpp
+    ${adaptor_imaging_dir}/common/webp-loading.cpp
+    ${adaptor_imaging_dir}/common/file-download.cpp
+)
+
+SET( adaptor_imaging_common_egl_src_files
+    ${adaptor_imaging_dir}/common/native-bitmap-buffer-impl.cpp
+)
+
+# module: imaging, backend: common/dynamic
+SET( adaptor_imaging_common_dynamic_src_files
+    ${adaptor_imaging_dir}/common/native-image-factory-dynamic.cpp
+)
+
+# module: imaging, backend: tizen
+SET( adaptor_imaging_tizen_src_files
+)
+
+# module: imaging, backend: tizen/egl
+SET( adaptor_imaging_tizen_egl_src_files
+    ${adaptor_imaging_dir}/tizen/native-image-factory-tizen.cpp
+    ${adaptor_imaging_dir}/tizen/native-image-impl-tizen.cpp
+    ${adaptor_imaging_dir}/tizen/native-image-queue-impl-tizen.cpp
+)
+
+# module: imaging, backend: tizen/vulkan
+SET( adaptor_imaging_tizen_vulkan_src_files
+    ${adaptor_imaging_dir}/tizen/native-image-factory-tizen-vulkan.cpp
+    ${adaptor_imaging_dir}/tizen/native-image-impl-tizen-vulkan.cpp
+    ${adaptor_imaging_dir}/tizen/native-image-queue-impl-tizen-vulkan.cpp
+)
+
+# module: imaging, backend: ubuntu
+SET( adaptor_imaging_ubuntu_src_files
+)
+
+# module: imaging, backend: ubuntu-x11/egl
+SET( adaptor_imaging_ubuntu_x11_egl_src_files
+    ${adaptor_imaging_dir}/ubuntu-x11/native-image-factory-x-egl.cpp
+    ${adaptor_imaging_dir}/ubuntu-x11/native-image-impl-x.cpp
+    ${adaptor_imaging_dir}/ubuntu-x11/native-image-queue-impl-x.cpp
+)
+
+# module: imaging, backend: ubuntu-x11/vulkan
+SET( adaptor_imaging_ubuntu_x11_vulkan_src_files
+    ${adaptor_imaging_dir}/ubuntu-x11/native-image-factory-x-vulkan.cpp
+)
+
+# module: imaging, backend: libuv-x11/glib
+SET( adaptor_imaging_x11_src_files
+)
+
+# module: imaging, backend: libuv-x11/glib / egl
+SET( adaptor_imaging_x11_egl_src_files
+    ${adaptor_imaging_dir}/x11/native-image-factory-x-egl.cpp
+    ${adaptor_imaging_dir}/x11/native-image-impl-x.cpp
+    ${adaptor_imaging_dir}/x11/native-image-queue-impl-x.cpp
+)
+
+# module: imaging, backend: libuv-x11/glib / vulkan
+SET( adaptor_imaging_x11_vulkan_src_files
+    ${adaptor_imaging_dir}/x11/native-image-factory-x-vulkan.cpp
+)
+
+# module: imaging, backend: android
+SET( adaptor_imaging_android_src_files
+)
+
+# module: imaging, backend: android, egl
+SET( adaptor_imaging_egl_android_src_files
+    ${adaptor_imaging_dir}/android/native-image-factory-android.cpp
+    ${adaptor_imaging_dir}/android/native-image-impl-android.cpp
+    ${adaptor_imaging_dir}/android/native-image-queue-impl-android.cpp
+)
+
+# module: imaging, backend: android, vulkan
+SET( adaptor_imaging_vulkan_android_src_files
+    ${adaptor_imaging_dir}/android/native-image-factory-android-vulkan.cpp
+)
+
+# module: imaging, backend: windows
+SET( adaptor_imaging_windows_src_files
+    ${adaptor_imaging_dir}/windows/native-image-factory-win.cpp
+    ${adaptor_imaging_dir}/windows/native-image-impl-win.cpp
+)
+
+# module: imaging, backend: macos
+SET( adaptor_imaging_macos_src_files
+    ${adaptor_imaging_dir}/macos/native-image-factory-mac.cpp
+    ${adaptor_imaging_dir}/macos/native-image-impl-mac.cpp
+)

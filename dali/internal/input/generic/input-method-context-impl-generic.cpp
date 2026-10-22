@@ -1,0 +1,352 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/input/generic/input-method-context-impl-generic.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace
+{
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_INPUT_METHOD_CONTEXT");
+#endif
+} // namespace
+
+InputMethodContextPtr InputMethodContextGeneric::New(Dali::Actor actor)
+{
+  InputMethodContextPtr manager;
+
+  if(actor && Dali::Adaptor::IsAvailable())
+  {
+    manager = new InputMethodContextGeneric(actor);
+  }
+
+  return manager;
+}
+
+void InputMethodContextGeneric::Finalize()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::Finalize\n");
+  DisconnectCallbacks();
+}
+
+InputMethodContextGeneric::InputMethodContextGeneric(Dali::Actor actor)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::InputMethodContextGeneric\n");
+  Initialize();
+}
+
+InputMethodContextGeneric::~InputMethodContextGeneric()
+{
+  Finalize();
+}
+
+void InputMethodContextGeneric::Initialize()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::Initialize\n");
+}
+
+void InputMethodContextGeneric::ConnectCallbacks()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::ConnectCallbacks\n");
+}
+
+void InputMethodContextGeneric::DisconnectCallbacks()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::DisconnectCallbacks\n");
+}
+
+void InputMethodContextGeneric::Activate()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::Activate\n");
+}
+
+void InputMethodContextGeneric::Deactivate()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::Deactivate\n");
+}
+
+void InputMethodContextGeneric::Reset()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::Reset\n");
+}
+
+ImfContext* InputMethodContextGeneric::GetContext()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetContext\n");
+
+  return nullptr;
+}
+
+bool InputMethodContextGeneric::RestoreAfterFocusLost() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::RestoreAfterFocusLost\n");
+
+  return false;
+}
+
+bool InputMethodContextGeneric::SetRestoreAfterFocusLost(bool toggle)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetRestoreAfterFocusLost\n");
+  return true;
+}
+
+void InputMethodContextGeneric::PreEditChanged(void*, ImfContext* imfContext, void* event_info)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::PreEditChanged\n");
+}
+
+void InputMethodContextGeneric::CommitReceived(void*, ImfContext* imfContext, void* event_info)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::CommitReceived\n");
+}
+
+bool InputMethodContextGeneric::RetrieveSurrounding(void* data, ImfContext* imfContext, char** text, int* cursorPosition)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::RetrieveSurrounding\n");
+  return false;
+}
+
+void InputMethodContextGeneric::DeleteSurrounding(void* data, ImfContext* imfContext, void* event_info)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::DeleteSurrounding\n");
+}
+
+void InputMethodContextGeneric::SendPrivateCommand(void* data, ImfContext* imfContext, void* eventInfo)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SendPrivateCommand\n");
+}
+
+void InputMethodContextGeneric::SendCommitContent(void* data, ImfContext* imfContext, void* eventInfo)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SendCommitContent\n");
+}
+
+void InputMethodContextGeneric::SendSelectionSet(void* data, ImfContext* imfContext, void* eventInfo)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SendSelectionSet\n");
+}
+
+void InputMethodContextGeneric::NotifyCursorPosition()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::NotifyCursorPosition\n");
+}
+
+void InputMethodContextGeneric::SetCursorPosition(unsigned int cursorPosition)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetCursorPosition\n");
+}
+
+unsigned int InputMethodContextGeneric::GetCursorPosition() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetCursorPosition\n");
+
+  return 0;
+}
+
+void InputMethodContextGeneric::SetSurroundingText(const Dali::String& text)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetSurroundingText\n");
+}
+
+Dali::String InputMethodContextGeneric::GetSurroundingText() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetSurroundingText\n");
+
+  return Dali::String();
+}
+
+void InputMethodContextGeneric::NotifyTextInputMultiLine(bool multiLine)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::NotifyTextInputMultiLine\n");
+}
+
+Dali::Integration::InputMethodContext::TextDirection InputMethodContextGeneric::GetTextDirection()
+{
+  Dali::Integration::InputMethodContext::TextDirection direction(Dali::Integration::InputMethodContext::LEFT_TO_RIGHT);
+  return direction;
+}
+
+BoundsInteger InputMethodContextGeneric::GetInputPanelArea()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetInputPanelArea\n");
+
+  int xPos, yPos, width, height;
+
+  width = height = xPos = yPos = 0;
+  return BoundsInteger(xPos, yPos, width, height);
+}
+
+void InputMethodContextGeneric::ApplyOptions(const Dali::Integration::InputMethodOptions& options)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::ApplyOptions\n");
+}
+
+bool InputMethodContextGeneric::SetInputPanelUserData(const Dali::String& data)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetInputPanelUserData\n");
+  return true;
+}
+
+Dali::String InputMethodContextGeneric::GetInputPanelUserData() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetInputPanelUserData\n");
+
+  return Dali::String();
+}
+
+Dali::InputMethodContext::State InputMethodContextGeneric::GetInputPanelState()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetInputPanelState\n");
+  return Dali::InputMethodContext::State::HIDE;
+}
+
+bool InputMethodContextGeneric::SetReturnKeyState(bool visible)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetReturnKeyState\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::IsReturnKeyEnabled() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::IsReturnKeyEnabled\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::AutoEnableInputPanel(bool enabled)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::AutoEnableInputPanel\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::ShowInputPanel()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::ShowInputPanel\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::HideInputPanel()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::HideInputPanel\n");
+  return true;
+}
+
+Dali::InputMethodContext::KeyboardType InputMethodContextGeneric::GetKeyboardType()
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetKeyboardType\n");
+
+  return Dali::InputMethodContext::KeyboardType::SOFTWARE_KEYBOARD;
+}
+
+bool InputMethodContextGeneric::SetInputPanelLanguageLocale(const Dali::String& locale)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetInputPanelLanguageLocale\n");
+  return false;
+}
+
+Dali::String InputMethodContextGeneric::GetInputPanelLanguageLocale() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetInputPanelLanguageLocale\n");
+
+  return Dali::String();
+}
+
+void InputMethodContextGeneric::SetContentMimeTypes(const Dali::String& mimeTypes)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetContentMimeTypes\n");
+}
+
+bool InputMethodContextGeneric::FilterEventKey(const Dali::KeyEvent& keyEvent)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::FilterEventKey\n");
+
+  return false;
+}
+
+bool InputMethodContextGeneric::AllowTextPrediction(bool prediction)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::AllowTextPrediction\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::IsTextPredictionAllowed() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::IsTextPredictionAllowed\n");
+
+  return false;
+}
+
+bool InputMethodContextGeneric::SetFullScreenMode(bool prediction)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetFullScreenMode\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::IsFullScreenMode() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::IsFullScreenMode\n");
+
+  return false;
+}
+
+bool InputMethodContextGeneric::SetInputPanelLanguage(Dali::Integration::InputMethodContext::InputPanelLanguage language)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetInputPanelLanguage\n");
+  return true;
+}
+
+Dali::Integration::InputMethodContext::InputPanelLanguage InputMethodContextGeneric::GetInputPanelLanguage() const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetInputPanelLanguage\n");
+
+  return Dali::Integration::InputMethodContext::InputPanelLanguage::AUTOMATIC;
+}
+
+bool InputMethodContextGeneric::SetInputPanelPosition(unsigned int x, unsigned int y)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetInputPanelPosition\n");
+  return true;
+}
+
+bool InputMethodContextGeneric::SetInputPanelPositionAlign(int x, int y, Dali::InputMethodContext::InputPanelAlign align)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::SetInputPanelPositionAlign\n");
+  return false;
+}
+
+void InputMethodContextGeneric::GetPreeditStyle(Dali::Integration::InputMethodContext::PreEditAttributeDataContainer& attrs) const
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "InputMethodContextGeneric::GetPreeditStyle\n");
+  // Do Nothing
+}
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

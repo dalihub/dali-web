@@ -1,0 +1,75 @@
+#ifndef DALI_WINDOW_SYSTEM_DEVEL_H
+#define DALI_WINDOW_SYSTEM_DEVEL_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/common/vector-wrapper.h>
+#include <cstdint>
+#include <string>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/screen-information.h>
+#include <dali/public-api/dali-adaptor-common.h>
+
+namespace DALI_NAMESPACE
+{
+namespace DevelWindowSystem
+{
+/**
+ * @brief Retrieves the DPI previously set to the target screen.
+ *
+ * @note Multiple screens are not currently supported.
+ * @param[out] horizontalDpi The horizontal resolution in DPI.
+ * @param[out] verticalDpi The vertical resolution in DPI.
+ */
+DALI_ADAPTOR_API void GetDpi(uint32_t& horizontalDpi, uint32_t& verticalDpi);
+
+/**
+ * @brief Sets the processes using geometry event propagation touch and hover events.
+ *
+ * @param[in] enabled True if the processes using geometry event propagation touch and hover events.
+ */
+DALI_ADAPTOR_API void SetGeometryHittestEnabled(bool enabled);
+
+/**
+ * @brief Queries whether the scene using geometry event propagation touch and hover events.
+ *
+ * @return True if the scene using geometry event propagation touch and hover events.
+ */
+DALI_ADAPTOR_API bool IsGeometryHittestEnabled();
+
+/**
+ * @brief Retrieves a list of all currently available screens.
+ *
+ * This function queries the window system for all connected and active screens,
+ * providing essential information for each. It is primarily intended for use
+ * in multi-screen environments where an application might need to manage
+ * windows across different displays.
+ *
+ * @return A std::vector containing Dali::ScreenInformation objects for each
+ * available screen. If no screens are available, the returned vector
+ * will be empty.
+ */
+DALI_ADAPTOR_API std::vector<Dali::ScreenInformation> GetAvailableScreens();
+
+} // namespace DevelWindowSystem
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_WINDOW_SYSTEM_DEVEL_H

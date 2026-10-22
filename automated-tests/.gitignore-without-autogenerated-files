@@ -1,0 +1,4 @@
+*.xml
+build
+build.log
+/CMakeLists.txt

@@ -1,0 +1,216 @@
+
+
+SET( devel_api_src_files
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/async-task-manager.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/graphics-backend.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/tts-player.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/actor-accessible.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/animated-image-loading.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/application.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/application-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-service.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/bitmap-saver.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/capture-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/environment-variable.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/event-feeder.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/event-thread-callback.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/feedback-player.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/file-loader.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/file-stream.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/gl-window.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/graphics-capabilities.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/image-loading-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/native-image-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/native-image-queue.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/native-image-source-queue.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/performance-logger.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/physical-keyboard.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/key-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/pixel-buffer-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/sound-player.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/style-monitor.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/texture-upload-manager.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/tilt-sensor.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/lifecycle-controller.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/vector-animation-renderer.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/vector-image-renderer.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/video-player.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/virtual-keyboard.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/thread-settings.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/window-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/offscreen-application.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/offscreen-window.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/camera-player.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/window-system-devel.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/window-blur-info.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/screen-information.cpp
+)
+
+SET( devel_api_adaptor_framework_header_files
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-actions.h
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-events.h
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-geometry.h
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-text.h
+  ${adaptor_devel_api_dir}/adaptor-framework/accessibility-types.h
+  ${adaptor_devel_api_dir}/adaptor-framework/actor-accessible.h
+  ${adaptor_devel_api_dir}/adaptor-framework/async-task-manager.h
+  ${adaptor_devel_api_dir}/adaptor-framework/animated-image-loading.h
+  ${adaptor_devel_api_dir}/adaptor-framework/application.h
+  ${adaptor_devel_api_dir}/adaptor-framework/application-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/graphics-backend.h
+  ${adaptor_devel_api_dir}/adaptor-framework/bitmap-saver.h
+  ${adaptor_devel_api_dir}/adaptor-framework/capture-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/environment-variable.h
+  ${adaptor_devel_api_dir}/adaptor-framework/event-feeder.h
+  ${adaptor_devel_api_dir}/adaptor-framework/event-thread-callback.h
+  ${adaptor_devel_api_dir}/adaptor-framework/feedback-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/feedback-player.h
+  ${adaptor_devel_api_dir}/adaptor-framework/file-loader.h
+  ${adaptor_devel_api_dir}/adaptor-framework/file-download-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/tts-player.h
+  ${adaptor_devel_api_dir}/adaptor-framework/file-stream.h
+  ${adaptor_devel_api_dir}/adaptor-framework/graphics-capabilities.h
+  ${adaptor_devel_api_dir}/adaptor-framework/image-loader-input.h
+  ${adaptor_devel_api_dir}/adaptor-framework/image-loader-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/image-loading-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/lifecycle-controller.h
+  ${adaptor_devel_api_dir}/adaptor-framework/mouse-relative-event.h
+  ${adaptor_devel_api_dir}/adaptor-framework/native-image-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/native-image-queue.h
+  ${adaptor_devel_api_dir}/adaptor-framework/native-image-source-queue.h
+  ${adaptor_devel_api_dir}/adaptor-framework/performance-logger.h
+  ${adaptor_devel_api_dir}/adaptor-framework/pixel-buffer-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/pointer-constraints-event.h
+  ${adaptor_devel_api_dir}/adaptor-framework/proxy-accessible.h
+  ${adaptor_devel_api_dir}/adaptor-framework/sound-player.h
+  ${adaptor_devel_api_dir}/adaptor-framework/style-monitor.h
+  ${adaptor_devel_api_dir}/adaptor-framework/texture-upload-manager.h
+  ${adaptor_devel_api_dir}/adaptor-framework/tilt-sensor.h
+  ${adaptor_devel_api_dir}/adaptor-framework/vector-animation-renderer.h
+  ${adaptor_devel_api_dir}/adaptor-framework/vector-animation-renderer-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/vector-image-renderer.h
+  ${adaptor_devel_api_dir}/adaptor-framework/video-player.h
+  ${adaptor_devel_api_dir}/adaptor-framework/video-player-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/key-extension-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/virtual-keyboard.h
+  ${adaptor_devel_api_dir}/adaptor-framework/physical-keyboard.h
+  ${adaptor_devel_api_dir}/adaptor-framework/key-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/thread-settings.h
+  ${adaptor_devel_api_dir}/adaptor-framework/window-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/component-application.h
+  ${adaptor_devel_api_dir}/adaptor-framework/video-sync-mode.h
+  ${adaptor_devel_api_dir}/adaptor-framework/offscreen-application.h
+  ${adaptor_devel_api_dir}/adaptor-framework/offscreen-window.h
+  ${adaptor_devel_api_dir}/adaptor-framework/camera-player.h
+  ${adaptor_devel_api_dir}/adaptor-framework/camera-player-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/window-system-devel.h
+  ${adaptor_devel_api_dir}/adaptor-framework/window-blur-info.h
+  ${adaptor_devel_api_dir}/adaptor-framework/screen-information.h
+)
+
+SET( devel_api_adaptor_framework_egl_header_files
+  ${adaptor_devel_api_dir}/adaptor-framework/gl-window.h
+)
+
+SET( devel_api_adaptor_framework_web_engine_header_files
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-back-forward-list.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-back-forward-list-item.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-certificate.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-console-message.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-context.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-context-menu.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-context-menu-item.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-cookie-manager.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-form-repost-decision.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-frame.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-http-auth-handler.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-load-error.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-hit-test.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-plugin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-policy-decision.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-request-interceptor.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-security-origin.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-settings.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-user-media-permission-request.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-device-list-get.h
+  ${adaptor_devel_api_dir}/adaptor-framework/web-engine/web-engine-file-chooser-request.h
+)
+
+
+SET( devel_api_atspi_interfaces_header_files
+  ${adaptor_devel_api_dir}/atspi-interfaces/accessible.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/accessibility-feature.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/action.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/application.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/collection.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/component.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/editable-text.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/hyperlink.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/hypertext.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/selection.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/socket.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/text.h
+  ${adaptor_devel_api_dir}/atspi-interfaces/value.h
+)
+
+
+SET( devel_api_text_abstraction_src_files
+   ${adaptor_devel_api_dir}/text-abstraction/bidirectional-support.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/bitmap-font.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/font-client.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/font-file-manager.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/font-list.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/font-metrics.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/glyph-buffer-data.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/glyph-info.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/script.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/segmentation.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/shaping.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/text-renderer.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/text-renderer-layout-helper.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/hyphenation.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/icu.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/emoji-character-properties.cpp
+   ${adaptor_devel_api_dir}/text-abstraction/emoji-helper.cpp
+)
+
+
+SET( devel_api_text_abstraction_header_files
+   ${adaptor_devel_api_dir}/text-abstraction/bidirectional-support.h
+   ${adaptor_devel_api_dir}/text-abstraction/bitmap-font.h
+   ${adaptor_devel_api_dir}/text-abstraction/font-client.h
+   ${adaptor_devel_api_dir}/text-abstraction/font-file-manager.h
+   ${adaptor_devel_api_dir}/text-abstraction/font-list.h
+   ${adaptor_devel_api_dir}/text-abstraction/font-metrics.h
+   ${adaptor_devel_api_dir}/text-abstraction/glyph-buffer-data.h
+   ${adaptor_devel_api_dir}/text-abstraction/glyph-info.h
+   ${adaptor_devel_api_dir}/text-abstraction/script.h
+   ${adaptor_devel_api_dir}/text-abstraction/segmentation.h
+   ${adaptor_devel_api_dir}/text-abstraction/shaping.h
+   ${adaptor_devel_api_dir}/text-abstraction/text-abstraction.h
+   ${adaptor_devel_api_dir}/text-abstraction/text-abstraction-definitions.h
+   ${adaptor_devel_api_dir}/text-abstraction/text-renderer.h
+   ${adaptor_devel_api_dir}/text-abstraction/text-renderer-layout-helper.h
+   ${adaptor_devel_api_dir}/text-abstraction/hyphenation.h
+   ${adaptor_devel_api_dir}/text-abstraction/icu.h
+   ${adaptor_devel_api_dir}/text-abstraction/icu-plugin.h
+   ${adaptor_devel_api_dir}/text-abstraction/emoji-character-properties.h
+   ${adaptor_devel_api_dir}/text-abstraction/emoji-helper.h
+   ${adaptor_devel_api_dir}/text-abstraction/defined-characters.h
+)
+
+SET( adaptor_widget_devel_api_src_files
+  ${adaptor_devel_api_dir}/adaptor-framework/widget.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/widget-application.cpp
+  ${adaptor_devel_api_dir}/adaptor-framework/widget-impl.cpp
+)
+
+SET( devel_api_adaptor_framework_widget_header_files
+  ${adaptor_devel_api_dir}/adaptor-framework/widget.h
+  ${adaptor_devel_api_dir}/adaptor-framework/widget-application.h
+  ${adaptor_devel_api_dir}/adaptor-framework/widget-impl.h
+)
