@@ -2323,6 +2323,14 @@ Dali::Any WindowBaseEcoreWl2::CreateWindow(int width, int height)
   return static_cast<void*>(mEglWindow);
 }
 
+bool WindowBaseEcoreWl2::RequiresSurfaceAlpha() const
+{
+  // Underlay video playback punches a hole through the UI by rendering
+  // transparent pixels, so the surface always needs an alpha channel even
+  // when the window itself is opaque.
+  return true;
+}
+
 void WindowBaseEcoreWl2::DestroyWindow()
 {
   if(mEglWindow != NULL)
@@ -2686,6 +2694,7 @@ void WindowBaseEcoreWl2::SetLayout(unsigned int numCols, unsigned int numRows, u
                         totalAngle);
 
   DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "ecore_wl2_window_layout_set");
+  ecore_wl2_window_resize_request_unset(mEcoreWindow);
   ecore_wl2_window_layout_set(mEcoreWindow, transformedNumCols, transformedNumRows, transformedColumn, transformedRow, transformedColSpan, transformedRowSpan);
 #endif
 }

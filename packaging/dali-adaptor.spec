@@ -3,7 +3,7 @@
 
 Name:       dali2-adaptor
 Summary:    The DALi Tizen Adaptor
-Version:    2.5.43
+Version:    2.5.44
 Release:    1
 Group:      System/Libraries
 License:    Apache-2.0 and BSD-3-Clause and MIT and CC0-1.0 and Unlicense and Zlib
@@ -116,10 +116,11 @@ BuildRequires:  pkgconfig(cynara-creds-self)
 %if "%{mv_prj}" != "1"
 %if "%{tizen_wayland_backend}" == "TCORE"
 BuildRequires:  pkgconfig(appcore-widget-base-tcore)
+BuildRequires:  pkgconfig(component-based-core-base-tcore)
 %else
 BuildRequires:  pkgconfig(appcore-widget-base)
-%endif
 BuildRequires:  pkgconfig(component-based-core-base)
+%endif
 %endif
 
 BuildRequires:  pkgconfig(bundle)
