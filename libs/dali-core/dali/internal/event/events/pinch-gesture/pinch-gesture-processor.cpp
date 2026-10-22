@@ -1,0 +1,398 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/event/events/pinch-gesture/pinch-gesture-processor.h>
+
+// EXTERNAL INCLUDES
+#include <algorithm>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/input-options.h>
+#include <dali/integration-api/trace.h>
+#include <dali/internal/event/common/scene-impl.h>
+#include <dali/internal/event/events/gesture-requests.h>
+#include <dali/internal/event/events/pinch-gesture/pinch-gesture-event.h>
+#include <dali/internal/event/events/pinch-gesture/pinch-gesture-impl.h>
+#include <dali/internal/event/events/pinch-gesture/pinch-gesture-recognizer.h>
+#include <dali/internal/event/render-tasks/render-task-impl.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/events/pinch-gesture.h>
+#include <dali/public-api/math/vector2.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace
+{
+DALI_INIT_TRACE_FILTER(gTraceFilter, DALI_TRACE_PERFORMANCE_MARKER, false);
+
+/**
+ * Creates a PinchGesture and asks the specified detector to emit its detected signal.
+ * @param[in]  actor             The actor that has been pinched.
+ * @param[in]  gestureDetectors  The gesture detector container that should emit the signal.
+ * @param[in]  pinchEvent        The pinchEvent received from the adaptor.
+ * @param[in]  localCenter       Relative to the actor attached to the detector.
+ */
+void EmitPinchSignal(
+  Actor*                          actor,
+  const GestureDetectorContainer& gestureDetectors,
+  const PinchGestureEvent&        pinchEvent,
+  Vector2                         localCenter,
+  GestureState                    state)
+{
+  Internal::PinchGesturePtr pinch(new Internal::PinchGesture(state));
+  pinch->SetTime(pinchEvent.time);
+
+  pinch->SetScale(pinchEvent.scale);
+  pinch->SetSpeed(pinchEvent.speed);
+  pinch->SetScreenCenterPoint(pinchEvent.centerPoint);
+
+  pinch->SetLocalCenterPoint(localCenter);
+  pinch->SetTriggerPoint(pinchEvent.triggerPoint);
+
+  DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_EMIT_PINCH_GESTURE_SIGNAL", [&](std::ostringstream& oss)
+  {
+    oss << "[" << gestureDetectors.size() << "]";
+  });
+
+  std::vector<GestureDetectorPtr> detectorSnapshot;
+  detectorSnapshot.reserve(gestureDetectors.size());
+  for(GestureDetector* detector : gestureDetectors)
+  {
+    detectorSnapshot.emplace_back(detector);
+  }
+
+  Dali::Actor actorHandle(actor);
+  for(const GestureDetectorPtr& detector : detectorSnapshot)
+  {
+    static_cast<PinchGestureDetector*>(detector.Get())->EmitPinchGestureSignal(actorHandle, Dali::PinchGesture(pinch.Get()));
+  }
+
+  DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_EMIT_PINCH_GESTURE_SIGNAL", [&](std::ostringstream& oss)
+  {
+    oss << "[" << gestureDetectors.size() << "]";
+  });
+}
+
+/**
+ * Functor which checks whether the specified actor is attached to the gesture detector.
+ * It returns true if it is no longer attached.  This can be used in remove_if functions.
+ */
+struct IsNotAttachedFunctor
+{
+  /**
+   * Constructor
+   * @param[in]  actor  The actor to check whether it is attached.
+   */
+  IsNotAttachedFunctor(Actor* actor)
+  : actorToCheck(actor)
+  {
+  }
+
+  /**
+   * Returns true if not attached, false if it is still attached.
+   * @param[in]  detector  The detector to check.
+   * @return true, if not attached, false otherwise.
+   */
+  bool operator()(const GestureDetector* detector) const
+  {
+    return !detector->IsAttached(*actorToCheck);
+  }
+
+  Actor* actorToCheck; ///< The actor to check whether it is attached or not.
+};
+
+} // unnamed namespace
+
+PinchGestureProcessor::PinchGestureProcessor()
+: GestureProcessor(GestureType::PINCH),
+  mPinchGestureDetectors(),
+  mCurrentPinchEmitters(),
+  mCurrentPinchEvent(nullptr),
+  mMinimumPinchDistance(Integration::DEFAULT_PINCH_GESTURE_MINIMUM_DISTANCE),
+  mMinimumTouchEvents(Integration::DEFAULT_PINCH_GESTURE_MINIMUM_TOUCH_EVENTS),
+  mMinimumTouchEventsAfterStart(Integration::DEFAULT_PINCH_GESTURE_MINIMUM_TOUCH_EVENTS_AFTER_START)
+{
+}
+
+PinchGestureProcessor::~PinchGestureProcessor() = default;
+
+void PinchGestureProcessor::SetMinimumPinchDistance(float value)
+{
+  mMinimumPinchDistance = value;
+
+  if(mGestureRecognizer)
+  {
+    UpdateDetection();
+  }
+}
+
+void PinchGestureProcessor::SetMinimumTouchEvents(uint32_t value)
+{
+  if(value > 1u && mMinimumTouchEvents != value)
+  {
+    mMinimumTouchEvents = value;
+
+    if(mGestureRecognizer)
+    {
+      UpdateDetection();
+    }
+  }
+}
+
+void PinchGestureProcessor::SetMinimumTouchEventsAfterStart(uint32_t value)
+{
+  if(value > 1u && mMinimumTouchEventsAfterStart != value)
+  {
+    mMinimumTouchEventsAfterStart = value;
+
+    if(mGestureRecognizer)
+    {
+      UpdateDetection();
+    }
+  }
+}
+
+float PinchGestureProcessor::GetMinimumPinchDistance() const
+{
+  return mMinimumPinchDistance;
+}
+
+uint32_t PinchGestureProcessor::GetMinimumTouchEvents() const
+{
+  return mMinimumTouchEvents;
+}
+
+uint32_t PinchGestureProcessor::GetMinimumTouchEventsAfterStart() const
+{
+  return mMinimumTouchEventsAfterStart;
+}
+
+void PinchGestureProcessor::Process(Scene& scene, const PinchGestureEvent& pinchEvent)
+{
+  DALI_TRACE_SCOPE(gTraceFilter, "DALI_PROCESS_PINCH_GESTURE");
+  switch(pinchEvent.state)
+  {
+    case GestureState::STARTED:
+    {
+      // The pinch gesture should only be sent to the gesture detector which first received it so that
+      // it can be told when the gesture ends as well.
+
+      mCurrentPinchEmitters.clear();
+      ResetActor();
+
+      HitTestAlgorithm::Results hitTestResults;
+      if(HitTest(scene, pinchEvent.centerPoint, hitTestResults))
+      {
+        // Record the current render-task for Screen->Actor coordinate conversions
+        mCurrentRenderTask = hitTestResults.renderTask;
+
+        // Set mCurrentPinchEvent to use inside overridden methods called from ProcessAndEmit()
+        mCurrentPinchEvent = &pinchEvent;
+        ProcessAndEmit(hitTestResults);
+        mCurrentPinchEvent = nullptr;
+      }
+      break;
+    }
+
+    case GestureState::CONTINUING:
+    case GestureState::FINISHED:
+    case GestureState::CANCELLED:
+    {
+      // Only send subsequent pinch gesture signals if we processed the pinch gesture when it started.
+      // Check if actor is still touchable.
+
+      Actor* currentGesturedActor = GetCurrentGesturedActor();
+      if(currentGesturedActor)
+      {
+        if(currentGesturedActor->IsHittable() && !mCurrentPinchEmitters.empty() && mCurrentRenderTask)
+        {
+          // Ensure actor is still attached to the emitters, if it is not then remove the emitter.
+          GestureDetectorContainer::iterator endIter = std::remove_if(mCurrentPinchEmitters.begin(), mCurrentPinchEmitters.end(), IsNotAttachedFunctor(currentGesturedActor));
+          mCurrentPinchEmitters.erase(endIter, mCurrentPinchEmitters.end());
+
+          if(!mCurrentPinchEmitters.empty())
+          {
+            Vector2     actorCoords;
+            RenderTask& renderTaskImpl(*mCurrentRenderTask.Get());
+            currentGesturedActor->ScreenToLocal(renderTaskImpl, actorCoords.x, actorCoords.y, pinchEvent.centerPoint.x, pinchEvent.centerPoint.y);
+
+            EmitPinchSignal(currentGesturedActor, mCurrentPinchEmitters, pinchEvent, actorCoords, pinchEvent.state);
+          }
+          else
+          {
+            // If we have no current emitters then clear pinched actor as well.
+            ResetActor();
+          }
+
+          // Clear current emitters if pinch gesture has ended or been cancelled.
+          if(pinchEvent.state == GestureState::FINISHED || pinchEvent.state == GestureState::CANCELLED)
+          {
+            mCurrentPinchEmitters.clear();
+            ResetActor();
+          }
+        }
+        else
+        {
+          if(!mCurrentPinchEmitters.empty() && mCurrentRenderTask)
+          {
+            // If the actor is no longer hittable, but we still have emitters, we should cancel the gesture
+            Vector2 actorCoords;
+            currentGesturedActor->ScreenToLocal(*mCurrentRenderTask.Get(), actorCoords.x, actorCoords.y, pinchEvent.centerPoint.x, pinchEvent.centerPoint.y);
+            EmitPinchSignal(currentGesturedActor, mCurrentPinchEmitters, pinchEvent, actorCoords, GestureState::CANCELLED);
+          }
+          mCurrentPinchEmitters.clear();
+          ResetActor();
+        }
+      }
+      break;
+    }
+
+    case GestureState::CLEAR:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CLEAR\n");
+      break;
+    }
+    case GestureState::POSSIBLE:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: POSSIBLE\n");
+      break;
+    }
+  }
+}
+
+void PinchGestureProcessor::AddGestureDetector(PinchGestureDetector* gestureDetector, Scene& scene)
+{
+  bool createRecognizer(mPinchGestureDetectors.empty());
+
+  mPinchGestureDetectors.push_back(gestureDetector);
+
+  if(createRecognizer)
+  {
+    PinchGestureRequest request;
+    FillRequest(request);
+
+    Size size          = scene.GetSize();
+    mGestureRecognizer = new PinchGestureRecognizer(*this, Vector2(size.width, size.height), scene.GetDpi(), request);
+  }
+}
+
+void PinchGestureProcessor::FillRequest(PinchGestureRequest& request) const
+{
+  request.minimumDistance              = mMinimumPinchDistance;
+  request.minimumTouchEvents           = mMinimumTouchEvents;
+  request.minimumTouchEventsAfterStart = mMinimumTouchEventsAfterStart;
+  request.deviceThresholds             = mDeviceThresholds;
+}
+
+void PinchGestureProcessor::SetDeviceThresholds(const GestureDeviceProfileTable<PinchThresholdValues>& thresholds)
+{
+  mDeviceThresholds = thresholds;
+
+  if(mGestureRecognizer)
+  {
+    UpdateDetection();
+  }
+}
+
+const GestureDeviceProfileTable<PinchThresholdValues>& PinchGestureProcessor::GetDeviceThresholds() const
+{
+  return mDeviceThresholds;
+}
+
+void PinchGestureProcessor::UpdateDetection()
+{
+  DALI_ASSERT_DEBUG(mGestureRecognizer);
+
+  PinchGestureRequest request;
+  FillRequest(request);
+  mGestureRecognizer->Update(request);
+}
+
+void PinchGestureProcessor::RemoveGestureDetector(PinchGestureDetector* gestureDetector)
+{
+  if(!mCurrentPinchEmitters.empty())
+  {
+    // Check if the removed detector was one that is currently being pinched and remove it from emitters.
+    GestureDetectorContainer::iterator endIter = std::remove(mCurrentPinchEmitters.begin(), mCurrentPinchEmitters.end(), gestureDetector);
+    mCurrentPinchEmitters.erase(endIter, mCurrentPinchEmitters.end());
+
+    // If we no longer have any emitters, then we should clear mCurrentGesturedActor as well
+    if(mCurrentPinchEmitters.empty())
+    {
+      ResetActor();
+    }
+  }
+
+  // Find the detector...
+  PinchGestureDetectorContainer::iterator endIter = std::remove(mPinchGestureDetectors.begin(), mPinchGestureDetectors.end(), gestureDetector);
+  DALI_ASSERT_DEBUG(endIter != mPinchGestureDetectors.end());
+
+  // ...and remove it
+  mPinchGestureDetectors.erase(endIter, mPinchGestureDetectors.end());
+
+  if(mPinchGestureDetectors.empty())
+  {
+    mGestureRecognizer = nullptr;
+  }
+}
+
+void PinchGestureProcessor::GestureDetectorUpdated(PinchGestureDetector* gestureDetector)
+{
+  // Nothing to do as PinchGestureDetector does not have any specific parameters.
+}
+
+Actor* PinchGestureProcessor::GetCurrentGesturedActor()
+{
+  // Call the base class implementation
+  return GestureProcessor::GetCurrentGesturedActor();
+}
+
+void PinchGestureProcessor::OnGesturedActorStageDisconnection()
+{
+  mCurrentPinchEmitters.clear();
+}
+
+bool PinchGestureProcessor::CheckGestureDetector(GestureDetector* detector, Actor* actor)
+{
+  bool ret = false;
+  if(detector)
+  {
+    ret = detector->CheckGestureDetector(mCurrentPinchEvent, actor, mCurrentRenderTask);
+  }
+  return ret;
+}
+
+void PinchGestureProcessor::EmitGestureSignal(Actor* actor, const GestureDetectorContainer& gestureDetectors, Vector2 actorCoordinates)
+{
+  DALI_ASSERT_DEBUG(mCurrentPinchEvent);
+
+  EmitPinchSignal(actor, gestureDetectors, *mCurrentPinchEvent, actorCoordinates, mCurrentPinchEvent->state);
+
+  if(actor->OnScene())
+  {
+    mCurrentPinchEmitters = gestureDetectors;
+    SetActor(actor);
+  }
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

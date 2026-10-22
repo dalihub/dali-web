@@ -1,0 +1,370 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/event/events/tap-gesture/tap-gesture-processor.h>
+
+// EXTERNAL INCLUDES
+#include <algorithm>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/input-options.h>
+#include <dali/integration-api/trace.h>
+#include <dali/internal/event/actors/actor-impl.h>
+#include <dali/internal/event/common/scene-impl.h>
+#include <dali/internal/event/events/gesture-requests.h>
+#include <dali/internal/event/events/tap-gesture/tap-gesture-event.h>
+#include <dali/internal/event/events/tap-gesture/tap-gesture-impl.h>
+#include <dali/internal/event/events/tap-gesture/tap-gesture-recognizer.h>
+#include <dali/internal/event/render-tasks/render-task-impl.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/common/dali-common.h>
+#include <dali/public-api/events/tap-gesture.h>
+#include <dali/public-api/math/vector2.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace
+{
+DALI_INIT_TRACE_FILTER(gTraceFilter, DALI_TRACE_PERFORMANCE_MARKER, false);
+
+/**
+ * Creates a TapGesture and asks the specified detector to emit its detected signal.
+ * @param[in]  actor             The actor on which a tap has occurred.
+ * @param[in]  gestureDetectors  A reference to gesture detectors that should emit the signal.
+ * @param[in]  tapEvent          The tapEvent received from the adaptor.
+ * @param[in]  localPoint        Relative to the actor attached to the detector.
+ */
+void EmitTapSignal(
+  Actor*                          actor,
+  const GestureDetectorContainer& gestureDetectors,
+  const TapGestureEvent&          tapEvent,
+  Vector2                         localPoint)
+{
+  Internal::TapGesturePtr tap(new Internal::TapGesture(tapEvent.state));
+  tap->SetTime(tapEvent.time);
+  tap->SetNumberOfTaps(tapEvent.numberOfTaps);
+  tap->SetNumberOfTouches(tapEvent.numberOfTouches);
+  tap->SetScreenPoint(tapEvent.point);
+  tap->SetLocalPoint(localPoint);
+  tap->SetTriggerPoint(tapEvent.triggerPoint);
+
+  DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_EMIT_TAP_GESTURE_SIGNAL", [&](std::ostringstream& oss)
+  {
+    oss << "[" << gestureDetectors.size() << "]";
+  });
+
+  std::vector<GestureDetectorPtr> detectorSnapshot;
+  detectorSnapshot.reserve(gestureDetectors.size());
+  for(GestureDetector* detector : gestureDetectors)
+  {
+    detectorSnapshot.emplace_back(detector);
+  }
+
+  Dali::Actor actorHandle(actor);
+  for(const GestureDetectorPtr& detector : detectorSnapshot)
+  {
+    static_cast<TapGestureDetector*>(detector.Get())->EmitTapGestureSignal(actorHandle, Dali::TapGesture(tap.Get()), tapEvent.maximumMultiTapInterval);
+  }
+
+  DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_EMIT_TAP_GESTURE_SIGNAL", [&](std::ostringstream& oss)
+  {
+    oss << "[" << gestureDetectors.size() << "]";
+  });
+}
+
+} // unnamed namespace
+
+TapGestureProcessor::TapGestureProcessor()
+: GestureProcessor(GestureType::TAP),
+  mTapGestureDetectors(),
+  mCurrentTapEvent(nullptr),
+  mPossibleProcessed(false),
+  mMaximumMultiTapInterval(Integration::DEFAULT_TAP_GESTURE_MAXIMUM_MULTI_TAP_INTERVAL),
+  mMaximumHoldingTime(Integration::DEFAULT_TAP_GESTURE_MAXIMUM_HOLDING_TIME),
+  mMaximumMotionDistance(Integration::DEFAULT_TAP_GESTURE_MAXIMUM_MOTION_DISTANCE)
+{
+}
+
+TapGestureProcessor::~TapGestureProcessor() = default;
+
+void TapGestureProcessor::Process(Scene& scene, const TapGestureEvent& tapEvent)
+{
+  DALI_TRACE_SCOPE(gTraceFilter, "DALI_PROCESS_TAP_GESTURE");
+  switch(tapEvent.state)
+  {
+    case GestureState::POSSIBLE:
+    {
+      ResetActor();
+      // Do a hit test and if an actor has been hit then save to see if tap event is still valid on a tap( same actor being hit )
+      HitTestAlgorithm::Results hitTestResults;
+      if(HitTest(scene, tapEvent.point, hitTestResults))
+      {
+        SetActor(&GetImplementation(hitTestResults.actor));
+        mCurrentTapActor.SetActor(GetCurrentGesturedActor());
+
+        // Indicate that we've processed a touch down. Bool should be sufficient as a change in actor will result in a cancellation
+        mPossibleProcessed = true;
+      }
+      break;
+    }
+
+    case GestureState::STARTED:
+    {
+      // Ensure that we're processing a hit on the current actor and that we've already processed a touch down
+      HitTestAlgorithm::Results hitTestResults;
+      if(GetCurrentGesturedActor() && HitTest(scene, tapEvent.point, hitTestResults) && mPossibleProcessed)
+      {
+        // Check that this actor is still the one that was used for the last touch down ?
+        if(mCurrentTapActor.GetActor() == &GetImplementation(hitTestResults.actor))
+        {
+          mCurrentTapEvent = &tapEvent;
+          ProcessAndEmit(hitTestResults);
+        }
+        mCurrentTapEvent   = nullptr;
+        mPossibleProcessed = false;
+      }
+      break;
+    }
+
+    case GestureState::CANCELLED:
+    {
+      mPossibleProcessed = false;
+      ResetActor();
+      break;
+    }
+
+    case GestureState::CONTINUING:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CONTINUING\n");
+      break;
+    }
+    case GestureState::FINISHED:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: FINISHED\n");
+      break;
+    }
+    case GestureState::CLEAR:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CLEAR\n");
+      break;
+    }
+  }
+}
+
+void TapGestureProcessor::AddGestureDetector(TapGestureDetector* gestureDetector, Scene& scene)
+{
+  bool firstRegistration(mTapGestureDetectors.empty());
+
+  mTapGestureDetectors.push_back(gestureDetector);
+
+  if(firstRegistration)
+  {
+    TapGestureRequest request;
+    FillRequest(request);
+
+    Size size          = scene.GetSize();
+    mGestureRecognizer = new TapGestureRecognizer(*this, Vector2(size.width, size.height), request);
+  }
+  else
+  {
+    UpdateDetection();
+  }
+}
+
+void TapGestureProcessor::RemoveGestureDetector(TapGestureDetector* gestureDetector)
+{
+  // Find detector ...
+  TapGestureDetectorContainer::iterator endIter = std::remove(mTapGestureDetectors.begin(), mTapGestureDetectors.end(), gestureDetector);
+  DALI_ASSERT_DEBUG(endIter != mTapGestureDetectors.end());
+
+  // ... and remove it
+  mTapGestureDetectors.erase(endIter, mTapGestureDetectors.end());
+
+  if(mTapGestureDetectors.empty())
+  {
+    mGestureRecognizer = nullptr;
+
+    ResetActor();
+  }
+  else
+  {
+    UpdateDetection();
+  }
+}
+
+void TapGestureProcessor::GestureDetectorUpdated(TapGestureDetector* gestureDetector)
+{
+  DALI_ASSERT_DEBUG(find(mTapGestureDetectors.begin(), mTapGestureDetectors.end(), gestureDetector) != mTapGestureDetectors.end());
+
+  UpdateDetection();
+}
+
+void TapGestureProcessor::SetMaximumMultiTapInterval(uint32_t time)
+{
+  if(time == 0u)
+  {
+    DALI_LOG_ERROR("MaximumMultiTapInterval must be greater than zero.");
+    return;
+  }
+  if(mMaximumMultiTapInterval != time)
+  {
+    mMaximumMultiTapInterval = time;
+
+    if(mGestureRecognizer)
+    {
+      UpdateDetection();
+    }
+  }
+}
+
+uint32_t TapGestureProcessor::GetMaximumMultiTapInterval() const
+{
+  return mMaximumMultiTapInterval;
+}
+
+void TapGestureProcessor::SetMaximumHoldingTime(uint32_t time)
+{
+  if(time == 0u)
+  {
+    DALI_LOG_ERROR("MaximumHoldingTime must be greater than zero.");
+    return;
+  }
+  if(mMaximumHoldingTime != time)
+  {
+    mMaximumHoldingTime = time;
+
+    if(mGestureRecognizer)
+    {
+      UpdateDetection();
+    }
+  }
+}
+
+uint32_t TapGestureProcessor::GetMaximumHoldingTime() const
+{
+  return mMaximumHoldingTime;
+}
+
+void TapGestureProcessor::SetMaximumMotionDistance(float distance)
+{
+  if(distance < 0.0f)
+  {
+    DALI_LOG_ERROR("distance must be greater than zero.");
+    return;
+  }
+
+  mMaximumMotionDistance = distance;
+
+  if(mGestureRecognizer)
+  {
+    UpdateDetection();
+  }
+}
+
+float TapGestureProcessor::GetMaximumMotionDistance() const
+{
+  return mMaximumMotionDistance;
+}
+
+void TapGestureProcessor::FillRequest(TapGestureRequest& request) const
+{
+  unsigned int minTaps    = UINT_MAX;
+  unsigned int maxTaps    = 0u;
+  unsigned int minTouches = UINT_MAX;
+  unsigned int maxTouches = 0u;
+
+  for(TapGestureDetector* detector : mTapGestureDetectors)
+  {
+    if(detector)
+    {
+      minTaps    = std::min(minTaps, detector->GetMinimumTapsRequired());
+      maxTaps    = std::max(maxTaps, detector->GetMaximumTapsRequired());
+      minTouches = std::min(minTouches, detector->GetTouchesRequired());
+      maxTouches = std::max(maxTouches, detector->GetTouchesRequired());
+    }
+  }
+
+  request.minTaps                 = minTaps;
+  request.maxTaps                 = maxTaps;
+  request.minTouches              = minTouches;
+  request.maxTouches              = maxTouches;
+  request.maximumMultiTapInterval = mMaximumMultiTapInterval;
+  request.maximumHoldingTime      = mMaximumHoldingTime;
+  request.maximumMotionDistance   = mMaximumMotionDistance;
+  request.deviceThresholds        = mDeviceThresholds;
+}
+
+void TapGestureProcessor::SetDeviceThresholds(const GestureDeviceProfileTable<TapThresholdValues>& thresholds)
+{
+  mDeviceThresholds = thresholds;
+
+  if(mGestureRecognizer)
+  {
+    UpdateDetection();
+  }
+}
+
+const GestureDeviceProfileTable<TapThresholdValues>& TapGestureProcessor::GetDeviceThresholds() const
+{
+  return mDeviceThresholds;
+}
+
+void TapGestureProcessor::UpdateDetection()
+{
+  DALI_ASSERT_DEBUG(!mTapGestureDetectors.empty());
+  DALI_ASSERT_DEBUG(mGestureRecognizer);
+
+  TapGestureRequest request;
+  FillRequest(request);
+  mGestureRecognizer->Update(request);
+}
+
+bool TapGestureProcessor::CheckGestureDetector(GestureDetector* detector, Actor* actor)
+{
+  DALI_ASSERT_DEBUG(mCurrentTapEvent);
+  bool ret = false;
+  if(detector)
+  {
+    ret = detector->CheckGestureDetector(mCurrentTapEvent, actor, nullptr);
+  }
+  return ret;
+}
+
+Actor* TapGestureProcessor::GetCurrentGesturedActor()
+{
+  return GestureProcessor::GetCurrentGesturedActor();
+}
+
+void TapGestureProcessor::EmitGestureSignal(Actor* actor, const GestureDetectorContainer& gestureDetectors, Vector2 actorCoordinates)
+{
+  DALI_ASSERT_DEBUG(mCurrentTapEvent);
+  ResetActor();
+
+  EmitTapSignal(actor, gestureDetectors, *mCurrentTapEvent, actorCoordinates);
+  if(actor->OnScene())
+  {
+    SetActor(actor);
+  }
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

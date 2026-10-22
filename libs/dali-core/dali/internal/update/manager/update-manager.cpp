@@ -1,0 +1,1767 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/update/manager/update-manager.h>
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/common/set-wrapper.h>
+#include <algorithm>
+
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+#include <dali/devel-api/common/map-wrapper.h>
+#else
+#include <unordered_map>
+#include <unordered_set>
+#endif
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/core.h>
+#include <dali/integration-api/trace.h>
+
+#include <dali/internal/common/owner-key-container.h>
+
+#include <dali/internal/event/animation/animation-playlist.h>
+#include <dali/internal/event/common/notification-manager.h>
+#include <dali/internal/event/common/property-notifier.h>
+#include <dali/internal/event/effects/shader-factory.h>
+
+#include <dali/internal/update/common/discard-queue.h>
+#include <dali/internal/update/common/scene-graph-memory-pool-collection.h>
+#include <dali/internal/update/controllers/render-manager-dispatcher.h>
+#include <dali/internal/update/manager/frame-callback-processor.h>
+#include <dali/internal/update/manager/render-task-processor.h>
+#include <dali/internal/update/manager/resetter-container.h>
+#include <dali/internal/update/manager/transform-manager.h>
+#include <dali/internal/update/manager/update-algorithms.h>
+#include <dali/internal/update/manager/update-manager-debug.h>
+#include <dali/internal/update/nodes/node.h>
+#include <dali/internal/update/queue/update-message-queue.h>
+
+#include <dali/internal/render/common/render-manager.h>
+#include <dali/internal/render/renderers/render-uniform-block.h>
+#include <dali/internal/render/renderers/render-vertex-buffer.h>
+
+// Un-comment to enable node tree debug logging
+// #define NODE_TREE_LOGGING 1
+
+#if (defined(DEBUG_ENABLED) && defined(NODE_TREE_LOGGING))
+#define SNAPSHOT_NODE_LOGGING                    \
+  const uint32_t FRAME_COUNT_TRIGGER = 16;       \
+  if(mImpl->frameCounter >= FRAME_COUNT_TRIGGER) \
+  {                                              \
+    for(auto&& scene : mImpl->scenes)            \
+    {                                            \
+      if(scene && scene->root)                   \
+      {                                          \
+        mImpl->frameCounter = 0;                 \
+        PrintNodes(*scene->root, 0);             \
+      }                                          \
+    }                                            \
+  }                                              \
+  mImpl->frameCounter++;
+#else
+#define SNAPSHOT_NODE_LOGGING
+#endif
+
+#if defined(DEBUG_ENABLED)
+extern Debug::Filter* gRenderTaskLogFilter;
+namespace
+{
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_UPDATE_MANAGER");
+} // unnamed namespace
+#endif
+namespace
+{
+DALI_INIT_TRACE_FILTER(gTraceFilter, DALI_TRACE_UPDATE_PROCESS, false);
+
+DALI_INIT_TIME_CHECKER_FILTER_WITH_DEFAULT_THRESHOLD(gTimeCheckerFilter, DALI_UPDATE_PROCESS_THRESHOLD_TIME, 48);
+} // namespace
+
+using namespace Dali::Integration;
+using Dali::Internal::Update::MessageQueue;
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace SceneGraph
+{
+namespace
+{
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+/**
+ * Flag whether property has changed, during the Update phase.
+ */
+enum ContainerRemovedFlagBits
+{
+  NOTHING               = 0x00,
+  NODE                  = 0x01,
+  RENDERER              = 0x02,
+  SHADER                = 0x04,
+  TEXTURE_SET           = 0x08,
+  ANIMATION             = 0x10,
+  PROPERTY_NOTIFICATION = 0x20,
+  CUSTOM_OBJECT         = 0x40,
+  UNIFORM_BLOCKS        = 0x80,
+};
+
+/**
+ * @brief ContainerRemovedFlags alters behaviour of implementation
+ */
+using ContainerRemovedFlags = uint8_t;
+#endif
+/**
+ * Helper to Erase an object from OwnerContainer using discard queue
+ * @param container to remove from
+ * @param object to remove
+ * @param discardQueue to put the object to
+ * @return True if object moved to discard queue. False if container didn't hold object.
+ */
+template<class Type>
+inline bool EraseUsingDiscardQueue(OwnerContainer<Type*>& container, Type* object, DiscardQueue<Type*, OwnerContainer<Type*>>& discardQueue)
+{
+  DALI_ASSERT_DEBUG(object && "NULL object not allowed");
+
+  // need to use the reference version of auto as we need the pointer to the pointer for the Release call below
+  for(auto&& iter : container)
+  {
+    if(iter == object)
+    {
+      // Transfer ownership to the discard queue, this keeps the object alive, until the render-thread has finished with it
+      discardQueue.Add(container.Release(&iter)); // take the address of the reference to a pointer (iter)
+      return true;                                // return as we only ever remove one object. Iterators to container are now invalidated as well so cannot continue
+    }
+  }
+  return false;
+}
+
+/**
+ * Helper to Erase an object from std::vector using discard queue
+ * @param container to remove from
+ * @param object to remove
+ * @param discardQueue to put the object to
+ * @return True if object moved to discard queue. False if container didn't hold object.
+ */
+template<class Type>
+inline bool EraseUsingDiscardQueue(OwnerKeyContainer<Type>& container, const MemoryPoolKey<Type>& key, DiscardQueue<MemoryPoolKey<Type>, OwnerKeyContainer<Type>>& discardQueue)
+{
+  DALI_ASSERT_DEBUG(key && "INVALID Key not allowed");
+
+  for(auto iter = container.begin(), end = container.end(); iter != end; ++iter)
+  {
+    if(*iter == key)
+    {
+      // Transfer ownership to the discard queue, this keeps the object alive, until the render-thread has finished with it
+      discardQueue.Add(container.Release(iter));
+      return true; // return as we only ever remove one object. Iterators to container are now invalidated as well so cannot continue
+    }
+  }
+  return false;
+}
+
+} // unnamed namespace
+
+/**
+ * Structure to contain UpdateManager internal data
+ */
+struct UpdateManager::Impl
+{
+  // SceneInfo keeps the root node of the Scene, its scene graph render task list, and the list of Layer pointers sorted by depth
+  struct SceneInfo
+  {
+    SceneInfo(Layer* root) ///< Constructor
+    : root(root)
+    {
+    }
+
+    ~SceneInfo()                               = default; ///< Default non-virtual destructor
+    SceneInfo(SceneInfo&& rhs)                 = default; ///< Move constructor
+    SceneInfo& operator=(SceneInfo&& rhs)      = default; ///< Move assignment operator
+    SceneInfo& operator=(const SceneInfo& rhs) = delete;  ///< Assignment operator
+    SceneInfo(const SceneInfo& rhs)            = delete;  ///< Copy constructor
+
+    Layer*                       root{nullptr};   ///< Root node (root is a layer). The layer is not stored in the node memory pool.
+    OwnerPointer<RenderTaskList> taskList;        ///< Scene graph render task list
+    SortedLayerPointers          sortedLayerList; ///< List of Layer pointers sorted by depth (one list of sorted layers per root)
+    OwnerPointer<Scene>          scene;           ///< Scene graph object of the scene
+  };
+
+  Impl(NotificationManager&           notificationManager,
+       CompleteNotificationInterface& animationPlaylist,
+       PropertyNotifier&              propertyNotifier,
+       RenderController&              renderController,
+       RenderManager&                 renderManager,
+       RenderTaskProcessor&           renderTaskProcessor)
+  : renderManagerDispatcher(renderManager),
+    notificationManager(notificationManager),
+    transformManager(),
+    animationPlaylist(animationPlaylist),
+    propertyNotifier(propertyNotifier),
+    renderController(renderController),
+    renderManager(renderManager),
+    renderTaskProcessor(renderTaskProcessor),
+    backgroundColor(Dali::DEFAULT_BACKGROUND_COLOR),
+    renderers(),
+    textureSets(),
+    shaders(),
+    uniformBlocks(),
+    panGestureProcessor(nullptr),
+    messageQueue(renderController),
+    frameCallbackProcessor(nullptr),
+    nodeDirtyFlags(NodePropertyFlags::TRANSFORM), // set to TransformFlag to ensure full update the first time through Update()
+    frameCounter(0),
+    renderingBehavior(Integration::RenderingBehavior::IF_REQUIRED),
+    activatedRendererCount(0),
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+    containerRemovedFlags(ContainerRemovedFlagBits::NOTHING),
+#endif
+    discardAnimationFinishedAge(0u),
+    animationFinishedDuringUpdate(false),
+    previousUpdateScene(false),
+    renderTaskWaiting(false),
+    renderersAdded(false),
+    renderingRequired(false),
+    renderersReorderRequired(false),
+    discardQueueHasItem(false)
+  {
+    // create first 'dummy' node
+    nodes.PushBack(nullptr);
+  }
+
+  ~Impl()
+  {
+    // Ensure to scene context destroyed.
+    ContextDestroyed();
+
+    // Disconnect render tasks from nodes, before destroying the nodes
+    for(auto&& scene : scenes)
+    {
+      if(scene && scene->taskList)
+      {
+        scene->taskList.Reset();
+      }
+    }
+
+    // UpdateManager owns the Nodes. Although Nodes are pool allocated they contain heap allocated parts
+    // like custom properties, which get released here
+    Vector<Node*>::Iterator iter    = nodes.Begin() + 1;
+    Vector<Node*>::Iterator endIter = nodes.End();
+    for(; iter != endIter; ++iter)
+    {
+      (*iter)->OnDestroy();
+      Node::Delete(*iter);
+    }
+    nodeIdMap.clear();
+
+    for(auto&& scene : scenes)
+    {
+      if(scene && scene->root)
+      {
+        scene->root->OnDestroy();
+        Node::Delete(scene->root);
+      }
+    }
+    scenes.clear();
+
+    // Ensure to clear renderers
+    renderers.Clear();
+    shaders.Clear();
+    uniformBlocks.Clear();
+  }
+
+  /**
+   * Lazy init for FrameCallbackProcessor.
+   * @param[in]  updateManager  A reference to the update-manager
+   */
+  FrameCallbackProcessor& GetFrameCallbackProcessor(UpdateManager& updateManager)
+  {
+    if(!frameCallbackProcessor)
+    {
+      frameCallbackProcessor = new FrameCallbackProcessor(updateManager, transformManager);
+    }
+    return *frameCallbackProcessor;
+  }
+
+  /**
+   * @brief Remove all owned render context at scene.
+   *
+   * @note Should be called at ContextDestroyed case.
+   */
+  void ContextDestroyed()
+  {
+    // Disconnect render tasks from nodes, before destroying the nodes
+    for(auto&& scene : scenes)
+    {
+      if(scene)
+      {
+        if(scene->scene)
+        {
+          scene->scene->ContextDestroyed();
+        }
+        if(scene->taskList)
+        {
+          RenderTaskList::RenderTaskContainer& tasks = scene->taskList->GetTasks();
+          for(auto&& task : tasks)
+          {
+            task->ContextDestroyed();
+          }
+        }
+      }
+    }
+  }
+
+  RenderManagerDispatcher        renderManagerDispatcher; ///< Used for passing functions to the render-manager
+  NotificationManager&           notificationManager;     ///< Queues notification messages for the event-thread.
+  TransformManager               transformManager;        ///< Used to update the transformation matrices of the nodes
+  CompleteNotificationInterface& animationPlaylist;       ///< Holds handles to all the animations
+  PropertyNotifier&              propertyNotifier;        ///< Provides notification to applications when properties are modified.
+  RenderController&              renderController;        ///< render controller
+  RenderManager&                 renderManager;           ///< This is responsible for rendering the results of each "update"
+  RenderTaskProcessor&           renderTaskProcessor;     ///< Handles RenderTasks and RenderInstrucitons
+
+  Vector4 backgroundColor; ///< The glClear color used at the beginning of each frame.
+
+  using SceneInfoPtr = std::unique_ptr<SceneInfo>;
+  std::vector<SceneInfoPtr> scenes; ///< A container of SceneInfo.
+
+  Vector<Node*> nodes; ///< A container of all instantiated nodes
+
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  using NodeIdMap = std::map<uint32_t, Node*>;
+
+  using PropertyBaseResetRequestedContainer = std::set<PropertyBase*>;
+#else
+  using NodeIdMap = std::unordered_map<uint32_t, Node*>;
+
+  using PropertyBaseResetRequestedContainer = std::unordered_set<PropertyBase*>;
+#endif
+  NodeIdMap nodeIdMap; ///< A container of nodes map by id.
+
+  Vector<Camera*> cameras; ///< A container of cameras. Note : these cameras are owned by Impl::nodes.
+
+  OwnerContainer<PropertyOwner*> customObjects; ///< A container of owned objects (with custom properties)
+
+  ResetterContainer<PropertyResetterBase> propertyResetters; ///< A container of property resetters
+  ResetterContainer<NodeResetter>         nodeResetters;     ///< A container of node resetters
+
+  PropertyBaseResetRequestedContainer resetRequestedPropertyBases; ///< A container of property base to be resets
+
+  OwnerContainer<Animation*>            animations;            ///< A container of owned animations
+  OwnerContainer<PropertyNotification*> propertyNotifications; ///< A container of owner property notifications.
+  OwnerKeyContainer<Renderer>           renderers;             ///< A container of owned renderers
+  OwnerContainer<TextureSet*>           textureSets;           ///< A container of owned texture sets
+  OwnerContainer<Shader*>               shaders;               ///< A container of owned shaders
+  OwnerContainer<Render::UniformBlock*> uniformBlocks;         ///< A container of owned uniformBlocks
+
+  DiscardQueue<Node*, OwnerContainer<Node*>>                                 nodeDiscardQueue; ///< Nodes are added here when disconnected from the scene-graph.
+  DiscardQueue<Shader*, OwnerContainer<Shader*>>                             shaderDiscardQueue;
+  DiscardQueue<Render::UniformBlock*, OwnerContainer<Render::UniformBlock*>> uniformBlockDiscardQueue;
+  DiscardQueue<MemoryPoolKey<Renderer>, OwnerKeyContainer<Renderer>>         rendererDiscardQueue;
+  DiscardQueue<Scene*, OwnerContainer<Scene*>>                               sceneDiscardQueue;
+  DiscardQueue<PropertyOwner*, OwnerContainer<PropertyOwner*>>               customObjectDiscardQueue;
+
+  std::vector<PropertyOwner*> updatedPropertyOwnerContainer; ///< List of updated property owner (not owned)
+
+  CompleteNotificationInterface::ParameterList notifyRequiredAnimations; ///< A temperal container of complete notify required animations, like animation finished, stopped, or loop completed.
+
+  OwnerPointer<PanGesture> panGestureProcessor; ///< Owned pan gesture processor; it lives for the lifecycle of UpdateManager
+
+  MessageQueue messageQueue; ///< The messages queued from the event-thread
+
+  OwnerPointer<FrameCallbackProcessor> frameCallbackProcessor; ///< Owned FrameCallbackProcessor, only created if required.
+
+  std::atomic<std::size_t>       renderInstructionCapacity{0u};
+  NodePropertyFlags              nodeDirtyFlags;    ///< cumulative node dirty flags from previous frame
+  uint32_t                       frameCounter;      ///< Frame counter used in debugging to choose which frame to debug and which to ignore.
+  Integration::RenderingBehavior renderingBehavior; ///< Set via Integration::Core::SetRenderingBehavior
+
+  uint32_t activatedRendererCount; ///< The number of valid renderers. (Deactivated only for VisualRenderer case now.)
+                                   ///< At Renderer container, [0 ~ activatedRendererCount) are activated, and [activatedRendererCount ~ renderers.Count()) deactivated.
+                                   ///< Deactivated didn't call PrepareRenderer(), for performance.
+                                   ///< This value validate after renderersReorderRequired become false, and invalidate after renderersReorderRequired become true.
+
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  ContainerRemovedFlags containerRemovedFlags; ///< cumulative container removed flags during current frame
+#endif
+
+  uint8_t discardAnimationFinishedAge : 2; ///< Age of EndAction::Discard animation Stop/Finished. It will make we call ResetToBaseValue at least 2 frames.
+
+  bool animationFinishedDuringUpdate : 1; ///< Flag whether any animations finished during the Update()
+  bool previousUpdateScene : 1;           ///< True if the scene was updated in the previous frame (otherwise it was optimized out)
+  bool renderTaskWaiting : 1;             ///< A REFRESH_ONCE render task is waiting to be rendered
+  bool renderersAdded : 1;                ///< Flag to keep track when renderers have been added to avoid unnecessary processing
+  bool renderingRequired : 1;             ///< True if required to render the current frame
+  bool renderersReorderRequired : 1;      ///< True if we need to count activated / deactivaed renderers.
+  bool discardQueueHasItem : 1;           ///< True if discard queue has at least 1 items.
+
+private:
+  Impl(const Impl&);            ///< Undefined
+  Impl& operator=(const Impl&); ///< Undefined
+};
+
+UpdateManager::UpdateManager(NotificationManager&           notificationManager,
+                             CompleteNotificationInterface& animationPlaylist,
+                             PropertyNotifier&              propertyNotifier,
+                             RenderController&              renderController,
+                             RenderManager&                 renderManager,
+                             RenderTaskProcessor&           renderTaskProcessor,
+                             MemoryPoolCollection&          memoryPoolCollection)
+: mImpl(nullptr)
+{
+  PropertyBase::RegisterResetterManager(*this);
+  PropertyOwner::RegisterPropertyOwnerFlagManager(*this);
+
+  // Register memory pool
+  Animation::RegisterMemoryPoolCollection(memoryPoolCollection);
+  Camera::RegisterMemoryPoolCollection(memoryPoolCollection);
+  Node::RegisterMemoryPoolCollection(memoryPoolCollection);
+  Renderer::RegisterMemoryPoolCollection(memoryPoolCollection);
+  RenderItem::RegisterMemoryPoolCollection(memoryPoolCollection);
+  RenderTaskList::RegisterMemoryPoolCollection(memoryPoolCollection);
+  TextureSet::RegisterMemoryPoolCollection(memoryPoolCollection);
+
+  mImpl = new Impl(notificationManager,
+                   animationPlaylist,
+                   propertyNotifier,
+                   renderController,
+                   renderManager,
+                   renderTaskProcessor);
+}
+
+UpdateManager::~UpdateManager()
+{
+  delete mImpl;
+
+  // Unregister memory pool
+  Animation::UnregisterMemoryPoolCollection();
+  Camera::UnregisterMemoryPoolCollection();
+  Node::UnregisterMemoryPoolCollection();
+  Renderer::UnregisterMemoryPoolCollection();
+  RenderItem::UnregisterMemoryPoolCollection();
+  RenderTaskList::UnregisterMemoryPoolCollection();
+  TextureSet::UnregisterMemoryPoolCollection();
+
+  PropertyBase::UnregisterResetterManager();
+  PropertyOwner::UnregisterPropertyOwnerFlagManager();
+}
+
+void UpdateManager::ContextDestroyed()
+{
+  // Remove owned update context
+  mImpl->ContextDestroyed();
+}
+
+void UpdateManager::InstallRoot(OwnerPointer<Layer>& layer)
+{
+  DALI_ASSERT_DEBUG(layer->IsLayer());
+  DALI_ASSERT_DEBUG(layer->GetParent() == NULL);
+
+  Layer* rootLayer = layer.Release();
+
+  DALI_ASSERT_DEBUG(std::find_if(mImpl->scenes.begin(), mImpl->scenes.end(), [rootLayer](Impl::SceneInfoPtr& scene)
+  { return scene && scene->root == rootLayer; }) == mImpl->scenes.end() &&
+                    "Root Node already installed");
+
+  rootLayer->CreateTransform(&mImpl->transformManager);
+  rootLayer->SetRoot(true);
+
+  rootLayer->AddInitializeResetter(*this);
+  rootLayer->RequestResetUpdated();
+
+  // Do not allow to insert duplicated nodes.
+  // It could be happened if node id is overflowed.
+  DALI_ASSERT_ALWAYS(mImpl->nodeIdMap.insert({rootLayer->GetId(), rootLayer}).second);
+
+  mImpl->scenes.emplace_back(new Impl::SceneInfo(rootLayer));
+}
+
+void UpdateManager::UninstallRoot(Layer* layer)
+{
+  DALI_ASSERT_DEBUG(layer->IsLayer());
+  DALI_ASSERT_DEBUG(layer->GetParent() == NULL);
+
+  for(auto iter = mImpl->scenes.begin(); iter != mImpl->scenes.end(); ++iter)
+  {
+    if((*iter) && (*iter)->root == layer)
+    {
+      mImpl->scenes.erase(iter);
+      break;
+    }
+  }
+
+  mImpl->nodeIdMap.erase(layer->GetId());
+
+  mImpl->nodeDiscardQueue.Add(layer);
+  mImpl->discardQueueHasItem = true;
+
+  // Notify the layer about impending destruction
+  layer->OnDestroy();
+}
+
+void UpdateManager::AddNode(OwnerPointer<Node>& node)
+{
+  DALI_ASSERT_ALWAYS(nullptr == node->GetParent()); // Should not have a parent yet
+
+  Node* rawNode = node.Release();
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] AddNode\n", rawNode);
+
+  // Add camera nodes occured rarely.
+  if(DALI_UNLIKELY(rawNode->IsCamera()))
+  {
+    AddCamera(static_cast<Camera*>(rawNode));
+  }
+
+  // Do not allow to insert duplicated nodes.
+  // It could be happened if node id is overflowed.
+  DALI_ASSERT_ALWAYS(mImpl->nodeIdMap.insert({rawNode->GetId(), rawNode}).second);
+
+  mImpl->nodes.PushBack(rawNode);
+
+  // Newly created nodes always need to reset flags.
+  rawNode->RequestResetUpdated();
+  rawNode->CreateTransform(&mImpl->transformManager);
+}
+
+void UpdateManager::ConnectNode(Node* parent, Node* node)
+{
+  DALI_ASSERT_ALWAYS(nullptr != parent);
+  DALI_ASSERT_ALWAYS(nullptr != node);
+  DALI_ASSERT_ALWAYS(nullptr == node->GetParent()); // Should not have a parent yet
+
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] ConnectNode\n", node);
+
+  parent->SetDirtyFlag(NodePropertyFlags::DESCENDENT_HIERARCHY_CHANGED); // make parent dirty so that render items dont get reused
+  parent->ConnectChild(node);
+
+  node->AddInitializeResetter(*this);
+
+  // Inform the frame-callback-processor, if set, about the node-hierarchy changing
+  if(mImpl->frameCallbackProcessor)
+  {
+    mImpl->frameCallbackProcessor->NodeHierarchyChanged();
+  }
+}
+
+void UpdateManager::DisconnectNode(Node* node)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] DisconnectNode\n", node);
+
+  Node* parent = node->GetParent();
+  DALI_ASSERT_ALWAYS(nullptr != parent);
+  parent->SetDirtyFlag(NodePropertyFlags::CHILD_DELETED | NodePropertyFlags::DESCENDENT_HIERARCHY_CHANGED); // make parent dirty so that render items dont get reused
+
+  parent->DisconnectChild(*node);
+
+  // Inform the frame-callback-processor, if set, about the node-hierarchy changing
+  if(mImpl->frameCallbackProcessor)
+  {
+    mImpl->frameCallbackProcessor->NodeHierarchyChanged();
+  }
+}
+
+void UpdateManager::DestroyNode(Node* node)
+{
+  DALI_ASSERT_ALWAYS(nullptr != node);
+  DALI_ASSERT_ALWAYS(nullptr == node->GetParent()); // Should have been disconnected
+
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] DestroyNode\n", node);
+
+  Vector<Node*>::Iterator iter    = mImpl->nodes.Begin() + 1;
+  Vector<Node*>::Iterator endIter = mImpl->nodes.End();
+  for(; iter != endIter; ++iter)
+  {
+    if((*iter) == node)
+    {
+      mImpl->nodes.Erase(iter);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+      mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::NODE;
+#endif
+      break;
+    }
+  }
+
+  // Remove camera nodes occured rarely.
+  if(DALI_UNLIKELY(node->IsCamera()))
+  {
+    RemoveCamera(static_cast<Camera*>(node));
+  }
+
+  mImpl->nodeIdMap.erase(node->GetId());
+
+  mImpl->nodeDiscardQueue.Add(node);
+  mImpl->discardQueueHasItem = true;
+
+  // Notify the Node about impending destruction
+  node->OnDestroy();
+}
+
+void UpdateManager::AddCamera(Camera* camera)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] AddCamera\n", camera);
+
+  mImpl->cameras.PushBack(camera);
+}
+
+void UpdateManager::RemoveCamera(Camera* camera)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] RemoveCamera\n", camera);
+
+  // Find the camera and remove it from list of cameras
+  Vector<Camera*>::Iterator iter    = mImpl->cameras.Begin();
+  Vector<Camera*>::Iterator endIter = mImpl->cameras.End();
+  for(; iter != endIter; ++iter)
+  {
+    if((*iter) == camera)
+    {
+      mImpl->cameras.Erase(iter);
+      break;
+    }
+  }
+}
+
+void UpdateManager::AddObject(OwnerPointer<PropertyOwner>& object)
+{
+  mImpl->customObjects.PushBack(object.Release());
+}
+
+void UpdateManager::RemoveObject(PropertyOwner* object)
+{
+  mImpl->discardQueueHasItem |= EraseUsingDiscardQueue(mImpl->customObjects, object, mImpl->customObjectDiscardQueue);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::CUSTOM_OBJECT;
+#endif
+}
+
+void UpdateManager::AddRenderTaskList(OwnerPointer<RenderTaskList>& taskList)
+{
+  RenderTaskList* taskListPointer = taskList.Release();
+  taskListPointer->Initialize(*this, *this, mImpl->renderManagerDispatcher);
+
+  mImpl->scenes.back()->taskList = taskListPointer;
+}
+
+void UpdateManager::RemoveRenderTaskList(RenderTaskList* taskList)
+{
+  for(auto&& scene : mImpl->scenes)
+  {
+    if(scene && scene->taskList == taskList)
+    {
+      scene->taskList.Reset();
+      break;
+    }
+  }
+}
+
+void UpdateManager::AddScene(OwnerPointer<Scene>& scene)
+{
+  auto& sceneInfo  = mImpl->scenes.back();
+  auto* scenePtr   = scene.Release();
+  sceneInfo->scene = scenePtr;
+
+  // Set root to the Scene
+  sceneInfo->scene->SetRoot(sceneInfo->root);
+
+  // Let RenderManager know scene initialized.
+  mImpl->renderManager.InitializeScene(scenePtr);
+}
+
+void UpdateManager::RemoveScene(Scene* scene)
+{
+  mImpl->renderManager.UninitializeScene(scene);
+
+  scene->RemoveSurfaceRenderTarget();
+
+  for(auto&& sceneInfo : mImpl->scenes)
+  {
+    if(sceneInfo && sceneInfo->scene && sceneInfo->scene.Get() == scene)
+    {
+      mImpl->sceneDiscardQueue.Add(sceneInfo->scene.Release()); // take the address of the reference to a pointer
+      mImpl->discardQueueHasItem = true;
+      break;
+    }
+  }
+}
+
+void UpdateManager::AddAnimation(OwnerPointer<SceneGraph::Animation>& animation)
+{
+  mImpl->animations.PushBack(animation.Release());
+}
+
+void UpdateManager::StopAnimation(Animation* animation)
+{
+  DALI_ASSERT_DEBUG(animation && "NULL animation called to stop");
+
+  bool animationFinished = animation->Stop();
+
+  mImpl->animationFinishedDuringUpdate = mImpl->animationFinishedDuringUpdate || animationFinished;
+}
+
+void UpdateManager::ClearAnimation(Animation* animation)
+{
+  DALI_ASSERT_DEBUG(animation && "NULL animation called to clear");
+
+  animation->ClearAnimator();
+}
+
+void UpdateManager::RemoveAnimation(Animation* animation)
+{
+  DALI_ASSERT_DEBUG(animation && "NULL animation called to remove");
+
+  animation->OnDestroy();
+
+  DALI_ASSERT_DEBUG(animation->GetState() == Animation::Destroyed);
+
+  // Do not remove from container now. Destroyed animation will be removed at Animate.
+}
+
+bool UpdateManager::IsAnimationRunning() const
+{
+  // Find any animation that isn't stopped or paused
+  for(auto&& iter : mImpl->animations)
+  {
+    const Animation::State state = iter->GetState();
+
+    if(state != Animation::Stopped &&
+       state != Animation::Paused)
+    {
+      return true; // stop iteration as soon as first one is found
+    }
+  }
+
+  return false;
+}
+
+void UpdateManager::RequestResetUpdated(const PropertyOwner& owner)
+{
+  mImpl->updatedPropertyOwnerContainer.emplace_back(const_cast<PropertyOwner*>(&owner));
+}
+
+void UpdateManager::DiscardPropertyOwner(PropertyOwner* discardedOwner)
+{
+  // Transfer ownership to the discard queue, this keeps the object alive, until the render-thread has finished with it
+  mImpl->customObjectDiscardQueue.Add(discardedOwner);
+  mImpl->discardQueueHasItem = true;
+}
+
+void UpdateManager::AddPropertyResetter(OwnerPointer<PropertyResetterBase>& propertyResetter)
+{
+  propertyResetter->Initialize();
+  mImpl->propertyResetters.PushBack(propertyResetter.Release());
+}
+
+void UpdateManager::AddNodeResetter(const Node& node)
+{
+  OwnerPointer<SceneGraph::NodeResetter> nodeResetter = SceneGraph::NodeResetter::New(node);
+  nodeResetter->Initialize();
+  mImpl->nodeResetters.PushBack(nodeResetter.Release());
+}
+
+void UpdateManager::RequestPropertyBaseResetToBaseValue(PropertyBase* propertyBase)
+{
+  mImpl->resetRequestedPropertyBases.insert(propertyBase);
+}
+
+void UpdateManager::AddPropertyNotification(OwnerPointer<PropertyNotification>& propertyNotification)
+{
+  mImpl->propertyNotifications.PushBack(propertyNotification.Release());
+}
+
+void UpdateManager::RemovePropertyNotification(PropertyNotification* propertyNotification)
+{
+  auto iter = std::find(mImpl->propertyNotifications.Begin(), mImpl->propertyNotifications.End(), propertyNotification);
+  if(iter != mImpl->propertyNotifications.End())
+  {
+    mImpl->propertyNotifications.Erase(iter);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+    mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::PROPERTY_NOTIFICATION;
+#endif
+  }
+}
+
+void UpdateManager::PropertyNotificationSetNotify(PropertyNotification* propertyNotification, PropertyNotification::NotifyMode notifyMode)
+{
+  DALI_ASSERT_DEBUG(propertyNotification && "propertyNotification scene graph object missing");
+  propertyNotification->SetNotifyMode(notifyMode);
+}
+
+void UpdateManager::AddShader(OwnerPointer<Shader>& shader)
+{
+  mImpl->shaders.PushBack(shader.Release());
+}
+
+void UpdateManager::RemoveShader(Shader* shader)
+{
+  // Find the shader and destroy it
+  mImpl->discardQueueHasItem |= EraseUsingDiscardQueue(mImpl->shaders, shader, mImpl->shaderDiscardQueue);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::SHADER;
+#endif
+}
+
+void UpdateManager::AddRenderer(OwnerKeyType<Renderer>& rendererKeyPointer)
+{
+  RendererKey           rendererKey = rendererKeyPointer.Release();
+  SceneGraph::Renderer* renderer    = rendererKey.Get();
+
+  // Skip if renderer is null
+  if(!renderer)
+  {
+    return;
+  }
+
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] AddRenderer\n", renderer);
+
+  renderer->ConnectToSceneGraph(mImpl->renderManagerDispatcher);
+
+  // DevNote : If first created renderer is deactivated, We dont need to reorder renderers.
+  if(!mImpl->renderersReorderRequired && !rendererKey->IsObservingNodeDeactivated())
+  {
+    mImpl->renderersReorderRequired = true;
+  }
+
+  mImpl->renderers.PushBack(rendererKey);
+}
+
+void UpdateManager::RemoveRenderer(const RendererKey& rendererKey)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "[%x] RemoveRenderer\n", rendererKey.Get());
+
+  // Find the renderer and destroy it
+  mImpl->discardQueueHasItem |= EraseUsingDiscardQueue(mImpl->renderers, rendererKey, mImpl->rendererDiscardQueue);
+
+  // DevNote : EraseUsingDiscardQueue keep renderer's order. We dont need to reorder renderers.
+  if(!mImpl->renderersReorderRequired && !rendererKey->IsObservingNodeDeactivated())
+  {
+    --mImpl->activatedRendererCount;
+  }
+
+  // Need to remove the render object as well
+  rendererKey->DisconnectFromSceneGraph(mImpl->renderManagerDispatcher);
+
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::RENDERER;
+#endif
+}
+
+void UpdateManager::AttachRenderer(Node* node, const RendererKey& renderer)
+{
+  node->AddRenderer(renderer);
+  mImpl->renderersAdded           = true;
+  mImpl->renderersReorderRequired = true;
+}
+
+void UpdateManager::AttachCacheRenderer(Node* node, const RendererKey& renderer)
+{
+  node->AddCacheRenderer(renderer);
+  mImpl->renderersAdded           = true;
+  mImpl->renderersReorderRequired = true;
+}
+
+void UpdateManager::DetachRenderer(Node* node, const RendererKey& renderer)
+{
+  node->RemoveRenderer(renderer);
+  mImpl->renderersReorderRequired = true;
+}
+
+void UpdateManager::DetachCacheRenderer(Node* node, const RendererKey& renderer)
+{
+  node->RemoveCacheRenderer(renderer);
+  mImpl->renderersReorderRequired = true;
+}
+
+void UpdateManager::SetPanGestureProcessor(PanGesture* panGestureProcessor)
+{
+  DALI_ASSERT_DEBUG(NULL != panGestureProcessor);
+
+  mImpl->panGestureProcessor = panGestureProcessor;
+}
+
+void UpdateManager::AddTextureSet(OwnerPointer<TextureSet>& textureSet)
+{
+  textureSet->SetRenderManagerDispatcher(&mImpl->renderManagerDispatcher);
+  mImpl->textureSets.PushBack(textureSet.Release());
+}
+
+void UpdateManager::RemoveTextureSet(TextureSet* textureSet)
+{
+  mImpl->textureSets.EraseObject(textureSet);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::TEXTURE_SET;
+#endif
+}
+
+void UpdateManager::AddUniformBlock(OwnerPointer<Render::UniformBlock>& uniformBlock)
+{
+  mImpl->uniformBlocks.PushBack(uniformBlock.Release());
+}
+
+void UpdateManager::RemoveUniformBlock(Render::UniformBlock* uniformBlock)
+{
+  mImpl->discardQueueHasItem |= EraseUsingDiscardQueue(mImpl->uniformBlocks, uniformBlock, mImpl->uniformBlockDiscardQueue);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::UNIFORM_BLOCKS;
+#endif
+}
+
+uint32_t* UpdateManager::ReserveMessageSlot(uint32_t size, bool updateScene)
+{
+  return mImpl->messageQueue.ReserveMessageSlot(size, updateScene);
+}
+
+std::size_t UpdateManager::GetUpdateMessageQueueCapacity() const
+{
+  return mImpl->messageQueue.GetCapacity();
+}
+
+std::size_t UpdateManager::GetRenderInstructionCapacity() const
+{
+  return mImpl->renderInstructionCapacity;
+}
+
+void UpdateManager::EventProcessingStarted()
+{
+  mImpl->messageQueue.EventProcessingStarted();
+}
+
+void UpdateManager::EventProcessingFinished()
+{
+  mImpl->messageQueue.EventProcessingFinished();
+}
+
+bool UpdateManager::FlushQueue()
+{
+  return mImpl->messageQueue.FlushQueue();
+}
+
+void UpdateManager::ResetProperties()
+{
+  // Clear the "animations finished" flag; This should be set if any (previously playing) animation is stopped
+  mImpl->animationFinishedDuringUpdate = false;
+
+  // Age down discard animations.
+  mImpl->discardAnimationFinishedAge >>= 1;
+
+  // Ensure that their was no request to reset to base values during the previous update
+  // (Since requested property base doesn't consider the lifecycle of PropertyBase,
+  // It might be invalid after the previous update finished)
+  DALI_ASSERT_DEBUG(mImpl->resetRequestedPropertyBases.empty() && "Reset to base values requested during the previous update!");
+
+  // Reset node properties
+  mImpl->nodeResetters.RequestResetToBaseValues();
+
+  // Reset all animating / constrained properties
+  mImpl->propertyResetters.RequestResetToBaseValues();
+
+  // Actual reset to base values here
+  if(!mImpl->resetRequestedPropertyBases.empty())
+  {
+    decltype(mImpl->resetRequestedPropertyBases) propertyBaseList;
+
+    // Ensure to reset list as zero capacity (Since std::unordered_set::clear() is slow if capacity is not zero)
+    propertyBaseList.swap(mImpl->resetRequestedPropertyBases);
+
+    for(auto&& propertyBase : propertyBaseList)
+    {
+      propertyBase->ResetToBaseValue();
+    }
+  }
+}
+
+bool UpdateManager::ProcessGestures(uint32_t lastVSyncTimeMilliseconds, uint32_t nextVSyncTimeMilliseconds)
+{
+  bool gestureUpdated(false);
+
+  if(mImpl->panGestureProcessor)
+  {
+    // gesture processor only supports default properties
+    gestureUpdated |= mImpl->panGestureProcessor->UpdateProperties(lastVSyncTimeMilliseconds, nextVSyncTimeMilliseconds);
+  }
+
+  return gestureUpdated;
+}
+
+bool UpdateManager::Animate(float elapsedSeconds)
+{
+  bool animationActive = false;
+
+  if(mImpl->animations.Empty())
+  {
+    return animationActive;
+  }
+
+  auto&& iter = mImpl->animations.Begin();
+
+  DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_ANIMATION_ANIMATE", [&](std::ostringstream& oss)
+  { oss << "[" << mImpl->animations.Count() << "]"; });
+
+  DALI_TIME_CHECKER_BEGIN(gTimeCheckerFilter);
+
+  while(iter != mImpl->animations.End())
+  {
+    Animation* animation             = *iter;
+    bool       finished              = false;
+    bool       stopped               = false;
+    bool       progressMarkerReached = false;
+    animation->Update(elapsedSeconds, stopped, finished, progressMarkerReached);
+
+    animationActive = animationActive || animation->IsActive();
+
+    if(progressMarkerReached)
+    {
+      mImpl->notificationManager.QueueMessage(Internal::NotifyProgressReachedMessage(mImpl->animationPlaylist, animation->GetNotifyId()));
+    }
+
+    mImpl->animationFinishedDuringUpdate = mImpl->animationFinishedDuringUpdate || finished;
+
+    // Check whether finished animation is Discard type. If then, we should update scene at least 2 frames.
+    if(finished && animation->GetEndAction() == Animation::EndAction::DISCARD)
+    {
+      mImpl->discardAnimationFinishedAge |= 2u;
+    }
+
+    // queue the notification on finished or stopped
+    if(finished || stopped)
+    {
+      mImpl->notifyRequiredAnimations.PushBack(animation->GetNotifyId());
+    }
+
+    // Remove animations that had been destroyed but were still waiting for an update
+    if(animation->GetState() == Animation::Destroyed)
+    {
+      iter = mImpl->animations.Erase(iter);
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+      mImpl->containerRemovedFlags |= ContainerRemovedFlagBits::ANIMATION;
+#endif
+    }
+    else
+    {
+      ++iter;
+    }
+  }
+
+  // The application should be notified by NotificationManager, in another thread
+  if(!mImpl->notifyRequiredAnimations.Empty())
+  {
+    mImpl->notificationManager.QueueNotification(&mImpl->animationPlaylist, std::move(mImpl->notifyRequiredAnimations));
+  }
+
+  DALI_TIME_CHECKER_END_WITH_MESSAGE_GENERATOR(gTimeCheckerFilter, [&](std::ostringstream& oss)
+  {
+    oss << "DALI_ANIMATION_ANIMATE. [" << mImpl->animations.Count() << "]";
+  });
+
+  DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_ANIMATION_ANIMATE", [&](std::ostringstream& oss)
+  { oss << "[" << mImpl->animations.Count() << "]"; });
+
+  return animationActive;
+}
+
+void UpdateManager::ConstrainCustomObjects(PropertyOwnerContainer& postPropertyOwners)
+{
+  // Constrain custom objects (in construction order)
+  for(auto&& object : mImpl->customObjects)
+  {
+    ConstrainPropertyOwner(*object, true, postPropertyOwners);
+  }
+}
+
+void UpdateManager::ConstrainRenderTasks(PropertyOwnerContainer& postPropertyOwners)
+{
+  // Constrain render-tasks
+  for(auto&& scene : mImpl->scenes)
+  {
+    if(scene && scene->taskList)
+    {
+      RenderTaskList::RenderTaskContainer& tasks = scene->taskList->GetTasks();
+      for(auto&& task : tasks)
+      {
+        ConstrainPropertyOwner(*task, true, postPropertyOwners);
+      }
+    }
+  }
+}
+
+void UpdateManager::ConstrainShaders(PropertyOwnerContainer& postPropertyOwners)
+{
+  // constrain shaders... (in construction order)
+  for(auto&& shader : mImpl->shaders)
+  {
+    ConstrainPropertyOwner(*shader, true, postPropertyOwners);
+  }
+  for(auto&& uniformBlock : mImpl->uniformBlocks)
+  {
+    ConstrainPropertyOwner(*uniformBlock, true, postPropertyOwners);
+  }
+}
+
+void UpdateManager::ProcessPropertyNotifications()
+{
+  for(auto&& notification : mImpl->propertyNotifications)
+  {
+    bool valid = notification->Check();
+    if(valid)
+    {
+      mImpl->notificationManager.QueueMessage(PropertyChangedMessage(mImpl->propertyNotifier, notification->GetNotifyId(), notification->GetValidity()));
+    }
+  }
+}
+
+void UpdateManager::UpdateRenderers(PropertyOwnerContainer& postPropertyOwners)
+{
+  if(mImpl->renderers.Empty())
+  {
+    return;
+  }
+
+  // ConnectNode / DisconnectNode / SetAllDirtyFlags() called case (like SetIgnored)
+  const bool fullUpdate = (mImpl->nodeDirtyFlags & (NodePropertyFlags::DESCENDENT_HIERARCHY_CHANGED));
+
+  DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_UPDATE_RENDERERS", [&](std::ostringstream& oss)
+  { oss << "[" << mImpl->renderers.Count() << ", force:" << fullUpdate << ", nodeDirty:" << mImpl->nodeDirtyFlags << "]"; });
+
+  DALI_TIME_CHECKER_BEGIN(gTimeCheckerFilter);
+
+  // TODO : Clean up this code in future.
+  if(fullUpdate)
+  {
+    // nodeDirtyFlags changed. Node's Ignore property might be changed.
+    mImpl->renderersReorderRequired = true;
+    for(const auto& rendererKey : mImpl->renderers)
+    {
+      // Apply constraints
+      auto renderer = rendererKey.Get();
+      ConstrainPropertyOwner(*renderer, true, postPropertyOwners);
+
+      mImpl->renderingRequired = renderer->PrepareRender() || mImpl->renderingRequired;
+    }
+
+    DALI_TRACE_END(gTraceFilter, "DALI_UPDATE_RENDERERS");
+  }
+  else
+  {
+    if(mImpl->renderersReorderRequired)
+    {
+      // Reset flag only here.
+      mImpl->renderersReorderRequired = false;
+
+      // Move deactivated renderers to end, and activated renderers as front
+      // We should keep order stable.
+      DALI_TRACE_BEGIN(gTraceFilter, "DALI_REORDER_RENDERERS");
+      decltype(mImpl->renderers) deactivatedRenderers;
+      for(auto iter = mImpl->renderers.Begin(); iter != mImpl->renderers.End();)
+      {
+        if((*iter)->IsObservingNodeDeactivated())
+        {
+          deactivatedRenderers.PushBack(mImpl->renderers.Release(iter));
+          // Note : we can use iter again since OwnerKeyContainer use linear memory pointer.
+        }
+        else
+        {
+          ++iter;
+        }
+      }
+      mImpl->activatedRendererCount = static_cast<uint32_t>(mImpl->renderers.Count());
+
+      while(!deactivatedRenderers.Empty())
+      {
+        auto endIter = deactivatedRenderers.End();
+        mImpl->renderers.PushBack(deactivatedRenderers.Release(--endIter));
+      }
+      DALI_TRACE_END(gTraceFilter, "DALI_REORDER_RENDERERS");
+    }
+
+    uint32_t count = mImpl->activatedRendererCount;
+    if(count > 0u)
+    {
+      for(const auto& rendererKey : mImpl->renderers)
+      {
+        // Apply constraints
+        auto renderer = rendererKey.Get();
+        ConstrainPropertyOwner(*renderer, true, postPropertyOwners);
+
+        mImpl->renderingRequired = renderer->PrepareRender() || mImpl->renderingRequired;
+        if(--count == 0)
+        {
+          break;
+        }
+      }
+    }
+    DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_UPDATE_RENDERERS", [&](std::ostringstream& oss)
+    { oss << "[" << mImpl->renderers.Count() << ", i:" << (mImpl->renderers.Count() - mImpl->activatedRendererCount) << "]"; });
+  }
+
+  DALI_TIME_CHECKER_END_WITH_MESSAGE_GENERATOR(gTimeCheckerFilter, [&](std::ostringstream& oss)
+  {
+    oss << "DALI_UPDATE_RENDERERS. [" << mImpl->renderers.Count() << ", i:" << (mImpl->renderers.Count() - mImpl->activatedRendererCount) << "]";
+  });
+}
+
+void UpdateManager::UpdateNodes(PropertyOwnerContainer& postPropertyOwners)
+{
+  DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "DALI_UPDATE_NODES");
+  mImpl->nodeDirtyFlags = NodePropertyFlags::NOTHING;
+
+  for(auto&& scene : mImpl->scenes)
+  {
+    if(scene && scene->root)
+    {
+      // Prepare resources, update shaders, for each node
+      // And add the renderers to the sorted layers. Start from root, which is also a layer
+      mImpl->nodeDirtyFlags |= UpdateNodeTree(*scene->root,
+                                              postPropertyOwners);
+    }
+  }
+}
+
+void UpdateManager::UpdateLayers()
+{
+  DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "DALI_UPDATE_LAYERS");
+  for(auto&& scene : mImpl->scenes)
+  {
+    if(scene && scene->root)
+    {
+      SceneGraph::UpdateLayerTree(*scene->root);
+    }
+  }
+}
+
+uint32_t UpdateManager::Update(float    elapsedSeconds,
+                               uint32_t lastVSyncTimeMilliseconds,
+                               uint32_t nextVSyncTimeMilliseconds,
+                               bool     renderToFboEnabled,
+                               bool     isRenderingToFbo,
+                               bool&    uploadOnly,
+                               bool&    rendererAdded)
+{
+  // Clear nodes/resources which were previously discarded
+  mImpl->nodeDiscardQueue.Clear();
+  mImpl->shaderDiscardQueue.Clear();
+  mImpl->rendererDiscardQueue.Clear();
+  mImpl->sceneDiscardQueue.Clear();
+  mImpl->customObjectDiscardQueue.Clear();
+
+  mImpl->discardQueueHasItem = false;
+
+  bool isAnimationRunning = IsAnimationRunning();
+
+  // Process Touches & Gestures
+  const bool gestureUpdated = ProcessGestures(lastVSyncTimeMilliseconds, nextVSyncTimeMilliseconds);
+
+  bool updateScene =                                   // The scene-graph requires an update if..
+    (mImpl->nodeDirtyFlags & RenderableUpdateFlags) || // ..nodes were dirty in previous frame OR
+    isAnimationRunning ||                              // ..at least one animation is running OR
+    mImpl->messageQueue.IsSceneUpdateRequired() ||     // ..a message that modifies the scene graph node tree is queued OR
+    mImpl->frameCallbackProcessor ||                   // ..a frame callback processor is existed OR
+    mImpl->discardAnimationFinishedAge > 0u ||         // ..at least one animation with EndAction::DISCARD finished
+    gestureUpdated;                                    // ..a gesture property was updated
+
+  uint32_t keepUpdating    = 0;
+  mImpl->renderingRequired = false;
+
+  // Although the scene-graph may not require an update, we still need to synchronize double-buffered
+  // values if the scene was updated in the previous frame.
+  if(updateScene || mImpl->previousUpdateScene)
+  {
+    // Reset properties from the previous update
+    ResetProperties();
+    mImpl->transformManager.ResetToBaseValue();
+  }
+
+  // Process the queued scene messages. Note, MessageQueue::FlushQueue may be called
+  // between calling IsSceneUpdateRequired() above and here, so updateScene should
+  // be set again
+  updateScene |= mImpl->messageQueue.ProcessMessages();
+
+  // Although the scene-graph may not require an update, we still need to synchronize double-buffered
+  // renderer lists if the scene was updated in the previous frame.
+  // We should not start skipping update steps or reusing lists until there has been two frames where nothing changes
+  if(updateScene || mImpl->previousUpdateScene)
+  {
+    DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_UPDATE_INTERNAL", [&](std::ostringstream& oss)
+    {
+      oss << "[n:" << mImpl->nodes.Size() << ",";
+      oss << "c:" << mImpl->customObjects.Size() << ",";
+      oss << "a:" << mImpl->animations.Size() << ",";
+      oss << "r:" << mImpl->renderers.Size() << ",";
+      oss << "t:" << mImpl->textureSets.Size() << ",";
+      oss << "s:" << mImpl->shaders.Size() << "]"; });
+
+    DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "DALI_UPDATE_INTERNAL");
+
+    // Animate
+    bool animationActive = Animate(elapsedSeconds);
+
+    PropertyOwnerContainer postPropertyOwners;
+    // Constraint custom objects
+    ConstrainCustomObjects(postPropertyOwners);
+
+    // Clear the lists of renderers from the previous update
+    for(auto&& scene : mImpl->scenes)
+    {
+      if(scene)
+      {
+        for(auto&& layer : scene->sortedLayerList)
+        {
+          if(layer)
+          {
+            layer->ClearRenderables();
+          }
+        }
+      }
+    }
+
+    // Call the frame-callback-processor if set
+    if(mImpl->frameCallbackProcessor)
+    {
+      if(mImpl->frameCallbackProcessor->Update(elapsedSeconds))
+      {
+        keepUpdating |= KeepUpdating::FRAME_UPDATE_CALLBACK;
+      }
+    }
+
+    // Update node hierarchy, apply constraints,
+    UpdateNodes(postPropertyOwners);
+
+    // Apply constraints to RenderTasks, shaders
+    ConstrainRenderTasks(postPropertyOwners);
+    ConstrainShaders(postPropertyOwners); // shaders & uniform blocks
+
+    // Update renderers and apply constraints
+    UpdateRenderers(postPropertyOwners);
+
+    // Update the transformations of all the nodes
+    if(mImpl->transformManager.Update())
+    {
+      mImpl->nodeDirtyFlags |= NodePropertyFlags::TRANSFORM;
+    }
+
+    // Constraint applied after transform manager updated. Only required property owner processed.
+    for(auto&& propertyOwner : postPropertyOwners)
+    {
+      ConstrainPropertyOwner(*propertyOwner, false, postPropertyOwners);
+    }
+
+    // Initialise layer renderable reuse
+    UpdateLayers();
+
+    // Process Property Notifications
+    ProcessPropertyNotifications();
+
+    // Update cameras
+    for(auto&& cameraIterator : mImpl->cameras)
+    {
+      cameraIterator->Update();
+    }
+
+    // Process the RenderTasks if renderers exist. This creates the instructions for rendering the next frame.
+    // make sure there is enough room in the instruction container
+    if(mImpl->renderersAdded)
+    {
+      rendererAdded = true;
+
+#if defined(DEBUG_ENABLED)
+      // Calculate how many render tasks we have in total
+      std::size_t numberOfRenderTasks        = 0;
+      std::size_t numberOfRenderInstructions = 0;
+      for(auto&& scene : mImpl->scenes)
+      {
+        if(scene && scene->taskList)
+        {
+          numberOfRenderTasks += scene->taskList->GetTasks().Count();
+        }
+      }
+#endif
+
+      bool renderContinuously = false;
+
+      mImpl->renderInstructionCapacity = 0u;
+      for(auto&& scene : mImpl->scenes)
+      {
+        if(scene && scene->root && scene->taskList && scene->scene)
+        {
+          DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "DALI_PROCESS_RENDER_TASK");
+
+          DALI_TRACE_BEGIN(gTraceFilter, "DALI_PROCESS_RENDER_TASK");
+          scene->scene->GetRenderInstructions().ResetAndReserve(static_cast<uint32_t>(scene->taskList->GetTasks().Count()));
+
+          const bool sceneForceRendering = scene->scene->NeedsForceRendering();
+
+          // Change uploadOnly flag as false if current scene requested force-rendering.
+          if(uploadOnly && sceneForceRendering)
+          {
+            uploadOnly = false;
+          }
+
+          const bool sceneKeepUpdating = scene->scene->KeepRenderingCheck(elapsedSeconds);
+          if(sceneKeepUpdating)
+          {
+            keepUpdating |= KeepUpdating::KEEP_RENDERING;
+          }
+
+          // If there are animations running, only add render instruction if at least one animation is currently active (i.e. not delayed)
+          // or the nodes are dirty
+          // or keep rendering is requested
+          if(!isAnimationRunning || animationActive || mImpl->renderingRequired || (mImpl->nodeDirtyFlags & RenderableUpdateFlags) || sceneKeepUpdating || sceneForceRendering)
+          {
+            renderContinuously |= mImpl->renderTaskProcessor.Process(*scene->taskList,
+                                                                     scene->sortedLayerList,
+                                                                     scene->scene->GetRenderInstructions(),
+                                                                     renderToFboEnabled,
+                                                                     isRenderingToFbo);
+
+            mImpl->renderInstructionCapacity += scene->scene->GetRenderInstructions().GetCapacity();
+            scene->scene->SetSkipRendering(false);
+          }
+          else
+          {
+            scene->scene->SetSkipRendering(true);
+          }
+          DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_PROCESS_RENDER_TASK", [&](std::ostringstream& oss)
+          { oss << "[render instruction capacity : " << mImpl->renderInstructionCapacity << "]\n"; });
+
+#if defined(DEBUG_ENABLED)
+          numberOfRenderInstructions += scene->scene->GetRenderInstructions().Count();
+#endif
+        }
+      }
+
+      if(renderContinuously)
+      {
+        keepUpdating |= KeepUpdating::RENDERER_CONTINUOUSLY;
+      }
+
+      DALI_LOG_INFO(gLogFilter, Debug::General, "Update: numberOfRenderTasks(%d), Render Instructions(%d)\n", numberOfRenderTasks, numberOfRenderInstructions);
+    }
+
+    DALI_TRACE_END(gTraceFilter, "DALI_UPDATE_INTERNAL");
+  }
+
+  if(!uploadOnly)
+  {
+    // check the countdown and notify
+    mImpl->renderTaskWaiting = false;
+
+    for(auto&& scene : mImpl->scenes)
+    {
+      if(scene && scene->root && scene->taskList)
+      {
+        RenderTaskList::RenderTaskContainer& tasks = scene->taskList->GetTasks();
+
+        CompleteNotificationInterface::ParameterList notifyRequiredRenderTasks;
+
+        const bool sceneVisible = !scene->scene || scene->scene->IsVisible();
+
+        for(auto&& renderTask : tasks)
+        {
+          // Rendering of the invisible scene is skipped. Keep the render task state until it is actually rendered.
+          if(!sceneVisible && renderTask->IsRenderRequired())
+          {
+            continue;
+          }
+
+          renderTask->UpdateState();
+
+          if(renderTask->IsWaitingToRender() &&
+             renderTask->ReadyToRender() /*avoid updating forever when source actor is off-stage*/)
+          {
+            mImpl->renderTaskWaiting = true; // keep update/render threads alive
+          }
+
+          if(renderTask->HasRendered())
+          {
+            notifyRequiredRenderTasks.PushBack(renderTask->GetNotifyId());
+          }
+        }
+
+        if(!notifyRequiredRenderTasks.Empty())
+        {
+          DALI_LOG_INFO(gRenderTaskLogFilter, Debug::General, "Notify a render task has finished\n");
+          mImpl->notificationManager.QueueNotification(scene->taskList->GetCompleteNotificationInterface(), std::move(notifyRequiredRenderTasks));
+        }
+      }
+    }
+  }
+
+  // Macro is undefined in release build.
+  SNAPSHOT_NODE_LOGGING;
+
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+  // Shrink relevant containers if required.
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::NODE)
+  {
+    mImpl->nodes.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::RENDERER)
+  {
+    mImpl->renderers.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::SHADER)
+  {
+    mImpl->shaders.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::TEXTURE_SET)
+  {
+    mImpl->textureSets.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::ANIMATION)
+  {
+    mImpl->animations.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::PROPERTY_NOTIFICATION)
+  {
+    mImpl->propertyNotifications.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::CUSTOM_OBJECT)
+  {
+    mImpl->customObjects.ShrinkToFitIfNeeded();
+  }
+  if(mImpl->containerRemovedFlags & ContainerRemovedFlagBits::UNIFORM_BLOCKS)
+  {
+    mImpl->uniformBlocks.ShrinkToFitIfNeeded();
+  }
+
+  // Reset flag
+  mImpl->containerRemovedFlags = ContainerRemovedFlagBits::NOTHING;
+#endif
+
+  // A ResetProperties() may be required in the next frame
+  mImpl->previousUpdateScene = updateScene;
+
+  // Check whether further updates are required
+  keepUpdating |= KeepUpdatingCheck(elapsedSeconds);
+
+  if(keepUpdating & (KeepUpdating::KEEP_RENDERING | KeepUpdating::FRAME_UPDATE_CALLBACK | KeepUpdating::RENDERER_CONTINUOUSLY))
+  {
+    // Set dirty flags for next frame to continue rendering
+    mImpl->nodeDirtyFlags |= RenderableUpdateFlags;
+  }
+
+  if(mImpl->discardQueueHasItem)
+  {
+    keepUpdating |= KeepUpdating::OBJECT_DISCARDED;
+  }
+
+  // tell the update manager that we're done so the queue can be given to event thread
+  mImpl->notificationManager.UpdateCompleted();
+
+  return keepUpdating;
+}
+
+void UpdateManager::PostRender()
+{
+  // Reset dirty flag
+  if(!mImpl->updatedPropertyOwnerContainer.empty())
+  {
+    for(auto* updatedPropertyOwner : mImpl->updatedPropertyOwnerContainer)
+    {
+      updatedPropertyOwner->ResetUpdated();
+    }
+    mImpl->updatedPropertyOwnerContainer.clear();
+
+#if defined(LOW_SPEC_MEMORY_MANAGEMENT_ENABLED)
+    mImpl->updatedPropertyOwnerContainer.shrink_to_fit();
+#endif
+  }
+}
+
+uint32_t UpdateManager::KeepUpdatingCheck(float elapsedSeconds) const
+{
+  uint32_t keepUpdatingRequest = KeepUpdating::NOT_REQUESTED;
+
+  // If the rendering behavior is set to continuously render, then continue to render.
+  // Keep updating until no messages are received and no animations are running.
+  // If an animation has just finished, update at least two frames more for Discard end-actions.
+  // No need to check for RenderManager as there is always a render after update and if that
+  // render needs another update it will tell the adaptor to call update again
+
+  if(mImpl->renderingBehavior == Integration::RenderingBehavior::CONTINUOUSLY)
+  {
+    keepUpdatingRequest |= KeepUpdating::KEEP_RENDERING;
+  }
+
+  if(IsAnimationRunning() ||
+     mImpl->animationFinishedDuringUpdate ||
+     mImpl->discardAnimationFinishedAge > 0u)
+  {
+    keepUpdatingRequest |= KeepUpdating::ANIMATIONS_RUNNING;
+  }
+
+  if(mImpl->renderTaskWaiting)
+  {
+    keepUpdatingRequest |= KeepUpdating::RENDER_TASK_SYNC;
+  }
+
+  return keepUpdatingRequest;
+}
+
+void UpdateManager::KeepRendering(float durationSeconds)
+{
+  for(auto&& scene : mImpl->scenes)
+  {
+    if(scene->scene)
+    {
+      scene->scene->KeepRendering(durationSeconds);
+    }
+  }
+}
+
+void UpdateManager::SetRenderingBehavior(const Integration::RenderingBehavior& renderingBehavior)
+{
+  mImpl->renderingBehavior = renderingBehavior;
+}
+
+void UpdateManager::RequestRendering()
+{
+  mImpl->renderingRequired = true;
+}
+
+void UpdateManager::ResetRendererAddedFlag()
+{
+  mImpl->renderersAdded = false;
+}
+
+Node* UpdateManager::GetNodePointerById(uint32_t nodeId) const
+{
+  Node* foundNodePointer = nullptr;
+  auto  iter             = mImpl->nodeIdMap.find(nodeId);
+  if(iter != mImpl->nodeIdMap.end())
+  {
+    foundNodePointer = iter->second;
+  }
+  return foundNodePointer;
+}
+
+void UpdateManager::SetLayerDepths(const SortedLayerPointers& layers, const Layer* rootLayer)
+{
+  for(auto&& scene : mImpl->scenes)
+  {
+    if(scene && scene->root == rootLayer)
+    {
+      scene->root->SetAllDirtyFlags();
+      scene->root->SetUpdated(true);
+      scene->sortedLayerList = layers;
+      break;
+    }
+  }
+}
+
+void UpdateManager::SetDepthIndices(OwnerPointer<NodeDepths>& nodeDepths)
+{
+  // note, this vector is already in depth order.
+  // So if we reverse iterate, we can assume that
+  // my descendant node's depth index are updated.
+
+  // And also, This API is the last flushed message.
+  // We can now setup the DESCENDENT_HIERARCHY_CHANGED flag here.
+  for(auto rIter = nodeDepths->nodeDepths.rbegin(), rEndIter = nodeDepths->nodeDepths.rend(); rIter != rEndIter; rIter++)
+  {
+    auto* node = rIter->node;
+    node->PropagateDescendentFlags();
+    node->SetDepthIndex(rIter->sortedDepth);
+    if(node->IsChildrenReorderRequired())
+    {
+      // Reorder children container only if sibiling order changed.
+      NodeContainer& container = node->GetChildren();
+      std::sort(container.Begin(), container.End(), [](Node* a, Node* b)
+      { return a->GetDepthIndex() < b->GetDepthIndex(); });
+    }
+  }
+}
+
+void UpdateManager::AddFrameCallback(OwnerPointer<FrameCallback>& frameCallback, const Node* rootNode)
+{
+  mImpl->GetFrameCallbackProcessor(*this).AddFrameCallback(frameCallback, rootNode);
+}
+
+void UpdateManager::RemoveFrameCallback(FrameCallbackInterface* frameCallback)
+{
+  mImpl->GetFrameCallbackProcessor(*this).RemoveFrameCallback(frameCallback);
+}
+
+void UpdateManager::NotifyFrameCallback(FrameCallbackInterface* frameCallback, Dali::UpdateProxy::NotifySyncPoint syncPoint)
+{
+  mImpl->GetFrameCallbackProcessor(*this).NotifyFrameCallback(frameCallback, syncPoint);
+}
+
+// API list to call RenderManager directly.
+
+void UpdateManager::SurfaceReplaced(Scene* scene)
+{
+  mImpl->renderManager.SurfaceReplaced(scene);
+}
+
+void UpdateManager::RequestClearProgramCache()
+{
+  mImpl->renderManager.ClearProgramCache();
+}
+
+void UpdateManager::AddSampler(OwnerPointer<Render::Sampler>& sampler)
+{
+  mImpl->renderManager.AddSampler(sampler);
+}
+
+void UpdateManager::RemoveSampler(Render::Sampler* sampler)
+{
+  mImpl->renderManager.RemoveSampler(sampler);
+}
+
+void UpdateManager::AddVertexBuffer(OwnerPointer<Render::VertexBuffer>& vertexBuffer)
+{
+  mImpl->renderManager.AddVertexBuffer(vertexBuffer);
+}
+
+void UpdateManager::RemoveVertexBuffer(Render::VertexBuffer* vertexBuffer)
+{
+  mImpl->renderManager.RemoveVertexBuffer(vertexBuffer);
+}
+
+void UpdateManager::AddGeometry(OwnerPointer<Render::Geometry>& geometry)
+{
+  mImpl->renderManager.AddGeometry(geometry);
+}
+
+void UpdateManager::RemoveGeometry(Render::Geometry* geometry)
+{
+  mImpl->renderManager.RemoveGeometry(geometry);
+}
+
+void UpdateManager::AddTexture(OwnerKeyType<Render::Texture>& textureKeyPointer)
+{
+  mImpl->renderManager.AddTexture(textureKeyPointer);
+}
+
+void UpdateManager::RemoveTexture(const Render::TextureKey& texture)
+{
+  mImpl->renderManager.RemoveTexture(texture);
+}
+
+void UpdateManager::AddFrameBuffer(OwnerPointer<Render::FrameBuffer>& frameBuffer)
+{
+  mImpl->renderManager.AddFrameBuffer(frameBuffer);
+}
+
+void UpdateManager::RemoveFrameBuffer(Render::FrameBuffer* frameBuffer)
+{
+  mImpl->renderManager.RemoveFrameBuffer(frameBuffer);
+}
+
+} // namespace SceneGraph
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

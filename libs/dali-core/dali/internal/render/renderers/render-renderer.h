@@ -1,0 +1,941 @@
+#ifndef DALI_INTERNAL_RENDER_RENDERER_H
+#define DALI_INTERNAL_RENDER_RENDERER_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <memory> ///< for std::unique_ptr
+#include <unordered_set>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/common/list-wrapper.h>
+#include <dali/devel-api/common/vector-wrapper.h>
+#include <dali/devel-api/signals/render-callback.h>
+#include <dali/public-api/common/dali-pair.h>
+#include <dali/public-api/common/dali-vector.h>
+#include <dali/public-api/math/matrix.h>
+#include <dali/public-api/math/vector4.h>
+
+#include <dali/devel-api/common/owner-container.h>
+#include <dali/graphics-api/graphics-controller.h>
+#include <dali/integration-api/debug.h>
+#include <dali/internal/common/blending-options.h>
+#include <dali/internal/common/const-string.h>
+#include <dali/internal/common/message.h>
+#include <dali/internal/common/type-abstraction-enums.h>
+#include <dali/internal/event/common/property-input-impl.h>
+#include <dali/internal/render/common/render-target-graphics-objects.h> ///< For RenderTargetGraphicsObjects::LifecycleObserver
+#include <dali/internal/render/data-providers/render-data-provider.h>
+#include <dali/internal/render/renderers/pipeline-cache.h>
+#include <dali/internal/render/renderers/uniform-buffer-manager.h>
+#include <dali/internal/update/manager/render-instruction-processor.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class Texture;
+class ProgramCache;
+class SharedUniformBufferViewContainer;
+
+namespace SceneGraph
+{
+class Shader;
+class NodeDataProvider;
+class MemoryPoolCollection;
+class RenderInstruction; // for reflection effect
+class RenderTargetGraphicsObjects;
+} // namespace SceneGraph
+
+namespace Render
+{
+class PipelineCache;
+struct PipelineCacheL2;
+class UniformBufferManager;
+class UniformBufferV2;
+class Renderer;
+class TerminatedNativeDrawManager;
+
+using PipelineCacheL2Container = std::list<PipelineCacheL2>;
+using PipelineCachePtr         = PipelineCacheL2Container::iterator;
+
+using RendererKey = MemoryPoolKey<Render::Renderer>;
+
+using UboViewContainer = Dali::OwnerContainer<Render::UniformBufferView*>;
+} // namespace Render
+} // namespace Internal
+
+// Ensure RendererKey can be used in Dali::Vector
+template<>
+struct TypeTraits<Internal::Render::RendererKey> : public BasicTypes<Internal::Render::RendererKey>
+{
+  enum
+  {
+    IS_TRIVIAL_TYPE = true
+  };
+};
+
+namespace Internal
+{
+namespace Render
+{
+/**
+ * Renderers are used to render meshes
+ * These objects are used during RenderManager::Render(), so properties modified during
+ * the Update must either be double-buffered.
+ */
+class Renderer : public PipelineCacheL0::LifecycleObserver, public SceneGraph::RenderTargetGraphicsObjects::LifecycleObserver
+{
+public:
+  /**
+   * @brief Struct to encapsulate stencil parameters required for control of the stencil buffer.
+   */
+  struct StencilParameters
+  {
+    StencilParameters(RenderMode::Type renderMode, StencilFunction::Type stencilFunction, int stencilFunctionMask, int stencilFunctionReference, int stencilMask, StencilOperation::Type stencilOperationOnFail, StencilOperation::Type stencilOperationOnZFail, StencilOperation::Type stencilOperationOnZPass)
+    : stencilFunctionMask(stencilFunctionMask),
+      stencilFunctionReference(stencilFunctionReference),
+      stencilMask(stencilMask),
+      renderMode(renderMode),
+      stencilFunction(stencilFunction),
+      stencilOperationOnFail(stencilOperationOnFail),
+      stencilOperationOnZFail(stencilOperationOnZFail),
+      stencilOperationOnZPass(stencilOperationOnZPass)
+    {
+    }
+
+    int                    stencilFunctionMask;         ///< The stencil function mask
+    int                    stencilFunctionReference;    ///< The stencil function reference
+    int                    stencilMask;                 ///< The stencil mask
+    RenderMode::Type       renderMode : 4;              ///< The render mode
+    StencilFunction::Type  stencilFunction : 4;         ///< The stencil function
+    StencilOperation::Type stencilOperationOnFail : 4;  ///< The stencil operation for stencil test fail
+    StencilOperation::Type stencilOperationOnZFail : 4; ///< The stencil operation for depth test fail
+    StencilOperation::Type stencilOperationOnZPass : 4; ///< The stencil operation for depth test pass
+  };
+
+  /**
+   * @brief Global static initialize for Render::Renderer before new CommandBuffer's Render fill start.
+   */
+  static void PrepareCommandBuffer();
+
+  /**
+   * @brief Global static finalize for Render::Renderer after new CommandBuffer's Render fill finished.
+   */
+  static void FinishedCommandBuffer();
+
+  /**
+   * Create a new renderer instance
+   * @param[in] dataProviders The data providers for the renderer
+   */
+  static RendererKey NewKey(SceneGraph::RenderDataProvider* dataProviders);
+
+  /**
+   * Register memory pool of render renderer.
+   * This should be called at the begin of Core.
+   */
+  static void RegisterMemoryPoolCollection(SceneGraph::MemoryPoolCollection& memoryPoolCollection);
+
+  /**
+   * Unregister memory pool of render renderer.
+   * This should be called at the end of Core.
+   */
+  static void UnregisterMemoryPoolCollection();
+
+  /**
+   * Constructor.
+   * @param[in] dataProviders The data providers for the renderer
+   */
+  Renderer(SceneGraph::RenderDataProvider* dataProviders);
+
+  /**
+   * Second-phase construction.
+   * This is called when the renderer is inside render thread
+   * @param[in] graphicsController The graphics controller to use
+   * @param[in] programCache Cache of program objects
+   * @param[in] uniformBufferManager Uniform buffer manager
+   * @param[in] pipelineCache Cache of pipelines
+   * @param[in] sharedUniformBufferViewContainer Container of shared uniform buffer views
+   */
+  void Initialize(Graphics::Controller&                graphicsController,
+                  ProgramCache&                        programCache,
+                  Render::UniformBufferManager&        uniformBufferManager,
+                  Render::PipelineCache&               pipelineCache,
+                  Render::TerminatedNativeDrawManager& terminatedNativeDrawManager,
+                  SharedUniformBufferViewContainer&    sharedUniformBufferViewContainer);
+
+  /**
+   * Destructor
+   */
+  ~Renderer();
+
+  /**
+   * Overriden delete operator
+   * Deletes the renderer from its global memory pool
+   */
+  void operator delete(void* ptr);
+
+  /**
+   * Get a pointer to the object from the given key.
+   * Used by MemoryPoolKey to provide pointer semantics.
+   */
+  static Renderer* Get(RendererKey::KeyType rendererKey);
+
+  /**
+   * Change the geometry used by the renderer
+   * @param[in] geometry The new geometry
+   */
+  void SetGeometry(Render::Geometry* geometry);
+
+  void SetDrawCommands(Dali::DevelRenderer::DrawCommand* pDrawCommands, uint32_t size);
+
+  /**
+   * @brief Returns whether we have a draw commands or not.
+   * @return True if draw commands applied
+   */
+  [[nodiscard]] bool IsDrawCommandsExist() const
+  {
+    return mDrawCommands && !(mDrawCommands->empty());
+  }
+
+  /**
+   * Set the face-culling mode.
+   * @param[in] mode The face-culling mode.
+   */
+  void SetFaceCullingMode(FaceCullingMode::Type mode);
+
+  [[nodiscard]] FaceCullingMode::Type GetFaceCullingMode() const
+  {
+    return mFaceCullingMode;
+  }
+
+  /**
+   * Set the bitmask for blending options
+   * @param[in] bitmask A bitmask of blending options.
+   */
+  void SetBlendingBitMask(uint32_t bitmask);
+
+  [[nodiscard]] uint32_t GetBlendingBitMask() const
+  {
+    return mBlendingOptions.GetBitmask();
+  }
+
+  /**
+   * Set the blend color for blending options
+   * @param[in] blendColor The blend color
+   */
+  void SetBlendColor(const Vector4& color);
+
+  [[nodiscard]] const Vector4& GetBlendColor() const
+  {
+    return mBlendingOptions.GetBlendColor() ? *mBlendingOptions.GetBlendColor() : Color::TRANSPARENT;
+  }
+
+  /**
+   * Set the first element index to draw by the indexed draw
+   * @param[in] firstElement index of first element to draw
+   */
+  void SetIndexedDrawFirstElement(uint32_t firstElement);
+
+  [[nodiscard]] uint32_t GetIndexedDrawFirstElement() const
+  {
+    return mIndexedDrawFirstElement;
+  }
+
+  /**
+   * Set the number of elements to draw by the indexed draw
+   * @param[in] elementsCount number of elements to draw
+   */
+  void SetIndexedDrawElementsCount(uint32_t elementsCount);
+
+  [[nodiscard]] uint32_t GetIndexedDrawElementsCount() const
+  {
+    return mIndexedDrawElementsCount;
+  }
+
+  /**
+   * @brief Set whether the Pre-multiplied Alpha Blending is required
+   *
+   * @param[in] preMultipled whether alpha is pre-multiplied.
+   */
+  void EnablePreMultipliedAlpha(bool preMultipled);
+
+  [[nodiscard]] bool IsPreMultipliedAlphaEnabled() const
+  {
+    return mPremultipliedAlphaEnabled;
+  }
+
+  /**
+   * Sets the depth write mode
+   * @param[in] depthWriteMode The depth write mode
+   */
+  void SetDepthWriteMode(DepthWriteMode::Type depthWriteMode);
+
+  /**
+   * Query the Renderer's depth write mode
+   * @return The renderer depth write mode
+   */
+  [[nodiscard]] DepthWriteMode::Type GetDepthWriteMode() const;
+
+  /**
+   * Sets the depth test mode
+   * @param[in] depthTestMode The depth test mode
+   */
+  void SetDepthTestMode(DepthTestMode::Type depthTestMode);
+
+  /**
+   * Query the Renderer's depth test mode
+   * @return The renderer depth test mode
+   */
+  [[nodiscard]] DepthTestMode::Type GetDepthTestMode() const;
+
+  /**
+   * Sets the depth function
+   * @param[in] depthFunction The depth function
+   */
+  void SetDepthFunction(DepthFunction::Type depthFunction);
+
+  /**
+   * Query the Renderer's depth function
+   * @return The renderer depth function
+   */
+  [[nodiscard]] DepthFunction::Type GetDepthFunction() const;
+
+  [[nodiscard]] const StencilParameters& GetStencilParameters() const
+  {
+    return mStencilParameters;
+  }
+
+  /**
+   * Sets the render mode
+   * @param[in] renderMode The render mode
+   */
+  void SetRenderMode(RenderMode::Type mode);
+
+  /**
+   * Gets the render mode
+   * @return The render mode
+   */
+  [[nodiscard]] RenderMode::Type GetRenderMode() const;
+
+  /**
+   * Sets the stencil function
+   * @param[in] stencilFunction The stencil function
+   */
+  void SetStencilFunction(StencilFunction::Type stencilFunction);
+
+  /**
+   * Gets the stencil function
+   * @return The stencil function
+   */
+  [[nodiscard]] StencilFunction::Type GetStencilFunction() const;
+
+  /**
+   * Sets the stencil function mask
+   * @param[in] stencilFunctionMask The stencil function mask
+   */
+  void SetStencilFunctionMask(int stencilFunctionMask);
+
+  /**
+   * Gets the stencil function mask
+   * @return The stencil function mask
+   */
+  [[nodiscard]] int GetStencilFunctionMask() const;
+
+  /**
+   * Sets the stencil function reference
+   * @param[in] stencilFunctionReference The stencil function reference
+   */
+  void SetStencilFunctionReference(int stencilFunctionReference);
+
+  /**
+   * Gets the stencil function reference
+   * @return The stencil function reference
+   */
+  [[nodiscard]] int GetStencilFunctionReference() const;
+
+  /**
+   * Sets the stencil mask
+   * @param[in] stencilMask The stencil mask
+   */
+  void SetStencilMask(int stencilMask);
+
+  /**
+   * Gets the stencil mask
+   * @return The stencil mask
+   */
+  [[nodiscard]] int GetStencilMask() const;
+
+  /**
+   * Sets the stencil operation for when the stencil test fails
+   * @param[in] stencilOperationOnFail The stencil operation
+   */
+  void SetStencilOperationOnFail(StencilOperation::Type stencilOperationOnFail);
+
+  /**
+   * Gets the stencil operation for when the stencil test fails
+   * @return The stencil operation
+   */
+  [[nodiscard]] StencilOperation::Type GetStencilOperationOnFail() const;
+
+  /**
+   * Sets the stencil operation for when the depth test fails
+   * @param[in] stencilOperationOnZFail The stencil operation
+   */
+  void SetStencilOperationOnZFail(StencilOperation::Type stencilOperationOnZFail);
+
+  /**
+   * Gets the stencil operation for when the depth test fails
+   * @return The stencil operation
+   */
+  [[nodiscard]] StencilOperation::Type GetStencilOperationOnZFail() const;
+
+  /**
+   * Sets the stencil operation for when the depth test passes
+   * @param[in] stencilOperationOnZPass The stencil operation
+   */
+  void SetStencilOperationOnZPass(StencilOperation::Type stencilOperationOnZPass);
+
+  /**
+   * Gets the stencil operation for when the depth test passes
+   * @return The stencil operation
+   */
+  [[nodiscard]] StencilOperation::Type GetStencilOperationOnZPass() const;
+
+  /**
+   * Called to render during RenderManager::Render().
+   * @param[in,out] commandBuffer The command buffer to write into
+   * @param[in] node The node using this renderer
+   * @param[in] modelViewMatrix The model-view matrix.
+   * @param[in] viewMatrix The view matrix.
+   * @param[in] projectionMatrix The projection matrix.
+   * @param[in] worldColorMultiplier The world color of the node.
+   * @param[in] scale Scale factor of the render item
+   * @param[in] size Size of the render item
+   * @param[in] blend If true, blending is enabled
+   * @param[in] instruction. for use case like reflection where CullFace needs to be adjusted
+   * @param[in] renderTargetGraphicsObjects render target associated with instruction
+   * @param[in] queueIndex Index of the render queue
+   *
+   * @return True if commands have been added to the command buffer
+   */
+  bool Render(Graphics::CommandBuffer&                             commandBuffer,
+              const SceneGraph::NodeDataProvider&                  node,
+              const Matrix&                                        modelMatrix,
+              const Matrix&                                        modelViewMatrix,
+              const Matrix&                                        viewMatrix,
+              const Matrix&                                        projectionMatrix,
+              const Vector4&                                       worldColorMultiplier,
+              const Vector3&                                       scale,
+              const Vector3&                                       size,
+              bool                                                 blend,
+              const Dali::Internal::SceneGraph::RenderInstruction& instruction,
+              SceneGraph::RenderTargetGraphicsObjects&             renderTargetGraphicsObjects,
+              uint32_t                                             queueIndex);
+
+  /**
+   * Returns true if this will create a draw command with it's own geometry
+   * and shader. Some renderers don't have a shader/geometry, e.g. drawable-actor
+   * creates an empty renderer.
+   */
+  bool NeedsProgram() const;
+
+  /**
+   * If we need a program, prepare it and return it.
+   * @param[in] instruction The render instruction
+   * @param[in] cacheSharedUniformBlock Cache the shared uniform block or not.
+   * @return the prepared program, or nullptr.
+   */
+  Program* PrepareProgram(const SceneGraph::RenderInstruction& instruction, bool cacheSharedUniformBlock);
+
+  /**
+   * Sets a RenderCallback object this renderer takes a reference of
+   *
+   * Held until nothing refers to it any more, which is what lets the callback outlive the
+   * client that created it: a terminate invocation handed to the TerminatedNativeDrawManager
+   * takes a reference too, so it stays valid even once this renderer is gone.
+   *
+   * @param[in] callback Valid pointer to a RenderCallback object
+   */
+  void SetRenderCallback(RenderCallbackPtr callback);
+
+  /**
+   * Removes the RenderCallback object this renderer draws through
+   *
+   * The outgoing callback is detached from the render targets it has been drawn into
+   * without being told about it - use TerminateRenderCallback() beforehand to have it
+   * release what it created.
+   */
+  void RemoveRenderCallback();
+
+  /**
+   * @brief Remove RenderCallback used for native rendering.
+   *
+   * @param[in] invokeCallback Invoke render callbacks forcibly if we need to catch terminate case at callback.
+   */
+  void TerminateRenderCallback(bool invokeCallback);
+
+  /**
+   * Returns currently set RenderCallback object
+   *
+   * @return Valid pointer to RenderCallback object or nullptr
+   */
+  RenderCallback* GetRenderCallback()
+  {
+    return mRenderCallback.Get();
+  }
+
+  /**
+   * Returns internal RenderCallbackInput structure
+   * @return Valid reference to the RenderCallbackInput
+   */
+  RenderCallbackInput& GetRenderCallbackInput()
+  {
+    if(!mRenderCallbackInput)
+    {
+      mRenderCallbackInput                    = std::make_unique<RenderCallbackInput>();
+      mRenderCallbackInput->isTerminated      = false;
+      mRenderCallbackInput->isNativeApiUsable = true;
+    }
+    return *mRenderCallbackInput;
+  }
+
+  /**
+   * Write the renderer's sort attributes to the passed in reference
+   *
+   * @param[out] sortAttributes
+   */
+  void SetSortAttributes(SceneGraph::RenderInstructionProcessor::SortAttributes& sortAttributes) const
+  {
+    if(!mRenderCallback)
+    {
+      sortAttributes.shader   = &mRenderDataProvider->GetShader();
+      sortAttributes.geometry = mGeometry;
+    }
+    else
+    {
+      sortAttributes.shader   = nullptr;
+      sortAttributes.geometry = nullptr;
+    }
+  }
+
+  /**
+   * Sets the flag indicating whether shader changed.
+   *
+   * @param[in] value True if shader changed
+   */
+  void SetShaderChanged(bool value);
+
+  /**
+   * Check if the renderer attributes/uniforms are updated and returns the flag
+   */
+  bool Updated();
+
+  template<class T>
+  bool WriteDefaultUniform(const Graphics::UniformInfo* uniformInfo,
+                           Render::UniformBufferView&   ubo,
+                           const T&                     data);
+
+  template<class T>
+  bool WriteDefaultUniformV2(const Graphics::UniformInfo*    uniformInfo,
+                             const Render::UboViewContainer& uboViews,
+                             const T&                        data);
+
+  template<class T>
+  void WriteUniform(Render::UniformBufferView&   ubo,
+                    const Graphics::UniformInfo& uniformInfo,
+                    const T&                     data);
+
+  static void WriteUniform(Render::UniformBufferView&   ubo,
+                           const Graphics::UniformInfo& uniformInfo,
+                           const void*                  data,
+                           uint32_t                     size);
+
+  [[nodiscard]] FaceCullingMode::Type GetFaceCullMode() const
+  {
+    return mFaceCullingMode;
+  }
+
+  /**
+   * @brief Gets update area after visual properties applied.
+   *
+   * @param[in] originalUpdateArea The original update area before apply the visual properties.
+   *
+   * @return The recalculated update area after visual properties applied.
+   */
+  Vector4 GetVisualTransformedUpdateArea(const Vector4& originalUpdateArea) const noexcept;
+
+  /**
+   * Detach a Renderer from the node provider.
+   * @param[in] node The node data provider to be detached renderer.
+   */
+  void DetachFromNodeDataProvider(const SceneGraph::NodeDataProvider& node);
+
+  /**
+   * @brief Gets the update area of textures.
+   *
+   * @return The updated area of textures
+   */
+  Vector4 GetTextureUpdateArea() const noexcept;
+
+  /**
+   * @brief Mark whether we should consider shared uniform block, or ignore it.
+   * @todo Currently, we ignore whole shared uniform blocks. We should specify the name of UBO in future.
+   *
+   * @param[in] enabled True if we will use shared uniform block. False otherwise.
+   */
+  void EnableSharedUniformBlock(bool enabled)
+  {
+    mUseSharedUniformBlock = enabled;
+  }
+
+  /**
+   * @brief Check whether we should consider shared uniform block, or ignore it.
+   * @todo Currently, we ignore whole shared uniform blocks. We should specify the name of UBO in future.
+   *
+   * @return True if we will use shared uniform block. False otherwise.
+   */
+  [[nodiscard]] bool UseSharedUniformBlock() const
+  {
+    return mUseSharedUniformBlock;
+  }
+
+public: // From PipelineCacheL0::LifecycleObserver
+  /**
+   * @copydoc Dali::Internal::Render::PipelineCacheL0::LifecycleObserver::PipelineCacheInvalidated()
+   */
+  void PipelineCacheInvalidated(PipelineCacheL0::LifecycleObserver::NotificationType notificationType) override;
+
+public: // From SceneGraph::RenderTargetGraphicsObjects::LifecycleObserver
+  /**
+   * @copydoc Dali::Internal::SceneGraph::RenderTargetGraphicsObjects::LifecycleObserver::RenderTargetGraphicsObjectsDestroyed()
+   */
+  void RenderTargetGraphicsObjectsDestroyed(const SceneGraph::RenderTargetGraphicsObjects* renderTargetGraphicsObjects) override;
+
+private:
+  struct UniformIndexMap;
+
+  // Undefined
+  Renderer(const Renderer&);
+
+  // Undefined
+  Renderer& operator=(const Renderer& rhs);
+
+  /**
+   * Builds a uniform map based on the index of the cached location in the Program.
+   * @param[in] node The node using the renderer
+   * @param[in] program The shader program on which to set the uniforms.
+   *
+   * @return the index of the node in change counters store / uniform maps store.
+   */
+  std::size_t BuildUniformIndexMap(const SceneGraph::NodeDataProvider& node, Program& program);
+
+  /**
+   * Bind the textures and setup the samplers
+   * @param[in] commandBuffer The command buffer to record binding into
+   *
+   * @return True if all textures are bounded successfully. False otherwise.
+   */
+  bool BindTextures(Graphics::CommandBuffer& commandBuffer);
+
+  /**
+   * Prepare a pipeline for this renderer.
+   *
+   * As a renderer can be re-used in a single frame (e.g. being used by multiple nodes, or
+   * by non-exclusive render tasks), we store a pipeline per node/instruction.
+   * In practice, the implementation will cached pipelines, so we normally only have
+   * multiple handles.
+   */
+  Graphics::Pipeline& PrepareGraphicsPipeline(
+    Program&                                             program,
+    const Dali::Internal::SceneGraph::RenderInstruction& instruction,
+    SceneGraph::RenderTargetGraphicsObjects&             renderTargetGraphicsObjects,
+    const SceneGraph::NodeDataProvider&                  node,
+    bool                                                 blend);
+
+  /**
+   * Setup and write data to the uniform buffer
+   *
+   * @param[in] commandBuffer The command buffer to bind the uniform buffer to
+   * @param[in] node The node using this renderer
+   * @param[in] modelViewMatrix The model-view matrix.
+   * @param[in] viewMatrix The view matrix.
+   * @param[in] projectionMatrix The projection matrix.
+   * @param[in] worldColorMultiplier The world color of the node.
+   * @param[in] scale Scale factor of the render item
+   * @param[in] size Size of the render item
+   * @param[in] blend If true, blending is enabled
+   * @param[in] instruction The render instruction
+   * @param[in] The node index
+   */
+  void WriteUniformBuffer(Graphics::CommandBuffer&             commandBuffer,
+                          Program*                             program,
+                          const SceneGraph::RenderInstruction& instruction,
+                          const Matrix&                        modelMatrix,
+                          const Matrix&                        modelViewMatrix,
+                          const Matrix&                        viewMatrix,
+                          const Matrix&                        projectionMatrix,
+                          const Vector4&                       worldColorMultiplier,
+                          const Vector3&                       scale,
+                          const Vector3&                       size,
+                          std::size_t                          nodeIndex);
+
+  /**
+   * @brief Fill uniform buffer at index. Writes uniforms into given memory address
+   *
+   * @param[in] instruction The render instruction
+   * @param[in] uboViews Target uniform buffer object
+   * @param[in] nodeIndex Index of node/renderer pair in mUniformIndexMaps
+   */
+  void FillUniformBuffer(Program&                             program,
+                         const SceneGraph::RenderInstruction& instruction,
+                         const Render::UboViewContainer&      uboViews,
+                         std::size_t                          nodeIndex);
+
+  /**
+   * @brief Write dynamic (i.e. not default) uniform into the buffer
+   *
+   * @param[in] propertyValue The property value to write
+   * @param[in] uniform The map describing the uniform
+   * @param[in] ubo Target uniform buffer view
+   */
+  void WriteDynUniform(const PropertyInputImpl*   propertyValue,
+                       UniformIndexMap&           uniform,
+                       Render::UniformBufferView& ubo);
+
+  /**
+   * @brief Clear the pipeline cache.
+   * @param[in] notifyToCache True if we need to notify pipeline cache that renderer don't hold cache anymore.
+   */
+  void ClearPipelineCache(bool notifyToCache);
+
+private:
+  Graphics::Controller*           mGraphicsController;
+  SceneGraph::RenderDataProvider* mRenderDataProvider;
+
+  Render::Geometry* mGeometry;
+
+  ProgramCache* mProgramCache{nullptr};
+
+  Render::UniformBufferManager*               mUniformBufferManager{};
+  SharedUniformBufferViewContainer*           mSharedUniformBufferViewContainer{};
+  std::vector<Graphics::UniformBufferBinding> mUniformBufferBindings{};
+
+  Render::PipelineCache* mPipelineCache{nullptr};
+
+  PipelineCachePtr             mPipeline{};
+  PipelineLifecycleNotifierPtr mPipelineLifecycleNotifier{};
+
+  using Hash = std::size_t;
+
+  struct UniformIndexMap
+  {
+    enum class State : uint8_t
+    {
+      INITIALIZE_REQUIRED,
+      INITIALIZED,
+      NOT_USED,
+    };
+    ConstString              uniformName;            ///< The uniform name
+    const PropertyInputImpl* propertyValue{nullptr}; ///< The property value
+    Hash                     uniformNameHash{0u};
+    Hash                     uniformNameHashNoArray{0u};
+    int32_t                  arrayIndex{-1}; ///< The array index
+
+    uint32_t arrayElementStride{0u}; ///< The stride for element of an array (0 - tightly packed)
+    uint32_t matrixStride{0u};       ///< The stride for a matrix row
+
+    uint16_t uniformOffset{0u};
+    uint16_t uniformBlockIndex{0u};
+    State    state{State::INITIALIZE_REQUIRED};
+  };
+
+  StencilParameters mStencilParameters; ///< Struct containing all stencil related options
+  BlendingOptions   mBlendingOptions;   ///< Blending options including blend color, blend func and blend equation
+
+  uint32_t mIndexedDrawFirstElement;  ///< Offset of first element to draw
+  uint32_t mIndexedDrawElementsCount; ///< Number of elements to draw
+
+  /** Struct to map node to index into mNodeMapCounters and mUniformIndexMaps */
+  struct RenderItemLookup
+  {
+    const SceneGraph::NodeDataProvider* node{nullptr};    ///< Node key. It can be nullptr if this NodeIndex don't need node uniform
+    const Program*                      program{nullptr}; ///< Program key.
+
+    std::size_t index{0};                       ///< Index into mUniformIndexMap
+    std::size_t nodeChangeCounter{0};           ///< The last known change counter for this node's uniform map
+    std::size_t renderItemMapChangeCounter{0u}; ///< Change counter of the renderer & shader collected uniform map for this render item (node/renderer pair)
+  };
+  std::vector<RenderItemLookup> mNodeIndexMap; ///< usually only 1 element.
+  using UniformIndexMappings = std::vector<UniformIndexMap>;
+  std::vector<UniformIndexMappings> mUniformIndexMaps; ///< Cached map per node/renderer/shader.
+
+  DepthFunction::Type   mDepthFunction : 4;             ///< The depth function
+  FaceCullingMode::Type mFaceCullingMode : 3;           ///< The mode of face culling
+  DepthWriteMode::Type  mDepthWriteMode : 3;            ///< The depth write mode
+  DepthTestMode::Type   mDepthTestMode : 3;             ///< The depth test mode
+  bool                  mPremultipliedAlphaEnabled : 1; ///< Flag indicating whether the Pre-multiplied Alpha Blending is required
+  bool                  mShaderChanged : 1;             ///< Flag indicating the shader changed and uniform maps have to be updated
+  bool                  mPipelineCached : 1;            ///< Flag indicating whether renderer cache valid pipeline or not.
+  bool                  mPipelineNotifierCached : 1;    ///< Flag indicating whether renderer cache valid pipeline notifier or not.
+  bool                  mUseSharedUniformBlock : 1;     ///< Flag whether we should use shared uniform block or not. Usually it must be true.
+
+  // For render callback features.
+  Render::TerminatedNativeDrawManager* mTerminatedNativeDrawManager{nullptr};
+  RenderCallbackPtr                    mRenderCallback{};
+  std::unique_ptr<RenderCallbackInput> mRenderCallbackInput{nullptr};
+  std::vector<Graphics::Texture*>      mRenderCallbackTextureBindings{};
+
+  /// A terminate invocation is delivered exactly once, whichever way it ends up happening.
+  bool mRenderCallbackTerminated{false};
+
+  // Struct to get matched UBO block correctly.
+  // Most of case the number of UBO is 1 or 2 usually. (VisualRenderer + RenderEffect case)
+  // So store 2 level registry cache to fast-out, and use unordered_map if more items exist.
+  struct SharedUniformBlockCache
+  {
+    // mSharedUboCache[renderpassTag][uniformBlockIndex][program] = matched UBO.
+    // Clear this cache when program destroyed / shader changed.
+    using CacheContainer = std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::unordered_map<const Program*, Render::UniformBlock*>>>;
+
+    using Key          = Dali::Pair<uint32_t, Dali::Pair<uint32_t, const Program*>>;
+    using KeyValuePair = Dali::Pair<Key, Render::UniformBlock*>;
+
+    static constexpr uint8_t CACHE_CREATE_THRESHOLD = 3;
+
+    union
+    {
+      Dali::Vector<KeyValuePair> mRegistry;
+      CacheContainer*            mCache; ///< Lazy cache for large UBO. Only allocated when block count >= CACHE_CREATE_THRESHOLD.
+    };
+    uint8_t mCount{0u};
+
+    SharedUniformBlockCache()
+    : mRegistry(),
+      mCount(0u)
+    {
+    }
+
+    ~SharedUniformBlockCache()
+    {
+      // Call manual destructor
+      if(mCount < CACHE_CREATE_THRESHOLD)
+      {
+        mRegistry.~Vector();
+      }
+      else
+      {
+        delete mCache;
+      }
+    }
+
+    void RegisterSharedUniformBlock(uint32_t renderpassTag, uint32_t uniformBlockIndex, const Program* program, Render::UniformBlock* uniformBlock)
+    {
+      if(mCount < CACHE_CREATE_THRESHOLD)
+      {
+        Key key = Dali::MakePair(renderpassTag, Dali::MakePair(uniformBlockIndex, program));
+        for(uint32_t i = 0; i < mCount; ++i)
+        {
+          if(mRegistry[i].first == key)
+          {
+            mRegistry[i].second = uniformBlock;
+            return;
+          }
+        }
+
+        // Add new item
+        if(mCount == CACHE_CREATE_THRESHOLD - 1)
+        {
+          // Copy previous variables first
+          Dali::Vector<KeyValuePair> registry = mRegistry;
+
+          // Call manual destructor and constructor.
+          mRegistry.~Vector();
+          mCache = new CacheContainer();
+
+          for(uint32_t i = 0; i < mCount; ++i)
+          {
+            (*mCache)[registry[i].first.first][registry[i].first.second.first][registry[i].first.second.second] = registry[i].second;
+          }
+          (*mCache)[renderpassTag][uniformBlockIndex][program] = uniformBlock;
+        }
+        else
+        {
+          mRegistry.PushBack(Dali::MakePair(key, uniformBlock));
+          ;
+        }
+        ++mCount;
+      }
+      else
+      {
+        (*mCache)[renderpassTag][uniformBlockIndex][program] = uniformBlock;
+      }
+    }
+
+    Render::UniformBlock* GetSharedUniformBlock(uint32_t renderpassTag, uint32_t uniformBlockIndex, const Program* program) const
+    {
+      if(mCount < CACHE_CREATE_THRESHOLD)
+      {
+        Key key = Dali::MakePair(renderpassTag, Dali::MakePair(uniformBlockIndex, program));
+        for(uint32_t i = 0; i < mCount; ++i)
+        {
+          if(mRegistry[i].first == key)
+          {
+            return mRegistry[i].second;
+          }
+        }
+      }
+      else
+      {
+        auto iter1 = (*mCache).find(renderpassTag);
+        if(iter1 != (*mCache).end())
+        {
+          auto& cache2 = iter1->second;
+          auto  iter2  = cache2.find(uniformBlockIndex);
+          if(iter2 != cache2.end())
+          {
+            auto& cache3 = iter2->second;
+            auto  iter3  = cache3.find(program);
+            if(iter3 != cache3.end())
+            {
+              return iter3->second;
+            }
+          }
+        }
+      }
+      return nullptr;
+    }
+  };
+  std::unique_ptr<SharedUniformBlockCache> mSharedUboCache{nullptr};
+
+  // Set of render targets that NativeDraw called. It will be used when we need to call NativeDraw callback's terminate callback.
+  using RenderCallbackInvokedTargetContainer = std::unordered_set<const SceneGraph::RenderTargetGraphicsObjects*>;
+  std::unique_ptr<RenderCallbackInvokedTargetContainer> mRenderCallbackInvokedTargets{nullptr};
+
+  std::unique_ptr<std::vector<Dali::DevelRenderer::DrawCommand>> mDrawCommands{nullptr}; // Devel stuff
+
+  Program* mCurrentProgram{nullptr}; ///< Prefetched program
+};
+
+} // namespace Render
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_RENDER_RENDERER_H

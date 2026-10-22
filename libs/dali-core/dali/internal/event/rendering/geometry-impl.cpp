@@ -1,0 +1,131 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/event/rendering/geometry-impl.h> // Dali::Internal::Geometry
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/object/type-registry.h>
+
+#include <dali/internal/render/renderers/render-geometry-messages.h>
+#include <dali/internal/update/manager/update-manager.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+GeometryPtr Geometry::New()
+{
+  GeometryPtr geometry(new Geometry());
+  geometry->Initialize();
+  return geometry;
+}
+
+uint32_t Geometry::AddVertexBuffer(VertexBuffer& vertexBuffer)
+{
+  mVertexBuffers.push_back(&vertexBuffer);
+  Render::AttachVertexBufferMessage(GetEventThreadServices(), *mRenderObject, *vertexBuffer.GetRenderObject());
+  return static_cast<uint32_t>(mVertexBuffers.size() - 1u);
+}
+
+uint32_t Geometry::GetNumberOfVertexBuffers() const
+{
+  return static_cast<uint32_t>(mVertexBuffers.size());
+}
+
+void Geometry::RemoveVertexBuffer(uint32_t index)
+{
+  const Render::VertexBuffer& renderVertexBuffer = static_cast<const Render::VertexBuffer&>(*(mVertexBuffers[index]->GetRenderObject()));
+  Render::RemoveVertexBufferMessage(GetEventThreadServices(), *mRenderObject, renderVertexBuffer);
+
+  mVertexBuffers.erase(mVertexBuffers.begin() + index);
+}
+
+void Geometry::SetIndexBuffer(const uint16_t* indices, uint32_t count)
+{
+  Render::Geometry::Uint16ContainerType indexData;
+  if(indices && count)
+  {
+    indexData.ResizeUninitialized(count);
+    std::copy(indices, indices + count, indexData.Begin());
+  }
+
+  Render::SetIndexBufferMessage(GetEventThreadServices(), *mRenderObject, indexData);
+}
+
+void Geometry::SetIndexBuffer(const uint32_t* indices, uint32_t count)
+{
+  Render::Geometry::Uint32ContainerType indexData;
+  if(indices && count)
+  {
+    indexData.ResizeUninitialized(count);
+    std::copy(indices, indices + count, indexData.Begin());
+  }
+
+  Render::SetIndexBufferMessage(GetEventThreadServices(), *mRenderObject, indexData);
+}
+
+void Geometry::SetType(Dali::Geometry::Type geometryType)
+{
+  if(geometryType != mType)
+  {
+    Render::SetGeometryTypeMessage(GetEventThreadServices(), *mRenderObject, geometryType);
+
+    mType = geometryType;
+  }
+}
+
+Dali::Geometry::Type Geometry::GetType() const
+{
+  return mType;
+}
+
+const Render::Geometry* Geometry::GetRenderObject() const
+{
+  return mRenderObject;
+}
+
+Geometry::Geometry()
+: EventThreadServicesHolder(EventThreadServices::Get()),
+  mRenderObject(nullptr),
+  mType(Dali::Geometry::TRIANGLES)
+{
+}
+
+void Geometry::Initialize()
+{
+  mRenderObject = new Render::Geometry();
+  OwnerPointer<Render::Geometry> transferOwnership(mRenderObject);
+  SceneGraph::AddGeometryMessage(GetEventThreadServices().GetUpdateManager(), transferOwnership);
+}
+
+Geometry::~Geometry()
+{
+  if(DALI_UNLIKELY(!EventThreadServices::IsEventThread()))
+  {
+    DALI_LOG_ERROR("~Geometry[%p] called from non-UI thread! something unknown issue will be happened!\n", this);
+  }
+
+  if(DALI_LIKELY(EventThreadServices::IsCoreRunning() && mRenderObject))
+  {
+    SceneGraph::RemoveGeometryMessage(GetEventThreadServices().GetUpdateManager(), *mRenderObject);
+  }
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

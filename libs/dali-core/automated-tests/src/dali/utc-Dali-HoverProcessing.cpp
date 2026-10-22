@@ -1,0 +1,2155 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-test-suite-utils.h>
+#include <dali/devel-api/actors/actor-devel.h>
+#include <dali/integration-api/events/hover-event-integ.h>
+#include <dali/integration-api/render-task-list-integ.h>
+#include <dali/public-api/dali-core.h>
+#include <stdlib.h>
+
+#include <iostream>
+#include <vector>
+
+using namespace Dali;
+
+void utc_dali_hover_processing_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_hover_processing_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+namespace
+{
+// Stores data that is populated in the callback and will be read by the TET cases
+struct SignalData
+{
+  SignalData()
+  : functorCalled(false),
+    hoverEvent(),
+    hoveredActor()
+  {
+  }
+
+  void Reset()
+  {
+    functorCalled = false;
+    hoverEvent.Reset();
+    hoveredActor.Reset();
+  }
+
+  bool       functorCalled;
+  HoverEvent hoverEvent;
+  Actor      hoveredActor;
+};
+
+// Functor that sets the data when called
+struct HoverEventFunctor
+{
+  /**
+   * Constructor.
+   * @param[in]  data         Reference to the data to store callback information.
+   * @param[in]  returnValue  What the functor should return.
+   */
+  HoverEventFunctor(SignalData& data, bool returnValue = true)
+  : signalData(data),
+    returnValue(returnValue)
+  {
+  }
+
+  bool operator()(Actor actor, HoverEvent hoverEvent)
+  {
+    signalData.functorCalled = true;
+    signalData.hoveredActor  = actor;
+    signalData.hoverEvent    = hoverEvent;
+
+    return returnValue;
+  }
+
+  SignalData& signalData;
+  bool        returnValue;
+};
+
+struct HoverTraceEntry
+{
+  Actor            actor;
+  PointState::Type state;
+};
+
+// Functor that removes the actor when called.
+struct RemoveActorFunctor : public HoverEventFunctor
+{
+  /**
+   * Constructor.
+   * @param[in]  data         Reference to the data to store callback information.
+   * @param[in]  returnValue  What the functor should return.
+   */
+  RemoveActorFunctor(SignalData& data, bool returnValue = true)
+  : HoverEventFunctor(data, returnValue)
+  {
+  }
+
+  bool operator()(Actor actor, HoverEvent hoverEvent)
+  {
+    Actor parent(actor.GetParent());
+    if(parent)
+    {
+      parent.Remove(actor);
+    }
+
+    return HoverEventFunctor::operator()(actor, hoverEvent);
+  }
+};
+
+Dali::Integration::HoverEvent GenerateSingleHover(PointState::Type state, const Vector2& screenPosition)
+{
+  Dali::Integration::HoverEvent hoverEvent;
+  Dali::Integration::Point      point;
+  point.SetState(state);
+  point.SetScreenPosition(screenPosition);
+  point.SetDeviceClass(Device::Class::MOUSE);
+  point.SetDeviceSubclass(Device::Subclass::NONE);
+  hoverEvent.points.push_back(point);
+  return hoverEvent;
+}
+
+} // namespace
+
+///////////////////////////////////////////////////////////////////////////////
+
+int UtcDaliHoverNormalProcessing(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  Vector2 screenCoordinates(10.0f, 10.0f);
+  Vector2 localCoordinates;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, data.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(localCoordinates, data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(0, data.hoverEvent.GetDeviceId(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(0u, data.hoverEvent.GetTime(), TEST_LOCATION);
+  DALI_TEST_EQUALS(actor, data.hoverEvent.GetHitActor(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(-1, data.hoverEvent.GetDeviceId(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data.hoverEvent.GetState(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2::ZERO, data.hoverEvent.GetScreenPosition(1), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2::ZERO, data.hoverEvent.GetLocalPosition(1), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(Dali::Actor(), data.hoverEvent.GetHitActor(1), TEST_LOCATION);
+  data.Reset();
+
+  // Emit a motion signal
+  screenCoordinates.x = screenCoordinates.y = 11.0f;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::MOTION, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, data.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(localCoordinates, data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(0, data.hoverEvent.GetDeviceId(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(0u, data.hoverEvent.GetTime(), TEST_LOCATION);
+  DALI_TEST_EQUALS(actor, data.hoverEvent.GetHitActor(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(-1, data.hoverEvent.GetDeviceId(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data.hoverEvent.GetState(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2::ZERO, data.hoverEvent.GetScreenPosition(1), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2::ZERO, data.hoverEvent.GetLocalPosition(1), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(Dali::Actor(), data.hoverEvent.GetHitActor(1), TEST_LOCATION);
+  data.Reset();
+
+  // Emit a finished signal
+  screenCoordinates.x = screenCoordinates.y = 12.0f;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  application.ProcessEvent(GenerateSingleHover(PointState::FINISHED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, data.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(localCoordinates, data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(0, data.hoverEvent.GetDeviceId(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(0u, data.hoverEvent.GetTime(), TEST_LOCATION);
+  DALI_TEST_EQUALS(actor, data.hoverEvent.GetHitActor(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(-1, data.hoverEvent.GetDeviceId(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data.hoverEvent.GetState(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2::ZERO, data.hoverEvent.GetScreenPosition(1), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2::ZERO, data.hoverEvent.GetLocalPosition(1), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(Dali::Actor(), data.hoverEvent.GetHitActor(1), TEST_LOCATION);
+  data.Reset();
+
+  // Emit a started signal where the actor is not present
+  screenCoordinates.x = screenCoordinates.y = 200.0f;
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(!data.hoverEvent);
+
+  END_TEST;
+}
+
+int UtcDaliHoverOutsideCameraNearFarPlanes(void)
+{
+  TestApplication application;
+
+  Dali::Integration::Scene scene     = application.GetScene();
+  Vector2                  sceneSize = scene.GetSize();
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::CENTER);
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::CENTER);
+  scene.Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Get the camera's near and far planes
+  RenderTaskList   taskList  = scene.GetRenderTaskList();
+  Dali::RenderTask task      = taskList.GetTask(0);
+  CameraActor      camera    = task.GetCameraActor();
+  float            nearPlane = camera.GetNearClippingPlane();
+  float            farPlane  = camera.GetFarClippingPlane();
+
+  // Calculate the current distance of the actor from the camera
+  float tanHalfFov = tanf(camera.GetFieldOfView() * 0.5f);
+  float distance   = (sceneSize.y * 0.5f) / tanHalfFov;
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  Vector2 screenCoordinates(sceneSize.x * 0.5f, sceneSize.y * 0.5f);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit a started signal where actor is just at the camera's near plane
+  actor.SetProperty(Actor::Property::POSITION_Z, distance - nearPlane);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit a started signal where actor is closer than the camera's near plane
+  actor.SetProperty(Actor::Property::POSITION_Z, (distance - nearPlane) + 1.0f);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit a started signal where actor is just at the camera's far plane
+  actor.SetProperty(Actor::Property::POSITION_Z, distance - farPlane);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit a started signal where actor is further than the camera's far plane
+  actor.SetProperty(Actor::Property::POSITION_Z, (distance - farPlane) - 1.0f);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverEmitEmpty(void)
+{
+  TestApplication application;
+
+  try
+  {
+    // Emit an empty HoverEvent
+    Dali::Integration::HoverEvent event;
+    application.ProcessEvent(event);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    DALI_TEST_ASSERT(e, "!event.points.empty()", TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliHoverInterrupted(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Emit an interrupted signal, we should be signalled regardless of whether there is a hit or not.
+  application.ProcessEvent(GenerateSingleHover(PointState::INTERRUPTED, Vector2(200.0f, 200.0f /* Outside actor */)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Emit another interrupted signal, our signal handler should not be called.
+  application.ProcessEvent(GenerateSingleHover(PointState::INTERRUPTED, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliHoverParentConsumer(void)
+{
+  TestApplication application;
+  Actor           rootActor(application.GetScene().GetRootLayer());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data, false);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Connect to root actor's hovered signal
+  SignalData        rootData;
+  HoverEventFunctor rootFunctor(rootData); // Consumes signal
+  rootActor.HoverEventSignal().Connect(&application, rootFunctor);
+
+  Vector2 screenCoordinates(10.0f, 10.0f);
+  Vector2 actorCoordinates, rootCoordinates;
+  actor.ScreenToLocal(actorCoordinates.x, actorCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  rootActor.ScreenToLocal(rootCoordinates.x, rootCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, rootData.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, data.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, rootData.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(actorCoordinates, data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(rootCoordinates, rootData.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit a motion signal
+  screenCoordinates.x = screenCoordinates.y = 11.0f;
+  actor.ScreenToLocal(actorCoordinates.x, actorCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  rootActor.ScreenToLocal(rootCoordinates.x, rootCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, rootData.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::MOTION, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::MOTION, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, data.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, rootData.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(actorCoordinates, data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(rootCoordinates, rootData.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit a finished signal
+  screenCoordinates.x = screenCoordinates.y = 12.0f;
+  actor.ScreenToLocal(actorCoordinates.x, actorCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  rootActor.ScreenToLocal(rootCoordinates.x, rootCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  application.ProcessEvent(GenerateSingleHover(PointState::FINISHED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, rootData.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, data.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, rootData.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(actorCoordinates, data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_EQUALS(rootCoordinates, rootData.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit a started signal where the actor is not present, will hit the root actor though
+  screenCoordinates.x = screenCoordinates.y = 200.0f;
+  rootActor.ScreenToLocal(rootCoordinates.x, rootCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, rootData.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(screenCoordinates, rootData.hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(rootCoordinates, rootData.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  DALI_TEST_CHECK(rootActor == rootData.hoverEvent.GetHitActor(0));
+  END_TEST;
+}
+
+int UtcDaliHoverInterruptedParentConsumer(void)
+{
+  TestApplication application;
+  Actor           rootActor(application.GetScene().GetRootLayer());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data, false);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Connect to root actor's hovered signal
+  SignalData        rootData;
+  HoverEventFunctor rootFunctor(rootData); // Consumes signal
+  rootActor.HoverEventSignal().Connect(&application, rootFunctor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit an interrupted signal
+  application.ProcessEvent(GenerateSingleHover(PointState::INTERRUPTED, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit another started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+  rootData.Reset();
+
+  // Remove actor from Scene
+  application.GetScene().Remove(actor);
+  data.Reset();
+  rootData.Reset();
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Emit an interrupted signal, only root actor's signal should be called.
+  application.ProcessEvent(GenerateSingleHover(PointState::INTERRUPTED, Vector2(200.0f, 200.0f /* Outside actor */)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(rootActor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit another interrupted state, none of the signal's should be called.
+  application.ProcessEvent(GenerateSingleHover(PointState::INTERRUPTED, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, rootData.functorCalled, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliHoverDeliverInterruptedEventToHoverStartedActor(void)
+{
+  // Test DeliverInterruptedEventToHoverStartedActor function
+  // Start hover on one actor, move to another, then finish
+  // The first actor should receive an interrupted event
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor1 = Actor::New();
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor1.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor1.SetProperty(Actor::Property::NAME, "actor1");
+  scene.Add(actor1);
+
+  Actor actor2 = Actor::New();
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::POSITION, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor2.SetProperty(Actor::Property::NAME, "actor2");
+  scene.Add(actor2);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actors' hovered signals
+  SignalData        data1, data2;
+  HoverEventFunctor functor1(data1);
+  HoverEventFunctor functor2(data2, false); // Don't consume to allow propagation
+  actor1.HoverEventSignal().Connect(&application, functor1);
+  actor2.HoverEventSignal().Connect(&application, functor2);
+
+  // Start hover on actor1
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data1.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, data2.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data1.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(data1.hoveredActor == actor1);
+  data1.Reset();
+  data2.Reset();
+
+  // Move to actor2 (actor1 should get leave, actor2 should get started)
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(false, data1.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data2.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::MOTION, data2.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(data2.hoveredActor == actor2);
+  data1.Reset();
+  data2.Reset();
+
+  // Finish on actor2 - actor1 should receive interrupted via DeliverInterruptedEventToHoverStartedActor
+  application.ProcessEvent(GenerateSingleHover(PointState::FINISHED, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(true, data1.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data2.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data1.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data2.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(data1.hoveredActor == actor1);
+  DALI_TEST_CHECK(data2.hoveredActor == actor2);
+  data1.Reset();
+  data2.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverDeliverInterruptedEventToHoverStartedActorNoInterrupt(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor1 = Actor::New();
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor1.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor1.SetProperty(Actor::Property::NAME, "actor1");
+  scene.Add(actor1);
+
+  Actor actor2 = Actor::New();
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::POSITION, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor2.SetProperty(Actor::Property::NAME, "actor2");
+  scene.Add(actor2);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actors' hovered signals
+  SignalData        data1, data2;
+  HoverEventFunctor functor1(data1);        // Consume events
+  HoverEventFunctor functor2(data2, false); // Don't consume
+  actor1.HoverEventSignal().Connect(&application, functor1);
+  actor2.HoverEventSignal().Connect(&application, functor2);
+
+  // Set actor to require leave events
+  actor1.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+  actor2.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+
+  // Start hover on actor1
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data1.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, data2.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data1.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(data1.hoveredActor == actor1);
+  data1.Reset();
+  data2.Reset();
+
+  // Move to actor2
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(true, data1.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data2.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::LEAVE, data1.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data2.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(data1.hoveredActor == actor1);
+  DALI_TEST_CHECK(data2.hoveredActor == actor2);
+  data1.Reset();
+  data2.Reset();
+
+  // Finish on actor2 - actor1 should not receive interrupted because it consumed the start event
+  application.ProcessEvent(GenerateSingleHover(PointState::FINISHED, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(false, data1.functorCalled, TEST_LOCATION); // Should not receive interrupted
+  DALI_TEST_EQUALS(true, data2.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::FINISHED, data2.hoverEvent.GetState(0), TEST_LOCATION);
+  data1.Reset();
+  data2.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverLeave(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Set actor to require leave events
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Emit a motion signal outside of actor, should be signalled with a Leave
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::LEAVE, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Another motion outside of actor, no signalling
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(201.0f, 201.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Another motion event inside actor, signalled with start. This is because a new hover event was started on that actor.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // We do not want to listen to leave events anymore
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, false);
+
+  // Another motion event outside of actor, no signalling
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverLeaveParentConsumer(void)
+{
+  TestApplication application;
+  Actor           rootActor(application.GetScene().GetRootLayer());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data, false);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Connect to root actor's hovered signal
+  SignalData        rootData;
+  HoverEventFunctor rootFunctor(rootData); // Consumes signal
+  rootActor.HoverEventSignal().Connect(&application, rootFunctor);
+
+  // Set actor to require leave events
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+  rootActor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit a motion signal outside of actor, should be signalled with a Leave
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::LEAVE, data.hoverEvent.GetState(0), TEST_LOCATION);
+  // rootActor receives "started" state because a new hover event entered in rootActor area.
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(rootActor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Another motion outside of actor, only rootActor signalled
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(201.0f, 201.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::MOTION, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(rootActor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Another motion event inside actor, signalled with start. This is because a new hover event was started on that actor.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // We do not want to listen to leave events of actor anymore
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, false);
+
+  // Another motion event outside of root actor, only root signalled
+  Vector2 sceneSize(application.GetScene().GetSize());
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(sceneSize.width + 10.0f, sceneSize.height + 10.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::LEAVE, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliHoverLeaveWithDispatchMotion(void)
+{
+  TestApplication application;
+  Actor           rootActor(application.GetScene().GetRootLayer());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data, false);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Connect to root actor's hovered signal
+  SignalData        rootData;
+  HoverEventFunctor rootFunctor(rootData); // Consumes signal
+  rootActor.HoverEventSignal().Connect(&application, rootFunctor);
+
+  // Set actor to require leave events
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+  rootActor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+
+  // Sets the dispatch hover motion property to false. This means that hover motion events are not recived
+  actor.SetProperty(Actor::Property::DISPATCH_HOVER_MOTION, false);
+  rootActor.SetProperty(Actor::Property::DISPATCH_HOVER_MOTION, false);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Emit a motion signal outside of actor, should be signalled with a Leave
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::LEAVE, data.hoverEvent.GetState(0), TEST_LOCATION);
+  // rootActor receives "started" state because a new hover event entered in rootActor area.
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(rootActor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Another motion event inside actor, signalled with start. This is because a new hover event was started on that actor.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(50.0f, 50.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Another motion event inside actor, Since DispatchHoverMotion is false, no signal is received.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, rootData.functorCalled, TEST_LOCATION);
+  data.Reset();
+  rootData.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverActorBecomesInsensitive(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Change actor to insensitive
+  actor.SetProperty(Actor::Property::SENSITIVE, false);
+
+  // Emit a motion signal, signalled with an interrupted
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverActorBecomesInsensitiveParentConsumer(void)
+{
+  TestApplication application;
+  Actor           rootActor(application.GetScene().GetRootLayer());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data, false);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Connect to root actor's hovered signal
+  SignalData        rootData;
+  HoverEventFunctor rootFunctor(rootData); // Consumes signal
+  rootActor.HoverEventSignal().Connect(&application, rootFunctor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, rootData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, rootData.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoverEvent.GetHitActor(0));
+  DALI_TEST_CHECK(actor == rootData.hoverEvent.GetHitActor(0));
+  data.Reset();
+  rootData.Reset();
+
+  // Remove actor from Scene
+  application.GetScene().Remove(actor);
+
+  // Because it was removed, it gets interrupted.
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+  rootData.Reset();
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Make root actor insensitive
+  rootActor.SetProperty(Actor::Property::SENSITIVE, false);
+
+  // Because it is insensitive, it does not receive the event.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, rootData.functorCalled, TEST_LOCATION);
+  data.Reset();
+  rootData.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverActorBecomesUserInteractionDisabled(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Change actor to disable user interaction.
+  actor.SetProperty(Actor::Property::ENABLED, false);
+
+  // Emit a motion signal, signalled with an interrupted
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverMultipleLayers(void)
+{
+  TestApplication application;
+  Actor           rootActor(application.GetScene().GetRootLayer());
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+
+  Layer layer1(Layer::New());
+  layer1.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  layer1.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(layer1);
+
+  Actor actor1(Actor::New());
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor1.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor1.SetProperty(Actor::Property::POSITION_Z, 1.0f); // Should hit actor1 in this layer
+  layer1.Add(actor1);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to layer1 and actor1
+  layer1.HoverEventSignal().Connect(&application, functor);
+  actor1.HoverEventSignal().Connect(&application, functor);
+
+  // Hit in hittable area, actor1 should be hit
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(data.hoveredActor == actor1);
+  data.Reset();
+
+  // Make layer1 insensitive, nothing should be hit
+  layer1.SetProperty(Actor::Property::SENSITIVE, false);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Make layer1 sensitive again, again actor1 will be hit
+  layer1.SetProperty(Actor::Property::SENSITIVE, true);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(data.hoveredActor == actor1);
+  data.Reset();
+
+  // Make rootActor insensitive, nothing should be hit
+  rootActor.SetProperty(Actor::Property::SENSITIVE, false);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Make rootActor sensitive
+  rootActor.SetProperty(Actor::Property::SENSITIVE, true);
+
+  // Add another layer
+  Layer layer2(Layer::New());
+  layer2.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  layer2.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  layer2.SetProperty(Actor::Property::POSITION_Z, 10.0f); // Should hit layer2 in this layer rather than actor2
+  application.GetScene().Add(layer2);
+
+  Actor actor2(Actor::New());
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  layer2.Add(actor2);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to layer2 and actor2
+  layer2.HoverEventSignal().Connect(&application, functor);
+  actor2.HoverEventSignal().Connect(&application, functor);
+
+  // Emit an event, should hit layer2
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  //DALI_TEST_CHECK( data.hoveredActor == layer2 ); // TODO: Uncomment this after removing renderable hack!
+  data.Reset();
+
+  // Make layer2 insensitive, should hit actor1
+  layer2.SetProperty(Actor::Property::SENSITIVE, false);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(data.hoveredActor == actor1);
+  data.Reset();
+
+  // Make layer2 sensitive again, should hit layer2
+  layer2.SetProperty(Actor::Property::SENSITIVE, true);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  //DALI_TEST_CHECK( data.hoveredActor == layer2 ); // TODO: Uncomment this after removing renderable hack!
+  data.Reset();
+
+  // Make layer2 invisible, render and notify
+  layer2.SetProperty(Actor::Property::VISIBLE, false);
+  application.SendNotification();
+  application.Render();
+
+  // Should hit actor1
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(data.hoveredActor == actor1);
+  data.Reset();
+
+  // Make rootActor invisible, render and notify
+  rootActor.SetProperty(Actor::Property::VISIBLE, false);
+
+  // Because visible became false, we receive interrupted
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  application.SendNotification();
+  application.Render();
+
+  // Should not hit anything
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverMultipleRenderTasks(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene(application.GetScene());
+  Vector2                  sceneSize(scene.GetSize());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+
+  // Create render task
+  Viewport   viewport(static_cast<int>(sceneSize.width * 0.5f), static_cast<int>(sceneSize.height * 0.5f), static_cast<int>(sceneSize.width * 0.5f), static_cast<int>(sceneSize.height * 0.5f));
+  RenderTask renderTask(application.GetScene().GetRenderTaskList().CreateTask());
+  renderTask.SetViewport(viewport);
+  renderTask.SetInputEnabled(true);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Ensure renderTask actor can be hit too.
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(viewport.x + 5.0f, viewport.y + 5.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Disable input on renderTask, should not be hittable
+  renderTask.SetInputEnabled(false);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(viewport.x + 5.0f, viewport.y + 5.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverMultipleRenderTasksWithChildLayer(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene(application.GetScene());
+  Vector2                  sceneSize(scene.GetSize());
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+
+  Layer layer = Layer::New();
+  layer.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  layer.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DevelActor::Add(actor, layer);
+
+  // Create render task
+  Viewport   viewport(static_cast<int>(sceneSize.width * 0.5f), static_cast<int>(sceneSize.height * 0.5f), static_cast<int>(sceneSize.width * 0.5f), static_cast<int>(sceneSize.height * 0.5f));
+  RenderTask renderTask(application.GetScene().GetRenderTaskList().CreateTask());
+  renderTask.SetViewport(viewport);
+  renderTask.SetInputEnabled(true);
+  renderTask.SetSourceActor(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to layer's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+  layer.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Ensure renderTask actor can be hit too.
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(viewport.x + 5.0f, viewport.y + 5.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Disable input on renderTask, should not be hittable
+  renderTask.SetInputEnabled(false);
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(viewport.x + 5.0f, viewport.y + 5.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverOffscreenRenderTasks(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene(application.GetScene());
+  Vector2                  sceneSize(scene.GetSize());
+
+  // FrameBufferImage for offscreen RenderTask
+  FrameBuffer frameBuffer = FrameBuffer::New(static_cast<uint32_t>(sceneSize.width), static_cast<uint32_t>(sceneSize.height));
+
+  // Create a renderable actor to display the FrameBufferImage
+  Actor renderableActor = CreateRenderableActor(frameBuffer.GetColorTexture());
+  renderableActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::CENTER);
+  renderableActor.SetProperty(Actor::Property::SIZE, Vector2(sceneSize.x, sceneSize.y));
+  renderableActor.ScaleBy(Vector3(1.0f, -1.0f, 1.0f)); // FIXME
+  scene.Add(renderableActor);
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+  application.GetGlAbstraction().SetCheckFramebufferStatusResult(GL_FRAMEBUFFER_COMPLETE); // Ensure framebuffer connects
+
+  scene.GetRenderTaskList().GetTask(0u).SetScreenToFrameBufferFunction(RenderTask::FULLSCREEN_FRAMEBUFFER_FUNCTION);
+
+  // Create a RenderTask
+  RenderTask renderTask = scene.GetRenderTaskList().CreateTask();
+  renderTask.SetSourceActor(actor);
+  renderTask.SetFrameBuffer(frameBuffer);
+  renderTask.SetInputEnabled(true);
+
+  // Create another RenderTask
+  RenderTask renderTask2(scene.GetRenderTaskList().CreateTask());
+  renderTask2.SetInputEnabled(true);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverMultipleRenderableActors(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene(application.GetScene());
+
+  Actor parent = CreateRenderableActor();
+  parent.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  parent.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(parent);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  parent.Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to layer's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  parent.HoverEventSignal().Connect(&application, functor);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(actor == data.hoveredActor);
+  END_TEST;
+}
+
+int UtcDaliHoverActorRemovedInSignal(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData         data;
+  RemoveActorFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Register for leave events
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Re-add, render and notify
+  application.GetScene().Add(actor);
+  application.SendNotification();
+  application.Render();
+
+  // Emit another signal outside of actor's area, should not get anything as the scene has changed.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(210.0f, 210.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Emit another signal outside of actor's area, should not get anything as the scene has changed.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(210.0f, 210.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Re-add actor back to scene, render and notify
+  application.GetScene().Add(actor);
+  application.SendNotification();
+  application.Render();
+
+  // Emit another started event
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Completely delete the actor
+  actor.Reset();
+
+  // Emit event, should not crash and should not receive an event.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(210.0f, 210.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliHoverActorSignalNotConsumed(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data, false);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliHoverActorUnStaged(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Remove actor from scene
+  application.GetScene().Remove(actor);
+
+  // Interrupted is received because the actor receiving the event removed.
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Emit a move at the same point, we should not be signalled.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+  END_TEST;
+}
+
+int UtcDaliHoverLeaveActorReadded(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+
+  // Set actor to receive hover-events
+  actor.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started and motion
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(11.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Remove actor from scene and add again
+  scene.Remove(actor);
+  scene.Add(actor);
+
+  // Emit a motion within the actor's bounds
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(12.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit a motion outside the actor's bounds
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 200.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::LEAVE, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverClippingActor(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+
+  Actor clippingActor = Actor::New();
+  clippingActor.SetProperty(Actor::Property::SIZE, Vector2(50.0f, 50.0f));
+  clippingActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  clippingActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::CLIP_CHILDREN);
+  scene.Add(clippingActor);
+
+  // Add a child to the clipped region.
+  Actor clippingChild = Actor::New();
+  clippingChild.SetProperty(Actor::Property::SIZE, Vector2(50.0f, 50.0f));
+  clippingChild.SetProperty(Actor::Property::POSITION, Vector2(25.0f, 25.0f));
+  clippingChild.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  clippingActor.Add(clippingChild);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal.
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit an event within clipped area - we should have a hit.
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  // Emit an event outside the clipped area but within the actor area, we should have a hit.
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(60.0f, 60.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  clippingChild.HoverEventSignal().Connect(&application, functor);
+
+  // Emit an event inside part of the child which is within the clipped area, we should have a hit.
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(30.0f, 30.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverEventCreate(void)
+{
+  TestApplication application;
+
+  Dali::HoverEvent hoverEvent = Dali::HoverEvent::New(100u);
+  DALI_TEST_CHECK(hoverEvent);
+
+  // Emit a started signal
+  DALI_TEST_EQUALS(100u, hoverEvent.GetTime(), TEST_LOCATION);
+  DALI_TEST_EQUALS(0u, hoverEvent.GetPointCount(), TEST_LOCATION);
+
+  hoverEvent.SetTime(200u);
+  DALI_TEST_EQUALS(200u, hoverEvent.GetTime(), TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliHoverEventAddPoint(void)
+{
+  TestApplication application;
+
+  Dali::HoverEvent hoverEvent = Dali::HoverEvent::New(100u);
+  DALI_TEST_CHECK(hoverEvent);
+
+  hoverEvent.AddPoint(1, PointState::STARTED, Vector2(10.0f, 20.0f));
+
+  DALI_TEST_EQUALS(1u, hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(1, hoverEvent.GetDeviceId(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2(10.0f, 20.0f), hoverEvent.GetScreenPosition(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(Device::Class::NONE, hoverEvent.GetDeviceClass(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(Device::Subclass::NONE, hoverEvent.GetDeviceSubclass(0), TEST_LOCATION);
+  DALI_TEST_EQUALS("", hoverEvent.GetDeviceName(0), TEST_LOCATION);
+
+  // The hit-actor and the local position are filled in when the event is processed
+  DALI_TEST_CHECK(!hoverEvent.GetHitActor(0));
+  DALI_TEST_EQUALS(Vector2::ZERO, hoverEvent.GetLocalPosition(0), TEST_LOCATION);
+
+  // Add a second point with the device information
+  hoverEvent.AddPoint(2, PointState::MOTION, Vector2(30.0f, 40.0f), Device::Class::MOUSE, Device::Subclass::NONE, "mouse-0");
+
+  DALI_TEST_EQUALS(2u, hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(2, hoverEvent.GetDeviceId(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::MOTION, hoverEvent.GetState(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(Vector2(30.0f, 40.0f), hoverEvent.GetScreenPosition(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(Device::Class::MOUSE, hoverEvent.GetDeviceClass(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(Device::Subclass::NONE, hoverEvent.GetDeviceSubclass(1), TEST_LOCATION);
+  DALI_TEST_EQUALS("mouse-0", hoverEvent.GetDeviceName(1), TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliIntegrationHoverEventFromHandle(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+  application.Render();
+
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Feeding an application created event back into the core goes through this conversion,
+  // so the time and every point of it has to survive.
+  Dali::HoverEvent handle = Dali::HoverEvent::New(132u);
+  handle.AddPoint(1, PointState::STARTED, Vector2(10.0f, 20.0f));
+  handle.AddPoint(2, PointState::MOTION, Vector2(30.0f, 40.0f), Device::Class::MOUSE, Device::Subclass::FINGER, "mouse-0");
+
+  Dali::Integration::HoverEvent hoverEvent(handle);
+
+  DALI_TEST_EQUALS(hoverEvent.type, Dali::Integration::Event::Hover, TEST_LOCATION);
+  DALI_TEST_EQUALS(hoverEvent.time, 132u, TEST_LOCATION);
+  DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 2u, TEST_LOCATION);
+
+  const Integration::Point& firstPoint = hoverEvent.GetPoint(0);
+  DALI_TEST_EQUALS(firstPoint.GetDeviceId(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(firstPoint.GetState(), PointState::STARTED, TEST_LOCATION);
+  DALI_TEST_EQUALS(firstPoint.GetScreenPosition(), Vector2(10.0f, 20.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(firstPoint.GetDeviceClass(), Device::Class::NONE, TEST_LOCATION);
+  DALI_TEST_EQUALS(firstPoint.GetDeviceSubclass(), Device::Subclass::NONE, TEST_LOCATION);
+  DALI_TEST_EQUALS(firstPoint.GetDeviceName(), "", TEST_LOCATION);
+
+  const Integration::Point& secondPoint = hoverEvent.GetPoint(1);
+  DALI_TEST_EQUALS(secondPoint.GetDeviceId(), 2, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondPoint.GetState(), PointState::MOTION, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondPoint.GetScreenPosition(), Vector2(30.0f, 40.0f), TEST_LOCATION);
+  DALI_TEST_EQUALS(secondPoint.GetDeviceClass(), Device::Class::MOUSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondPoint.GetDeviceSubclass(), Device::Subclass::FINGER, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondPoint.GetDeviceName(), "mouse-0", TEST_LOCATION);
+
+  // The converted event must be processable by the core, this is what feeding it does
+  application.ProcessEvent(hoverEvent);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(132u, data.hoverEvent.GetTime(), TEST_LOCATION);
+  DALI_TEST_EQUALS(2u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_CHECK(data.hoverEvent.GetHitActor(0) == actor);
+  DALI_TEST_EQUALS(Vector2(10.0f, 20.0f), data.hoverEvent.GetLocalPosition(0), 0.1f, TEST_LOCATION);
+  data.Reset();
+
+  // An event with no points must convert to an event with no points, not to stale values.
+  Dali::Integration::HoverEvent emptyEvent(Dali::HoverEvent::New(0u));
+  DALI_TEST_EQUALS(emptyEvent.time, 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(emptyEvent.GetPointCount(), 0u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliHoverActorHide(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  // Emit a started
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  data.Reset();
+
+  actor.SetProperty(Actor::Property::VISIBLE, false);
+
+  // flush the queue and render once
+  application.SendNotification();
+  application.Render();
+
+  // Interrupted is received because the actor receiving the event hides.
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::INTERRUPTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  data.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverStartConsumerDifferentAtEnd(void)
+{
+  // Start a hover in one actor, continue it in another actor
+  // End hover in the second actor
+  // First actor should still get a hover finished call
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor);
+
+  Actor actor2 = Actor::New();
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::POSITION, Vector2(100.0f, 100.0f));
+  actor2.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(actor2);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to hover start actor's hovered signal
+  SignalData        dataStartActor;
+  HoverEventFunctor functorStartActor(dataStartActor);
+  actor.HoverEventSignal().Connect(&application, functorStartActor);
+
+  // Connect to second actor's hovered signal
+  SignalData        dataSecondActor;
+  HoverEventFunctor functorSecondActor(dataSecondActor);
+  actor2.HoverEventSignal().Connect(&application, functorSecondActor);
+
+  auto resetData = [&]()
+  { dataStartActor.Reset(); dataSecondActor.Reset(); };
+
+  // Emit a started
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, dataStartActor.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, dataSecondActor.functorCalled, TEST_LOCATION);
+  resetData();
+
+  // Emit a hover somewhere else
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(false, dataStartActor.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataSecondActor.functorCalled, TEST_LOCATION);
+  resetData();
+
+  // Emit a hover end in the same point, the hover start actor should still be informed
+  application.ProcessEvent(GenerateSingleHover(PointState::FINISHED, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(true, dataStartActor.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataSecondActor.functorCalled, TEST_LOCATION);
+  resetData();
+
+  // Do it again with the geometry on
+  // Emit a started
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, dataStartActor.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, dataSecondActor.functorCalled, TEST_LOCATION);
+  resetData();
+
+  // Emit a hover somewhere else
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(false, dataStartActor.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataSecondActor.functorCalled, TEST_LOCATION);
+  resetData();
+
+  scene.SetGeometryHittestEnabled(true);
+
+  // Emit a hover end in the same point, the hover start actor should still be informed
+  application.ProcessEvent(GenerateSingleHover(PointState::FINISHED, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(true, dataStartActor.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataSecondActor.functorCalled, TEST_LOCATION);
+  resetData();
+
+  END_TEST;
+}
+
+int UtcDaliHoverEnsureDifferentConsumerReceivesInterrupted(void)
+{
+  // Interrupted event with a different consumer to previous event
+
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor parent = Actor::New();
+  parent.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  parent.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(parent);
+
+  Actor child = Actor::New();
+  child.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  child.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  parent.Add(child);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to parent's hover signal
+  SignalData        dataParent;
+  HoverEventFunctor functorParent(dataParent);
+  parent.HoverEventSignal().Connect(&application, functorParent);
+
+  // Connect to child's hovered signal but do not consume
+  SignalData        dataChildNoConsume;
+  HoverEventFunctor functorChildNoConsume(dataChildNoConsume, false);
+  child.HoverEventSignal().Connect(&application, functorChildNoConsume);
+
+  // Create a functor to consume the event of the child, but don't connect just yet
+  SignalData        dataChildConsume;
+  HoverEventFunctor functorChildConsume(dataChildConsume);
+
+  auto resetData = [&]()
+  { dataParent.Reset(); dataChildNoConsume.Reset(); dataChildConsume.Reset(); };
+
+  // Emit a started
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, dataParent.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataChildNoConsume.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, dataChildConsume.functorCalled, TEST_LOCATION);
+  resetData();
+
+  // Connect to child's hover event and consume so it's a different consumer on interrupted
+  child.HoverEventSignal().Connect(&application, functorChildConsume);
+
+  // Emit interrupted, all three methods should be called
+  application.ProcessEvent(GenerateSingleHover(PointState::INTERRUPTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, dataParent.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataChildNoConsume.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataChildConsume.functorCalled, TEST_LOCATION);
+  resetData();
+
+  END_TEST;
+}
+
+int UtcDaliHoverEnsureDifferentConsumerReceivesLeave(void)
+{
+  // Motion event outside previous hit actor
+  // This event is consumed by a different actor
+  // The previous consumer's listener should still get called
+
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor parent = Actor::New();
+  parent.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  parent.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  scene.Add(parent);
+
+  Actor child = Actor::New();
+  child.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  child.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  parent.Add(child);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to parent's hover signal
+  SignalData        dataParent;
+  HoverEventFunctor functorParent(dataParent);
+  parent.HoverEventSignal().Connect(&application, functorParent);
+
+  // Connect to child's hovered signal but do not consume
+  SignalData        dataChildNoConsume;
+  HoverEventFunctor functorChildNoConsume(dataChildNoConsume, false);
+  child.HoverEventSignal().Connect(&application, functorChildNoConsume);
+
+  // Create a functor to consume the event of the child, but don't connect just yet
+  SignalData        dataChildConsume;
+  HoverEventFunctor functorChildConsume(dataChildConsume);
+
+  auto resetData = [&]()
+  { dataParent.Reset(); dataChildNoConsume.Reset(); dataChildConsume.Reset(); };
+
+  // Emit a started
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(10.0f, 10.0f)));
+  DALI_TEST_EQUALS(true, dataParent.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataChildNoConsume.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, dataChildConsume.functorCalled, TEST_LOCATION);
+  resetData();
+
+  // Connect to child's hover event and consume so it's a different consumer on interrupted
+  child.HoverEventSignal().Connect(&application, functorChildConsume);
+
+  // Also make last consumer insensitive
+  parent.SetProperty(Actor::Property::SENSITIVE, false);
+
+  // Emit interrupted, all three methods should be called
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(110.0f, 110.0f)));
+  DALI_TEST_EQUALS(true, dataParent.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataChildNoConsume.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, dataChildConsume.functorCalled, TEST_LOCATION);
+  resetData();
+
+  END_TEST;
+}
+
+int UtcDaliHoverEventGetDeviceAPI(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  Vector2 screenCoordinates(10.0f, 10.0f);
+  Vector2 localCoordinates;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(data.hoverEvent.GetDeviceClass(0), Device::Class::MOUSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(data.hoverEvent.GetDeviceSubclass(0), Device::Subclass::NONE, TEST_LOCATION);
+  data.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverEventGetDeviceAPINegative(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  Vector2 screenCoordinates(10.0f, 10.0f);
+  Vector2 localCoordinates;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+
+  // Emit a started signal
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, screenCoordinates));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(data.hoverEvent.GetDeviceClass(-1), Device::Class::NONE, TEST_LOCATION);
+  DALI_TEST_EQUALS(data.hoverEvent.GetDeviceSubclass(-1), Device::Subclass::NONE, TEST_LOCATION);
+  data.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliHoverEventGetDeviceNamePositive(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+  Dali::String deviceName("hwKeyboard");
+
+  Vector2 screenCoordinates(10.0f, 10.0f);
+  Vector2 localCoordinates;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+
+  // Emit a down signal with deviceName
+  Dali::Integration::HoverEvent hoverEvent = GenerateSingleHover(PointState::STARTED, screenCoordinates);
+  hoverEvent.points[0].SetDeviceName(deviceName);
+
+  application.ProcessEvent(hoverEvent);
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(data.hoverEvent.GetDeviceName(0), deviceName, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliHoverEventGetDeviceNameNagative(void)
+{
+  TestApplication application;
+
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  application.GetScene().Add(actor);
+
+  // Render and notify
+  application.SendNotification();
+  application.Render();
+
+  // Connect to actor's hovered signal
+  SignalData        data;
+  HoverEventFunctor functor(data);
+  actor.HoverEventSignal().Connect(&application, functor);
+
+  Vector2 screenCoordinates(10.0f, 10.0f);
+  Vector2 localCoordinates;
+  actor.ScreenToLocal(localCoordinates.x, localCoordinates.y, screenCoordinates.x, screenCoordinates.y);
+
+  // Emit a down signal with deviceName
+  Dali::Integration::HoverEvent hoverEvent = GenerateSingleHover(PointState::STARTED, screenCoordinates);
+
+  application.ProcessEvent(hoverEvent);
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(1u, data.hoverEvent.GetPointCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(PointState::STARTED, data.hoverEvent.GetState(0), TEST_LOCATION);
+  DALI_TEST_EQUALS(data.hoverEvent.GetDeviceName(1), "", TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliHoverOverlappingSiblingsExclusive(void)
+{
+  TestApplication application;
+
+  Actor parent = Actor::New();
+  parent.SetProperty(Actor::Property::SIZE, Vector2(225.0f, 100.0f));
+  parent.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  parent.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  application.GetScene().Add(parent);
+
+  Actor actorA = Actor::New();
+  actorA.SetProperty(Actor::Property::SIZE, Vector2(150.0f, 100.0f));
+  actorA.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actorA.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  actorA.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+  parent.Add(actorA);
+
+  Actor actorB = Actor::New();
+  actorB.SetProperty(Actor::Property::SIZE, Vector2(150.0f, 100.0f));
+  actorB.SetProperty(Actor::Property::POSITION, Vector2(75.0f, 0.0f));
+  actorB.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actorB.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  actorB.SetProperty(Actor::Property::LEAVE_REQUIRED, true);
+  parent.Add(actorB);
+
+  application.SendNotification();
+  application.Render();
+
+  std::vector<HoverTraceEntry> trace;
+  bool                         consumeActorB = false;
+
+  actorA.HoverEventSignal().Connect(&application, [&](Actor actor, HoverEvent event)
+  {
+    trace.push_back({actor, event.GetState(0)});
+    return false;
+  });
+  actorB.HoverEventSignal().Connect(&application, [&](Actor actor, HoverEvent event)
+  {
+    trace.push_back({actor, event.GetState(0)});
+    return consumeActorB;
+  });
+  parent.HoverEventSignal().Connect(&application, [&](Actor actor, HoverEvent event)
+  {
+    trace.push_back({actor, event.GetState(0)});
+    return false;
+  });
+
+  // Enter A-only area. The event bubbles from A to its actual parent.
+  application.ProcessEvent(GenerateSingleHover(PointState::STARTED, Vector2(25.0f, 50.0f)));
+  DALI_TEST_EQUALS(trace.size(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].actor, actorA, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].state, PointState::STARTED, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].state, PointState::STARTED, TEST_LOCATION);
+  trace.clear();
+
+  // Enter the overlap. A leaves before the topmost B starts; A is not a fall-through target.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(100.0f, 50.0f)));
+  DALI_TEST_EQUALS(trace.size(), 4u, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].actor, actorA, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].state, PointState::LEAVE, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].state, PointState::LEAVE, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[2].actor, actorB, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[2].state, PointState::STARTED, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[3].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[3].state, PointState::STARTED, TEST_LOCATION);
+  trace.clear();
+
+  // Moving inside B keeps B as the exclusive target.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(200.0f, 50.0f)));
+  DALI_TEST_EQUALS(trace.size(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].actor, actorB, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].state, PointState::MOTION, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].state, PointState::MOTION, TEST_LOCATION);
+  trace.clear();
+
+  // Expose A again.
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(25.0f, 50.0f)));
+  DALI_TEST_EQUALS(trace.size(), 4u, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].actor, actorB, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].state, PointState::LEAVE, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].state, PointState::LEAVE, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[2].actor, actorA, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[2].state, PointState::STARTED, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[3].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[3].state, PointState::STARTED, TEST_LOCATION);
+  trace.clear();
+
+  // Consuming on B stops parent bubbling, but does not change sibling targeting.
+  consumeActorB = true;
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(100.0f, 50.0f)));
+  DALI_TEST_EQUALS(trace.size(), 3u, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].actor, actorA, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].state, PointState::LEAVE, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].state, PointState::LEAVE, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[2].actor, actorB, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[2].state, PointState::STARTED, TEST_LOCATION);
+  trace.clear();
+
+  // Not consuming resumes parent bubbling; the lower sibling A still receives nothing.
+  consumeActorB = false;
+  application.ProcessEvent(GenerateSingleHover(PointState::MOTION, Vector2(101.0f, 50.0f)));
+  DALI_TEST_EQUALS(trace.size(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].actor, actorB, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[0].state, PointState::MOTION, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].actor, parent, TEST_LOCATION);
+  DALI_TEST_EQUALS(trace[1].state, PointState::MOTION, TEST_LOCATION);
+
+  END_TEST;
+}

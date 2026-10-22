@@ -1,0 +1,166 @@
+#ifndef DALI_PROPERTY_KEY_H
+#define DALI_PROPERTY_KEY_H
+
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <sstream>
+
+// INTERNAL INCLUDES
+#include <dali/public-api/common/dali-common.h>
+#include <dali/public-api/common/dali-string-view.h>
+#include <dali/public-api/common/dali-string.h>
+#include <dali/public-api/object/property.h>
+
+namespace DALI_NAMESPACE
+{
+/**
+ * @addtogroup dali_core_object
+ * @{
+ */
+
+/**
+ * @brief A key type which can be either a Dali::String or a Property::Index
+ * @SINCE_1_2.7
+ */
+struct DALI_CORE_API Property::Key
+{
+  /**
+   * @brief The type of key
+   * @SINCE_1_2.7
+   */
+  enum Type
+  {
+    INDEX, ///< The key is a Property::Index
+    STRING ///< The key is a string
+  } type;  ///< The type of the key
+
+  Property::Index indexKey;  ///< The index key.
+  Dali::String    stringKey; ///< The string key.
+
+  /**
+   * @brief Constructor
+   * @SINCE_1_2.7
+   *
+   * @param[in] key The string key to copy
+   */
+  Key(const Dali::String& key);
+
+  /**
+   * @brief Constructor
+   * @SINCE_1_2.7
+   *
+   * @param[in] key The string key
+   */
+  Key(const Dali::StringView& key);
+
+  /**
+   * @brief Constructor
+   * @SINCE_1_4.16
+   *
+   * @param[in] key The string key as a const char *
+   */
+  Key(const char* key);
+
+  /**
+   * @brief Constructor
+   * @SINCE_1_2.7
+   *
+   * @param[in] key The index key
+   */
+  Key(Property::Index key);
+
+  /**
+   * @brief The equality operator
+   * @SINCE_1_2.7
+   *
+   * @param[in] rhs A string key to compare against.
+   * @return true if the key compares, or false if it isn't equal or of the wrong type
+   */
+  bool operator==(const Dali::StringView& rhs) const;
+
+  /**
+   * @brief Constructor
+   * @SINCE_1_4.16
+   *
+   * @param[in] key The string key as a const char *
+   * @return true if the key compares, or false if it isn't equal or of the wrong type
+   */
+  bool operator==(const char* key) const;
+
+  /**
+   * @brief The equality operator
+   * @SINCE_1_2.7
+   *
+   * @param[in] rhs An index key to compare against.
+   * @return true if the key compares, or false if it isn't equal or of the wrong type
+   */
+  bool operator==(Property::Index rhs) const;
+
+  /**
+   * @brief The equality operator
+   * @SINCE_1_2.7
+   *
+   * @param[in] rhs A key  to compare against.
+   * @return true if the keys are of the same type and have the same value
+   */
+  bool operator==(const Key& rhs) const;
+
+  /**
+   * @brief The inequality operator
+   * @SINCE_1_2.7
+   *
+   * @param[in] rhs A string key to compare against.
+   * @return true if the key is not equal or not a string key
+   */
+  bool operator!=(const Dali::StringView& rhs) const;
+
+  /**
+   * @brief The inequality operator
+   * @SINCE_1_4.16
+   *
+   * @param[in] rhs A const char* key to compare against.
+   * @return true if the key is not equal or not a string key
+   */
+  bool operator!=(const char* rhs) const;
+
+  /**
+   * @brief The inequality operator
+   * @SINCE_1_2.7
+   *
+   * @param[in] rhs An index key to compare against.
+   * @return true if the key is not equal, or not an index key
+   */
+  bool operator!=(Property::Index rhs) const;
+
+  /**
+   * @brief The inequality operator
+   * @SINCE_1_2.7
+   *
+   * @param[in] rhs A key to compare against.
+   * @return true if the keys are not of the same type or are not equal
+   */
+  bool operator!=(const Key& rhs) const;
+};
+
+/**
+ * @}
+ */
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_PROPERTY_KEY_H

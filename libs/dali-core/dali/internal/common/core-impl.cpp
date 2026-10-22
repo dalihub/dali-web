@@ -1,0 +1,1022 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/common/core-impl.h>
+
+// EXTERNAL INCLUDES
+#include <algorithm>
+
+// INTERNAL INCLUDES
+#include <dali/graphics-api/graphics-controller.h>
+#include <dali/integration-api/core.h>
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/events/event.h>
+#include <dali/integration-api/platform-abstraction.h>
+#include <dali/integration-api/processor-interface.h>
+#include <dali/integration-api/render-controller.h>
+#include <dali/integration-api/scene-pre-render-status.h>
+#include <dali/integration-api/trace.h>
+
+#include <dali/internal/event/actors/actor-impl.h>
+#include <dali/internal/event/animation/animation-playlist.h>
+#include <dali/internal/event/common/event-thread-services.h>
+#include <dali/internal/event/common/notification-manager.h>
+#include <dali/internal/event/common/property-notification-manager.h>
+#include <dali/internal/event/common/thread-local-storage.h>
+#include <dali/internal/event/common/type-registry-impl.h>
+#include <dali/internal/event/effects/shader-factory.h>
+#include <dali/internal/event/events/event-processor.h>
+#include <dali/internal/event/events/gesture-event-processor.h>
+#include <dali/internal/event/render-tasks/render-task-list-impl.h>
+#include <dali/internal/event/size-negotiation/memory-pool-relayout-container.h>
+#include <dali/internal/event/size-negotiation/relayout-controller-impl.h>
+#include <dali/internal/event/update/frame-callback-interface-impl.h>
+
+#include <dali/internal/update/common/discard-queue.h>
+#include <dali/internal/update/common/property-batch-free-list.h>
+#include <dali/internal/update/common/scene-graph-memory-pool-collection.h>
+#include <dali/internal/update/manager/render-task-processor.h>
+#include <dali/internal/update/manager/update-manager.h>
+
+#include <dali/internal/render/common/performance-monitor.h>
+#include <dali/internal/render/common/render-manager.h>
+#include <dali/internal/render/renderers/uniform-buffer-view.h>
+
+#include <dali/public-api/update/frame-callback-interface.h>
+
+using Dali::Internal::SceneGraph::RenderManager;
+using Dali::Internal::SceneGraph::UpdateManager;
+
+namespace
+{
+// The Update for frame N+1 may be processed whilst frame N is being rendered.
+const uint32_t MAXIMUM_UPDATE_COUNT = 2u;
+
+DALI_INIT_TRACE_FILTER(gTraceFilter, DALI_TRACE_PERFORMANCE_MARKER, false);
+
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gCoreFilter = Debug::Filter::New(Debug::Concise, false, "LOG_CORE");
+#endif
+} // namespace
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+using Integration::Event;
+using Integration::PlatformAbstraction;
+using Integration::RenderController;
+using Integration::RenderStatus;
+using Integration::UpdateStatus;
+
+Core::Core(RenderController&            renderController,
+           PlatformAbstraction&         platform,
+           Graphics::Controller&        graphicsController,
+           Integration::CorePolicyFlags corePolicy)
+: mRenderController(renderController),
+  mPlatform(platform),
+  mProcessorOnceIndex(0u),
+  mPostProcessorOnceIndex(0u),
+  mProcessingEvent(false),
+  mProcessorUnregistered(false),
+  mPostProcessorUnregistered(false),
+  mRelayoutFlush(false)
+{
+  // Create the thread local storage
+  CreateThreadLocalStorage();
+
+  // This does nothing until Core is built with --enable-performance-monitor
+  PERFORMANCE_MONITOR_INIT(platform);
+
+  mNotificationManager = new NotificationManager();
+
+  mAnimationPlaylist = AnimationPlaylist::New();
+
+  mPropertyNotificationManager = PropertyNotificationManager::New();
+
+  mRenderTaskProcessor = new SceneGraph::RenderTaskProcessor();
+
+  mMemoryPoolCollection = new SceneGraph::MemoryPoolCollection();
+
+  mRenderManager = RenderManager::New(graphicsController,
+                                      *mMemoryPoolCollection);
+
+  mUpdateManager = new UpdateManager(*mNotificationManager,
+                                     *mAnimationPlaylist,
+                                     *mPropertyNotificationManager,
+                                     renderController,
+                                     *mRenderManager,
+                                     *mRenderTaskProcessor,
+                                     *mMemoryPoolCollection);
+
+  mObjectRegistry = ObjectRegistry::New();
+
+  mRelayoutController = IntrusivePtr<RelayoutController>(new RelayoutController(mRenderController));
+
+  mGestureEventProcessor = new GestureEventProcessor(*mUpdateManager, mRenderController);
+
+  mShaderFactory = new ShaderFactory();
+
+  GetImplementation(Dali::TypeRegistry::Get()).CallInitFunctions();
+
+  DALI_LOG_RELEASE_INFO("Core policy enum : 0x%x\n", static_cast<uint32_t>(corePolicy));
+}
+
+Core::~Core()
+{
+  /*
+   * The order of destructing these singletons is important!!!
+   */
+
+  // clear the thread local storage first
+  // allows core to be created / deleted many times in the same thread (how TET cases work).
+  ThreadLocalStorage* tls = ThreadLocalStorage::GetInternal();
+  if(tls)
+  {
+    tls->Remove();
+    tls->Unreference();
+  }
+
+  // Call SceneDestroyed() if we never be called it ever before.
+  SceneDestroyed();
+
+  mObjectRegistry.Reset();
+
+  // Stop relayout requests
+  mRelayoutController.Reset();
+
+  // Remove all Scenes
+  mScenes.clear();
+
+  // Destroy before UpdateManager.
+  mGestureEventProcessor.Reset();
+  mPropertyNotificationManager.Reset();
+  mNotificationManager.Reset();
+  mAnimationPlaylist.Reset();
+
+  // Destroy before RenderManager.
+  mUpdateManager.Reset();
+
+  // Destroy RenderManager.
+  mRenderManager.Reset();
+
+  // Destroy after RenderManager.
+  mMemoryPoolCollection.Reset();
+
+  // Other classes - Don't care of destruct order.
+  mShaderFactory.Reset();
+  mRenderTaskProcessor.Reset();
+}
+
+void Core::Initialize()
+{
+}
+
+void Core::ContextCreated()
+{
+}
+
+void Core::ContextDestroyed()
+{
+  mUpdateManager->ContextDestroyed();
+  mRenderManager->ContextDestroyed();
+}
+
+void Core::Update(float elapsedSeconds, uint32_t lastVSyncTimeMilliseconds, uint32_t nextVSyncTimeMilliseconds, Integration::UpdateStatus& status, bool renderToFboEnabled, bool isRenderingToFbo, bool uploadOnly)
+{
+  // set the time delta so adaptor can easily print FPS with a release build with 0 as
+  // it is cached by frametime
+  status.secondsFromLastFrame = elapsedSeconds;
+
+  static bool rendererAdded = false;
+  bool        oldUploadOnly = uploadOnly;
+
+  // Render returns true when there are updates on the scene or one or more animations are completed.
+  // Use the estimated time diff till we render as the elapsed time.
+  status.keepUpdating = mUpdateManager->Update(elapsedSeconds,
+                                               lastVSyncTimeMilliseconds,
+                                               nextVSyncTimeMilliseconds,
+                                               renderToFboEnabled,
+                                               isRenderingToFbo,
+                                               uploadOnly,
+                                               rendererAdded);
+
+  // Get the value of renderer added from updateManager.
+  status.rendererAdded = rendererAdded;
+
+  // Get the value of force render required if uploadOnly variable changed as true at updateManager.
+  status.needsForceRendering = (oldUploadOnly && !uploadOnly);
+
+  // Check the Notification Manager message queue to set needsNotification
+  status.needsNotification = mNotificationManager->MessagesToProcess();
+
+  // No need to keep update running if there are notifications to process.
+  // Any message to update will wake it up anyways
+}
+
+void Core::PreRender(RenderStatus& status, bool forceClear)
+{
+  mRenderManager->PreRender(status, forceClear);
+}
+
+void Core::PreRenderScene(Integration::Scene& scene, Integration::ScenePreRenderStatus& status, std::vector<BoundsInteger>& damagedRects)
+{
+  mRenderManager->PreRenderScene(scene, status, damagedRects);
+}
+
+void Core::RenderScene(RenderStatus& status, Integration::Scene& scene, bool renderToFbo)
+{
+  mRenderManager->RenderScene(status, scene, renderToFbo);
+}
+
+void Core::RenderScene(RenderStatus& status, Integration::Scene& scene, bool renderToFbo, BoundsInteger& clippingRect)
+{
+  mRenderManager->RenderScene(status, scene, renderToFbo, clippingRect);
+}
+
+void Core::ClearScene(Integration::Scene scene)
+{
+  mRenderManager->ClearScene(scene);
+}
+
+void Core::PostRender()
+{
+  mUpdateManager->PostRender();
+  mRenderManager->PostRender();
+}
+
+void Core::SceneCreated()
+{
+  mRelayoutController->OnApplicationSceneCreated();
+
+  for(const auto& scene : mScenes)
+  {
+    Dali::Actor sceneRootLayer = scene->GetRootLayer();
+    mRelayoutController->RequestRelayoutTree(sceneRootLayer);
+  }
+}
+
+void Core::SceneDestroyed()
+{
+  // Be careful that Core::SceneDestroyed() could be called multiple times.
+
+  // Remove all registered processors.
+  UnregisterProcessors();
+
+  mRelayoutController->SetEnabled(false);
+}
+
+void Core::QueueEvent(const Integration::Event& event)
+{
+  if(mScenes.size() != 0)
+  {
+    mScenes.front()->QueueEvent(event);
+  }
+}
+
+void Core::ForceRelayout()
+{
+  if(mRelayoutFlush)
+  {
+    DALI_LOG_ERROR("ForceRelayout should not be called from within RelayoutAndFlush!\n");
+    return;
+  }
+
+  // Scene could be added or removed while processing the events
+  // Copy the Scene container locally to avoid possibly invalid iterator
+  SceneContainer scenes = mScenes;
+
+  DALI_LOG_DEBUG_INFO("ForceRelayout()\n");
+  RelayoutAndFlush(scenes);
+  DALI_LOG_DEBUG_INFO("ForceRelayout() done\n");
+}
+
+void Core::ProcessEvents()
+{
+  // Guard against calls to ProcessEvents() during ProcessEvents()
+  if(mProcessingEvent)
+  {
+    DALI_LOG_ERROR("ProcessEvents should not be called from within ProcessEvents!\n");
+    mRenderController.RequestProcessEventsOnIdle();
+    return;
+  }
+
+  mProcessingEvent = true;
+  mRelayoutController->SetProcessingCoreEvents(true);
+
+  // Signal that any messages received will be flushed soon
+  mUpdateManager->EventProcessingStarted();
+
+  // Scene could be added or removed while processing the events
+  // Copy the Scene container locally to avoid possibly invalid iterator
+  SceneContainer scenes = mScenes;
+
+  // process events in all scenes
+  for(auto scene : scenes)
+  {
+    scene->ProcessEvents();
+  }
+
+  mNotificationManager->ProcessMessages();
+
+  // Emit signal here to inform listeners that event processing has finished.
+  for(auto scene : scenes)
+  {
+    scene->EmitEventProcessingFinishedSignal();
+  }
+
+  RelayoutAndFlush(scenes);
+
+  // Notify to animation play list that event processing has finished.
+  mAnimationPlaylist->EventLoopFinished();
+
+  mUpdateManager->EventProcessingFinished();
+
+  // Check if the touch or gestures require updates.
+  const bool gestureNeedsUpdate = mGestureEventProcessor->NeedsUpdate();
+
+  if(gestureNeedsUpdate)
+  {
+    // tell the render controller to keep update thread running
+    mRenderController.RequestUpdate();
+  }
+
+  mRelayoutController->SetProcessingCoreEvents(false);
+
+  // ProcessEvents() may now be called again
+  mProcessingEvent = false;
+}
+
+void Core::RelayoutAndFlush(SceneContainer& scenes)
+{
+  if(mRelayoutFlush)
+  {
+    DALI_LOG_ERROR("RelayoutAndFlush should not be called from within RelayoutAndFlush!\n");
+    return;
+  }
+
+  const bool isProcessEvents = mProcessingEvent;
+
+  if(!isProcessEvents)
+  {
+    // Fake that we are in ProcessEvents()
+    mProcessingEvent = true;
+    mRelayoutController->SetProcessingCoreEvents(true);
+
+    // Signal that any messages received will be flushed soon
+    mUpdateManager->EventProcessingStarted();
+
+    mNotificationManager->ProcessMessages();
+  }
+
+  mRelayoutFlush = true;
+
+  // Run any registered processors
+  RunProcessors();
+
+  // Run the size negotiation after event processing finished signal
+  mRelayoutController->Relayout();
+
+  // Run any registered post processors
+  RunPostProcessors();
+
+  // Rebuild depth tree after event processing has finished
+  for(auto& scene : scenes)
+  {
+    scene->RebuildDepthTree();
+  }
+
+  // process events in all scenes
+  for(auto scene : scenes)
+  {
+    auto& renderTaskList = scene->GetRenderTaskList();
+    renderTaskList.ReorderTasks(scene->GetLayerList());
+  }
+
+  // Flush any queued messages for the update-thread
+  // Flush every pending property batch before FlushQueue() so batched
+  // changes are turned into messages in the same frame
+  FlushAllPropertyBatches();
+  const bool messagesToProcess = mUpdateManager->FlushQueue();
+
+  if(messagesToProcess)
+  {
+    // tell the render controller to keep update thread running
+    mRenderController.RequestUpdate();
+  }
+
+  mRelayoutFlush = false;
+
+  if(!isProcessEvents)
+  {
+    // Notify to animation play list that event processing has finished.
+    mAnimationPlaylist->EventLoopFinished();
+
+    // Revert fake informations
+    mProcessingEvent = false;
+    mRelayoutController->SetProcessingCoreEvents(false);
+
+    mUpdateManager->EventProcessingFinished();
+  }
+}
+
+uint32_t Core::GetMaximumUpdateCount() const
+{
+  return MAXIMUM_UPDATE_COUNT;
+}
+
+void Core::ChangeCorePolicy(Integration::CorePolicyFlags corePolicy)
+{
+  mRenderManager->CheckSceneCount();
+  DALI_LOG_RELEASE_INFO("Core policy enum changed to : 0x%x\n", static_cast<uint32_t>(corePolicy));
+}
+
+void Core::ChangeGraphicsController(Graphics::Controller& graphicsController)
+{
+  DALI_LOG_RELEASE_INFO("ChangeGraphicsController\n");
+  mRenderManager->ChangeGraphicsController(graphicsController);
+}
+
+void Core::PreInitializeCompleted()
+{
+  // Send message to update thread to reset renderer added flag
+  using LocalType = Message<UpdateManager>;
+
+  // Reserve some memory inside the message queue
+  uint32_t* slot = mUpdateManager->ReserveMessageSlot(sizeof(LocalType));
+
+  // Construct message in the message queue memory; note that delete should not be called on the return value
+  new(slot) LocalType(mUpdateManager.Get(), &UpdateManager::ResetRendererAddedFlag);
+}
+
+void Core::RegisterProcessor(Integration::Processor& processor, bool postProcessor)
+{
+  if(postProcessor)
+  {
+    mPostProcessors.PushBack(&processor);
+  }
+  else
+  {
+    mProcessors.PushBack(&processor);
+  }
+}
+
+void Core::UnregisterProcessor(Integration::Processor& processor, bool postProcessor)
+{
+  if(postProcessor)
+  {
+    auto iter = std::find(mPostProcessors.Begin(), mPostProcessors.End(), &processor);
+    if(iter != mPostProcessors.End())
+    {
+      mPostProcessors.Erase(iter);
+      mPostProcessorUnregistered = true;
+    }
+  }
+  else
+  {
+    auto iter = std::find(mProcessors.Begin(), mProcessors.End(), &processor);
+    if(iter != mProcessors.End())
+    {
+      mProcessors.Erase(iter);
+      mProcessorUnregistered = true;
+    }
+  }
+}
+
+void Core::RegisterProcessorOnce(Integration::Processor& processor, bool postProcessor)
+{
+  if(postProcessor)
+  {
+    mPostProcessorsOnce[mPostProcessorOnceIndex].PushBack(&processor);
+  }
+  else
+  {
+    mProcessorsOnce[mProcessorOnceIndex].PushBack(&processor);
+  }
+}
+
+void Core::UnregisterProcessorOnce(Integration::Processor& processor, bool postProcessor)
+{
+  if(postProcessor)
+  {
+    for(uint32_t index = 0; index < 2; ++index)
+    {
+      auto iter = std::find(mPostProcessorsOnce[index].Begin(), mPostProcessorsOnce[index].End(), &processor);
+      if(iter != mPostProcessorsOnce[index].End())
+      {
+        mPostProcessorsOnce[index].Erase(iter);
+        if(index != mPostProcessorOnceIndex)
+        {
+          // Check processor unregistered during processing.
+          mPostProcessorUnregistered = true;
+        }
+      }
+    }
+  }
+  else
+  {
+    for(uint32_t index = 0; index < 2; ++index)
+    {
+      auto iter = std::find(mProcessorsOnce[index].Begin(), mProcessorsOnce[index].End(), &processor);
+      if(iter != mProcessorsOnce[index].End())
+      {
+        mProcessorsOnce[index].Erase(iter);
+        if(index != mProcessorOnceIndex)
+        {
+          // Check processor unregistered during processing.
+          mProcessorUnregistered = true;
+        }
+      }
+    }
+  }
+}
+
+void Core::UnregisterProcessors()
+{
+  mPostProcessors.Clear();
+  mPostProcessorUnregistered = true;
+  mProcessors.Clear();
+  mProcessorUnregistered = true;
+
+  for(uint32_t index = 0; index < 2; ++index)
+  {
+    mPostProcessorsOnce[index].Clear();
+    mProcessorsOnce[index].Clear();
+  }
+}
+
+void Core::RunProcessors()
+{
+  if(mProcessorsOnce[mProcessorOnceIndex].Count() != 0)
+  {
+    DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSORS_ONCE", [&](std::ostringstream& oss)
+    { oss << "[" << mProcessorOnceIndex << ":" << mProcessorsOnce[mProcessorOnceIndex].Count() << "]"; });
+
+    // Swap processor index.
+    uint32_t currentIndex = mProcessorOnceIndex;
+    mProcessorOnceIndex ^= 1;
+
+    // Copy processor pointers to prevent changes to vector affecting loop iterator.
+    Dali::Vector<Integration::Processor*> processors(mProcessorsOnce[currentIndex]);
+
+    // To prevent accessing processor unregistered during the loop
+    mProcessorUnregistered = false;
+
+    for(auto processor : processors)
+    {
+      if(processor)
+      {
+        if(!mProcessorUnregistered)
+        {
+          processor->Process(false);
+        }
+        else
+        {
+          // Run processor if the processor is still in the list.
+          // It may be removed during the loop.
+          auto iter = std::find(mProcessorsOnce[currentIndex].Begin(), mProcessorsOnce[currentIndex].End(), processor);
+          if(iter != mProcessorsOnce[currentIndex].End())
+          {
+            processor->Process(false);
+          }
+        }
+      }
+    }
+
+    // Clear once processor.
+    mProcessorsOnce[currentIndex].Clear();
+
+    DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSORS_ONCE", [&](std::ostringstream& oss)
+    {
+      oss << "[" << currentIndex;
+      if(mProcessorUnregistered)
+      {
+        oss << ", processor changed";
+      }
+      oss << "]"; });
+  }
+
+  if(mProcessors.Count() != 0)
+  {
+    DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSORS", [&](std::ostringstream& oss)
+    { oss << "[" << mProcessors.Count() << "]"; });
+
+    // Copy processor pointers to prevent changes to vector affecting loop iterator.
+    Dali::Vector<Integration::Processor*> processors(mProcessors);
+
+    // To prevent accessing processor unregistered during the loop
+    mProcessorUnregistered = false;
+
+    for(auto processor : processors)
+    {
+      if(processor)
+      {
+        if(!mProcessorUnregistered)
+        {
+          DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSOR", [&](std::ostringstream& oss)
+          { oss << "[" << processor->GetProcessorName() << "]"; });
+          processor->Process(false);
+          DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSOR", [&](std::ostringstream& oss)
+          { oss << "[END]"; }); // Do not use "processor" variable. It may be unregistered during Process()
+        }
+        else
+        {
+          // Run processor if the processor is still in the list.
+          // It may be removed during the loop.
+          auto iter = std::find(mProcessors.Begin(), mProcessors.End(), processor);
+          if(iter != mProcessors.End())
+          {
+            DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSOR", [&](std::ostringstream& oss)
+            { oss << "[" << processor->GetProcessorName() << "]"; });
+            processor->Process(false);
+            DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSOR", [&](std::ostringstream& oss)
+            { oss << "[END]"; }); // Do not use "processor" variable. It may be unregistered during Process()
+          }
+        }
+      }
+    }
+    DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_PROCESSORS", [&](std::ostringstream& oss)
+    {
+      oss << "[" << mProcessors.Count();
+      if(mProcessorUnregistered)
+      {
+        oss << ", processor changed";
+      }
+      oss << "]"; });
+  }
+}
+
+void Core::RunPostProcessors()
+{
+  if(mPostProcessorsOnce[mPostProcessorOnceIndex].Count() != 0)
+  {
+    DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSORS_ONCE", [&](std::ostringstream& oss)
+    { oss << "[" << mPostProcessorOnceIndex << ":" << mPostProcessorsOnce[mPostProcessorOnceIndex].Count() << "]"; });
+
+    // Swap processor index.
+    uint32_t currentIndex = mPostProcessorOnceIndex;
+    mPostProcessorOnceIndex ^= 1;
+
+    // Copy processor pointers to prevent changes to vector affecting loop iterator.
+    Dali::Vector<Integration::Processor*> processors(mPostProcessorsOnce[currentIndex]);
+
+    // To prevent accessing processor unregistered during the loop
+    mPostProcessorUnregistered = false;
+
+    for(auto processor : processors)
+    {
+      if(processor)
+      {
+        if(!mPostProcessorUnregistered)
+        {
+          processor->Process(true);
+        }
+        else
+        {
+          // Run processor if the processor is still in the list.
+          // It may be removed during the loop.
+          auto iter = std::find(mPostProcessorsOnce[currentIndex].Begin(), mPostProcessorsOnce[currentIndex].End(), processor);
+          if(iter != mPostProcessorsOnce[currentIndex].End())
+          {
+            processor->Process(true);
+          }
+        }
+      }
+    }
+
+    // Clear once processor.
+    mPostProcessorsOnce[currentIndex].Clear();
+
+    DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSORS_ONCE", [&](std::ostringstream& oss)
+    {
+      oss << "[" << currentIndex;
+      if(mPostProcessorUnregistered)
+      {
+        oss << ", processor changed";
+      }
+      oss << "]"; });
+  }
+
+  if(mPostProcessors.Count() != 0)
+  {
+    DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSORS", [&](std::ostringstream& oss)
+    { oss << "[" << mPostProcessors.Count() << "]"; });
+
+    // Copy processor pointers to prevent changes to vector affecting loop iterator.
+    Dali::Vector<Integration::Processor*> processors(mPostProcessors);
+
+    // To prevent accessing processor unregistered during the loop
+    mPostProcessorUnregistered = false;
+
+    for(auto processor : processors)
+    {
+      if(processor)
+      {
+        if(!mPostProcessorUnregistered)
+        {
+          DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSOR", [&](std::ostringstream& oss)
+          { oss << "[" << processor->GetProcessorName() << "]"; });
+          processor->Process(true);
+          DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSOR", [&](std::ostringstream& oss)
+          { oss << "[END]"; }); // Do not use "processor" variable. It may be unregistered during Process()
+        }
+        else
+        {
+          // Run processor if the processor is still in the list.
+          // It may be removed during the loop.
+          auto iter = std::find(mPostProcessors.Begin(), mPostProcessors.End(), processor);
+          if(iter != mPostProcessors.End())
+          {
+            DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSOR", [&](std::ostringstream& oss)
+            { oss << "[" << processor->GetProcessorName() << "]"; });
+            processor->Process(true);
+            DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSOR", [&](std::ostringstream& oss)
+            { oss << "[END]"; }); // Do not use "processor" variable. It may be unregistered during Process()
+          }
+        }
+      }
+    }
+
+    DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_CORE_RUN_POST_PROCESSORS", [&](std::ostringstream& oss)
+    {
+      oss << "[" << mPostProcessors.Count();
+      if(mPostProcessorUnregistered)
+      {
+        oss << ", processor changed";
+      }
+      oss << "]"; });
+  }
+}
+
+PlatformAbstraction& Core::GetPlatform()
+{
+  return mPlatform;
+}
+
+UpdateManager& Core::GetUpdateManager()
+{
+  return *(mUpdateManager);
+}
+
+RenderManager& Core::GetRenderManager()
+{
+  return *(mRenderManager);
+}
+
+NotificationManager& Core::GetNotificationManager()
+{
+  return *(mNotificationManager);
+}
+
+ShaderFactory& Core::GetShaderFactory()
+{
+  return *(mShaderFactory);
+}
+
+GestureEventProcessor& Core::GetGestureEventProcessor()
+{
+  return *(mGestureEventProcessor);
+}
+
+RelayoutController& Core::GetRelayoutController()
+{
+  return *(mRelayoutController.Get());
+}
+
+void Core::AddFrameCallback(FrameCallbackInterface& frameCallback, Actor& rootActor)
+{
+  DALI_ASSERT_ALWAYS((!FrameCallbackInterface::Impl::Get(frameCallback).IsConnectedToSceneGraph()) && "FrameCallbackInterface implementation already added");
+
+  // Create scene-graph object and transfer to UpdateManager
+  OwnerPointer<SceneGraph::FrameCallback> transferOwnership(SceneGraph::FrameCallback::New(frameCallback));
+  AddFrameCallbackMessage(*mUpdateManager, transferOwnership, rootActor.GetNode());
+}
+
+void Core::AddGlobalFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  DALI_ASSERT_ALWAYS((!FrameCallbackInterface::Impl::Get(frameCallback).IsConnectedToSceneGraph()) && "FrameCallbackInterface implementation already added");
+
+  // Create scene-graph object and transfer to UpdateManager
+  OwnerPointer<SceneGraph::FrameCallback> transferOwnership(SceneGraph::FrameCallback::New(frameCallback));
+  AddGlobalFrameCallbackMessage(*mUpdateManager, transferOwnership);
+}
+
+void Core::RemoveFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  FrameCallbackInterface::Impl::Get(frameCallback).Invalidate();
+  RemoveFrameCallbackMessage(*mUpdateManager, frameCallback);
+}
+
+Dali::UpdateProxy::NotifySyncPoint Core::NotifyFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  static Dali::UpdateProxy::NotifySyncPoint sSyncPoint = 0;
+  ++sSyncPoint;
+
+  NotifyFrameCallbackMessage(*mUpdateManager, &frameCallback, sSyncPoint);
+  return sSyncPoint;
+}
+
+ObjectRegistry& Core::GetObjectRegistry() const
+{
+  return *(mObjectRegistry.Get());
+}
+
+void Core::LogMemoryPools() const
+{
+  uint32_t animationPoolCapacity, animationPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::ANIMATION, animationPoolCapacity, animationPoolSize);
+  uint32_t renderItemPoolCapacity, renderItemPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDER_ITEM, renderItemPoolCapacity, renderItemPoolSize);
+  uint32_t rendererPoolCapacity, rendererPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDERER, rendererPoolCapacity, rendererPoolSize);
+  uint32_t textureSetPoolCapacity, textureSetPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::TEXTURE_SET, textureSetPoolCapacity, textureSetPoolSize);
+  uint32_t renderTaskPoolCapacity, renderTaskPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDER_TASK_LIST, renderTaskPoolCapacity, renderTaskPoolSize);
+  uint32_t nodePoolCapacity, nodePoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::NODE, nodePoolCapacity, nodePoolSize);
+  uint32_t cameraPoolCapacity, cameraPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::CAMERA, cameraPoolCapacity, cameraPoolSize);
+  uint32_t renderRendererPoolCapacity, renderRendererPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDER_RENDERER, renderRendererPoolCapacity, renderRendererPoolSize);
+  uint32_t renderTexturePoolCapacity, renderTexturePoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDER_TEXTURE, renderTexturePoolCapacity, renderTexturePoolSize);
+  uint32_t renderUboViewPoolCapacity, renderUboViewPoolSize;
+  mMemoryPoolCollection->GetCapacity(SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDER_UBO_VIEW, renderUboViewPoolCapacity, renderUboViewPoolSize);
+  uint32_t relayoutItemPoolCapacity, relayoutItemPoolSize;
+  mRelayoutController->GetMemoryPoolCapacity(relayoutItemPoolCapacity, relayoutItemPoolSize);
+
+#define SIZE_CONV(cap, type, sz) \
+  cap, ((cap + (1 << 9)) >> 10), TypeSizeWithAlignment<type>::size, cap / TypeSizeWithAlignment<type>::size, (cap == 0u ? 0u : sz * 100u / cap)
+
+  DALI_LOG_RELEASE_INFO(
+    "\n"
+    "Memory Pool capacities and fill%%:\n"
+    "  Animations:          %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  RenderItems:         %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  Renderers:           %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  TextureSets:         %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  RenderTasks:         %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  Nodes:               %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  Cameras:             %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  Render::Renderers:   %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  Render::Textures:    %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n"
+    "  Render::UBOViews:    %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n",
+
+    SIZE_CONV(animationPoolCapacity, Dali::Internal::SceneGraph::Animation, animationPoolSize),
+    SIZE_CONV(renderItemPoolCapacity, Dali::Internal::SceneGraph::RenderItem, renderItemPoolSize),
+    SIZE_CONV(rendererPoolCapacity, Dali::Internal::SceneGraph::Renderer, rendererPoolSize),
+    SIZE_CONV(textureSetPoolCapacity, Dali::Internal::SceneGraph::TextureSet, textureSetPoolSize),
+    SIZE_CONV(renderTaskPoolCapacity, Dali::Internal::SceneGraph::RenderTaskList, renderTaskPoolSize),
+    SIZE_CONV(nodePoolCapacity, Dali::Internal::SceneGraph::Node, nodePoolSize),
+    SIZE_CONV(cameraPoolCapacity, Dali::Internal::SceneGraph::Camera, cameraPoolSize),
+    SIZE_CONV(renderRendererPoolCapacity, Dali::Internal::Render::Renderer, renderRendererPoolSize),
+    SIZE_CONV(renderTexturePoolCapacity, Dali::Internal::Render::Texture, renderTexturePoolSize),
+    SIZE_CONV(renderUboViewPoolCapacity, Dali::Internal::Render::UniformBufferView, renderUboViewPoolSize));
+  DALI_LOG_RELEASE_INFO(
+    "\n"
+    "  RelayoutItems:       %10u byte (%9u KB) [%4zu byte * %6zu items] %3u%%\n",
+    SIZE_CONV(relayoutItemPoolCapacity, Dali::Internal::MemoryPoolRelayoutContainer::RelayoutInfo, relayoutItemPoolSize));
+
+  uint32_t updateQCapacity = static_cast<uint32_t>(mUpdateManager->GetUpdateMessageQueueCapacity());
+
+  DALI_LOG_RELEASE_INFO(
+    "\n"
+    "  Message Queue:       %10u byte (%9u KB) \n",
+    updateQCapacity, ((updateQCapacity + (1 << 9)) >> 10));
+
+  size_t renderInstructionCapacity = mUpdateManager->GetRenderInstructionCapacity();
+  DALI_LOG_RELEASE_INFO(
+    "\n"
+    "  RenderInstruction:   %10zu byte (%9zu KB)\n",
+    renderInstructionCapacity, ((renderInstructionCapacity + (1 << 9)) >> 10));
+
+  size_t totalPoolCapacity =
+    animationPoolCapacity +
+    renderItemPoolCapacity +
+    relayoutItemPoolCapacity +
+    rendererPoolCapacity +
+    textureSetPoolCapacity +
+    renderTaskPoolCapacity +
+    nodePoolCapacity +
+    cameraPoolCapacity +
+
+    renderRendererPoolCapacity +
+    renderTexturePoolCapacity +
+    renderUboViewPoolCapacity +
+
+    updateQCapacity +
+    renderInstructionCapacity;
+
+  DALI_LOG_RELEASE_INFO(
+    "\n"
+    "  Total pool capacity: %10zu byte (%9zu KB) (%6zu MB)",
+    totalPoolCapacity, ((totalPoolCapacity + (1 << 9)) >> 10), ((totalPoolCapacity + (1 << 19)) >> 20));
+}
+
+void Core::SetRenderingBehavior(Integration::RenderingBehavior renderingBehavior)
+{
+  if(mRenderingBehavior != renderingBehavior)
+  {
+    SetRenderingBehaviorMessage(*mUpdateManager, renderingBehavior);
+    mRenderingBehavior = renderingBehavior;
+  }
+}
+
+Integration::RenderingBehavior Core::GetRenderingBehavior() const
+{
+  return mRenderingBehavior;
+}
+
+void Core::KeepRendering(float durationSeconds)
+{
+  KeepRenderingMessage(*mUpdateManager, durationSeconds);
+}
+
+EventThreadServices& Core::GetEventThreadServices()
+{
+  return *this;
+}
+
+PropertyNotificationManager& Core::GetPropertyNotificationManager() const
+{
+  return *(mPropertyNotificationManager);
+}
+
+AnimationPlaylist& Core::GetAnimationPlaylist() const
+{
+  return *(mAnimationPlaylist);
+}
+
+Integration::GraphicsConfig& Core::GetGraphicsConfig() const
+{
+  return (*mRenderManager).GetGraphicsConfig();
+}
+
+const Core::SceneContainer& Core::GetScenes() const
+{
+  return mScenes;
+}
+
+void Core::AddScene(Scene* scene)
+{
+  mScenes.push_back(scene);
+}
+
+void Core::RemoveScene(Scene* scene)
+{
+  auto iter = std::find(mScenes.begin(), mScenes.end(), scene);
+  if(iter != mScenes.end())
+  {
+    mScenes.erase(iter);
+  }
+}
+
+void Core::CreateThreadLocalStorage()
+{
+  // a pointer to the ThreadLocalStorage object will be stored in TLS
+  // The ThreadLocalStorage object should be deleted by the Core destructor
+  ThreadLocalStorage* tls = new ThreadLocalStorage(this);
+  tls->Reference();
+}
+
+void Core::RegisterObject(Dali::BaseObject* object)
+{
+  mObjectRegistry = &ThreadLocalStorage::Get().GetObjectRegistry();
+  mObjectRegistry->RegisterObject(object);
+}
+
+void Core::UnregisterObject(Dali::BaseObject* object)
+{
+  mObjectRegistry = &ThreadLocalStorage::Get().GetObjectRegistry();
+  mObjectRegistry->UnregisterObject(object);
+}
+
+Integration::RenderController& Core::GetRenderController()
+{
+  return mRenderController;
+}
+
+uint32_t* Core::ReserveMessageSlot(uint32_t size, bool updateScene)
+{
+  return mUpdateManager->ReserveMessageSlot(size, updateScene);
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

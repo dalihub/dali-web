@@ -1,0 +1,325 @@
+#ifndef DALI_INTERNAL_SCENE_GRAPH_RENDER_MANAGER_H
+#define DALI_INTERNAL_SCENE_GRAPH_RENDER_MANAGER_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/graphics-api/graphics-controller.h>
+#include <dali/integration-api/core-enumerations.h>
+#include <dali/internal/common/owner-key-type.h>
+#include <dali/internal/event/rendering/texture-impl.h>
+#include <dali/internal/render/renderers/render-renderer.h>
+#include <dali/internal/render/renderers/render-vertex-buffer.h>
+#include <dali/public-api/math/rect.h>
+
+#include <dali/graphics-api/graphics-texture-upload-helper.h> // for Graphics::UploadParams
+
+namespace DALI_NAMESPACE
+{
+namespace Integration
+{
+class RenderStatus;
+class Scene;
+class ScenePreRenderStatus;
+} // namespace Integration
+
+struct Vector4;
+
+namespace Internal
+{
+
+namespace Render
+{
+class FrameBuffer;
+class Renderer;
+class Sampler;
+class RenderTracker;
+class Geometry;
+class Texture;
+} // namespace Render
+
+namespace SceneGraph
+{
+class MemoryPoolCollection;
+class RenderInstruction;
+class RenderInstructionContainer;
+class Shader;
+class Scene;
+
+/**
+ * RenderManager is responsible for rendering the result of the previous "update", which
+ * is provided in a RenderCommand during UpdateManager::Update().
+ */
+class RenderManager
+{
+public:
+  /**
+   * Construct a new RenderManager.
+   * @param[in]  graphicsController         The graphics controller for a given rendering backend
+   * @param[in]  memoryPoolCollection       Memory pool collection.
+   */
+  static RenderManager* New(Graphics::Controller& graphicsController,
+                            MemoryPoolCollection& memoryPoolCollection);
+
+  /**
+   * Non-virtual destructor; not intended as a base class
+   */
+  ~RenderManager();
+
+  /**
+   * Change the graphics controller.
+   * @param[in] graphicsController The graphics controller for a given rendering backend
+   */
+  void ChangeGraphicsController(Graphics::Controller& graphicsController);
+
+  void CheckSceneCount();
+
+  /**
+   * The graphics context is being shutdown. Clean down any outstanding graphics resources.
+   */
+  void ContextDestroyed();
+
+  // The foltlowing methods should be called from UpdateManager message.
+
+  /**
+   * Add a Renderer to the render manager.
+   * @param[in] rendererKeyPointer The renderer to add.
+   * @post renderer is notionally owned by RenderManager
+   */
+  void AddRenderer(OwnerKeyType<Render::Renderer>& rendererKeyPointer);
+
+  /**
+   * Remove a Renderer from the render manager.
+   * @param[in] renderer The renderer to remove.
+   * @post renderer is destroyed.
+   */
+  void RemoveRenderer(const Render::RendererKey& renderer);
+
+  /**
+   * Add a sampler to the render manager.
+   * @param[in] sampler The sampler to add.
+   * @post sampler is owned by RenderManager
+   */
+  void AddSampler(OwnerPointer<Render::Sampler>& sampler);
+
+  /**
+   * Remove a sampler from the render manager.
+   * @param[in] sampler The sampler to remove.
+   * @post sampler is destroyed.
+   */
+  void RemoveSampler(Render::Sampler* sampler);
+
+  /**
+   * Add a property buffer to the render manager.
+   * @param[in] vertexBuffer The property buffer to add.
+   * @post propertBuffer is owned by RenderManager
+   */
+  void AddVertexBuffer(OwnerPointer<Render::VertexBuffer>& vertexBuffer);
+
+  /**
+   * Remove a property buffer from the render manager.
+   * @param[in] vertexBuffer The property buffer to remove.
+   * @post vertexBuffer is destroyed.
+   */
+  void RemoveVertexBuffer(Render::VertexBuffer* vertexBuffer);
+
+  /**
+   * Add a geometry to the render manager.
+   * @param[in] geometry The geometry to add.
+   * @post geometry is owned by RenderManager
+   */
+  void AddGeometry(OwnerPointer<Render::Geometry>& geometry);
+
+  /**
+   * Remove a geometry from the render manager.
+   * @param[in] geometry The geometry to remove.
+   * @post geometry is destroyed.
+   */
+  void RemoveGeometry(Render::Geometry* geometry);
+
+  /**
+   * Adds a texture to the render manager
+   * @param[in] textureKeyPointer The texture to add
+   */
+  void AddTexture(OwnerKeyType<Render::Texture>& textureKeyPointer);
+
+  /**
+   * Removes a texture from the render manager
+   * @param[in] texture The texture to remove
+   */
+  void RemoveTexture(const Render::TextureKey& texture);
+
+  /**
+   * Sets the updated flag of a texture
+   * @param[in] texture The updated texture
+   */
+  void SetTextureUpdated(const Render::TextureKey& textureKey);
+
+  /**
+   * Adds a framebuffer to the render manager
+   * @param[in] frameBuffer The framebuffer to add
+   */
+  void AddFrameBuffer(OwnerPointer<Render::FrameBuffer>& frameBuffer);
+
+  /**
+   * Removes a framebuffer from the render manager
+   * @param[in] frameBuffer The framebuffer to remove
+   */
+  void RemoveFrameBuffer(Render::FrameBuffer* frameBuffer);
+
+  /**
+   * Initializes a Scene to the render manager
+   * @param[in] scene The Scene to initialize
+   */
+  void InitializeScene(SceneGraph::Scene* scene);
+
+  /**
+   * Uninitializes a Scene to the render manager
+   * @param[in] scene The Scene to uninitialize
+   */
+  void UninitializeScene(SceneGraph::Scene* scene);
+
+  /**
+   * This is called when the surface of the scene has been replaced.
+   * @param[in] scene The scene.
+   */
+  void SurfaceReplaced(SceneGraph::Scene* scene);
+
+  /**
+   * Adds a render tracker to the RenderManager. RenderManager takes ownership of the
+   * tracker. The lifetime of the tracker is related to the lifetime of the tracked
+   * object, usually an offscreen render task.
+   * @param[in] renderTracker The render tracker
+   */
+  void AddRenderTracker(Render::RenderTracker* renderTracker);
+
+  /**
+   * Removes a render tracker from the RenderManager.
+   * @param[in] renderTracker The render tracker to remove.
+   */
+  void RemoveRenderTracker(Render::RenderTracker* renderTracker);
+
+  /**
+   * Clear all cached programs and shaders from the cache. This will be used
+   * when we need recreate the Graphics::Program forcibly.
+   */
+  void ClearProgramCache();
+
+  // This method should be called from Core::PreRender()
+
+  /**
+   * This is called before rendering any scene in the next frame. This method should be preceded
+   * by a call up Update.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The graphics implementation must be initialized
+   * @param[out] status showing whether update is required to run.
+   * @param[in] forceClear force the Clear on the framebuffer even if nothing is rendered.
+   */
+  void PreRender(Integration::RenderStatus& status, bool forceClear);
+
+  // This method should be called from Core::PreRender()
+
+  /**
+   * This is called before rendering any scene in the next frame. This method should be preceded
+   * by a call up Update.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The graphics implementation must be initialized
+   * @param[out] status The status of pre render operation.
+   * @param[in] scene The scene to be rendered.
+   * @param[out] damagedRects The list of damaged rects for the current render pass.
+   * @return True if this scene will present, false otherwise.
+   */
+  void PreRenderScene(Integration::Scene& scene, Integration::ScenePreRenderStatus& status, std::vector<BoundsInteger>& damagedRects);
+
+  // This method should be called from Core::RenderScene()
+
+  /**
+   * Render a scene in the next frame. This method should be preceded by a call up PreRender.
+   * This method should be called twice. The first pass to render off-screen frame buffers if any,
+   * and the second pass to render the surface.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The graphics implementation must be initialized
+   * @param[out] status contains the rendering flags.
+   * @param[in] scene The scene to be rendered.
+   * @param[in] renderToFbo True to render off-screen frame buffers only if any, and False to render the surface only.
+   */
+  void RenderScene(Integration::RenderStatus& status, Integration::Scene& scene, bool renderToFbo);
+
+  /**
+   * Render a scene in the next frame. This method should be preceded by a call to PreRender.
+   * This method should be called twice. The first pass to render off-screen frame buffers if any,
+   * and the second pass to render the surface.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The graphics implementation must be initialized
+   * @param[out] status contains the rendering flags.
+   * @param[in] scene The scene to be rendered.
+   * @param[in] renderToFbo True to render off-screen frame buffers only if any, and False to render the surface only.
+   * @param[in] clippingRect The clipping rect for the rendered scene.
+   */
+  void RenderScene(Integration::RenderStatus& status, Integration::Scene& scene, bool renderToFbo, BoundsInteger& clippingRect);
+
+  /**
+   * Clear the scene's surface.
+   *
+   * Note, this does not need to be called if there is something to render.
+   *
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @param[in] scene The scene to be rendered.
+   */
+  void ClearScene(Integration::Scene scene);
+
+  // This method should be called from Core::PostRender()
+
+  /**
+   * This is called after rendering all the scenes in the next frame. This method should be
+   * followed by a call up RenderScene.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The graphics implementation must be initialized
+   */
+  void PostRender();
+
+  /**
+   * @brief Returns GraphicsConfig
+   * @return A reference to the GraphicsConfig struct.
+   */
+  Integration::GraphicsConfig& GetGraphicsConfig() const;
+
+private:
+  /**
+   * Construct a new RenderManager.
+   */
+  RenderManager();
+
+  // Undefined
+  RenderManager(const RenderManager&);
+
+  // Undefined
+  RenderManager& operator=(const RenderManager& rhs);
+
+private:
+  struct Impl;
+  Impl* mImpl;
+};
+
+} // namespace SceneGraph
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_SCENE_GRAPH_RENDER_MANAGER_H

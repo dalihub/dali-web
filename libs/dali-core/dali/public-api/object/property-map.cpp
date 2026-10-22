@@ -1,0 +1,654 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/object/property-map.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <algorithm> // for std::find_if
+#include <limits>
+#include <unordered_map>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/common/vector-wrapper.h>
+#include <dali/integration-api/stream-operators.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/internal/common/hash-utils.h>
+
+using Dali::Integration::ToDaliString;
+using Dali::Integration::ToDaliStringView;
+using Dali::Integration::ToStdStringView;
+
+namespace DALI_NAMESPACE
+{
+namespace
+{
+
+typedef std::vector<StringValuePair> StringValueContainer;
+
+using IndexValuePair      = Pair<Property::Index, Property::Value>;
+using IndexValueContainer = std::vector<IndexValuePair>;
+
+constexpr std::size_t NOT_HASHED    = 0u;
+constexpr std::size_t ALWAYS_REHASH = std::numeric_limits<std::size_t>::max();
+
+}; // unnamed namespace
+
+struct Property::Map::Impl
+{
+public:
+  std::size_t GetHash() const
+  {
+    std::size_t hash = mHash;
+    if(hash == ALWAYS_REHASH || hash == NOT_HASHED)
+    {
+      hash = Dali::Internal::HashUtils::INITIAL_HASH_VALUE;
+
+      for(const auto& iter : mStringValueContainer)
+      {
+        // Use unordered hash operation.
+        auto valueHash = iter.second.GetHash();
+        valueHash *= valueHash;
+        hash += Dali::Internal::HashUtils::HashStringView(ToStdStringView(iter.first), valueHash);
+      }
+      for(const auto& iter : mIndexValueContainer)
+      {
+        // Use unordered hash operation.
+        auto valueHash = iter.second.GetHash();
+        valueHash *= valueHash;
+        hash += Dali::Internal::HashUtils::HashRawValue(iter.first, valueHash);
+      }
+
+      if(mHash != ALWAYS_REHASH)
+      {
+        mHash = hash;
+      }
+    }
+    return hash;
+  }
+
+public:
+  StringValueContainer mStringValueContainer;
+  IndexValueContainer  mIndexValueContainer;
+
+  mutable std::size_t mHash{NOT_HASHED};
+};
+
+Property::Map::Map()
+: mImpl(new Impl)
+{
+}
+
+Property::Map::Map(const Property::Map& other)
+: mImpl(new Impl)
+{
+  if(DALI_LIKELY(other.mImpl))
+  {
+    mImpl->mStringValueContainer = other.mImpl->mStringValueContainer;
+    mImpl->mIndexValueContainer  = other.mImpl->mIndexValueContainer;
+    // Keep mHash as NOT_HASHED.
+  }
+}
+
+Property::Map::Map(Property::Map&& other) noexcept
+: mImpl(other.mImpl)
+{
+  other.mImpl = nullptr;
+}
+
+Property::Map::~Map()
+{
+  delete mImpl;
+}
+
+Property::Map::SizeType Property::Map::Count() const
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    return static_cast<SizeType>(mImpl->mStringValueContainer.size() + mImpl->mIndexValueContainer.size());
+  }
+  return 0;
+}
+
+bool Property::Map::Empty() const
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    return mImpl->mStringValueContainer.empty() && mImpl->mIndexValueContainer.empty();
+  }
+  return true;
+}
+
+void Property::Map::Insert(Dali::String key, Value value)
+{
+  if(DALI_UNLIKELY(!mImpl))
+  {
+    mImpl = new Impl();
+  }
+
+  // Store Dali::String directly, convert to std::string_view only for hashing
+  if(mImpl->mHash != ALWAYS_REHASH && mImpl->mHash != NOT_HASHED)
+  {
+    // Use unordered hash operation - convert to std::string_view for hashing
+    auto valueHash = value.GetHash();
+    valueHash *= valueHash;
+    mImpl->mHash += Dali::Internal::HashUtils::HashStringView(ToStdStringView(key), valueHash);
+  }
+  mImpl->mStringValueContainer.push_back(MakePair(std::move(key), std::move(value)));
+}
+
+void Property::Map::Insert(Property::Index key, Value value)
+{
+  if(DALI_UNLIKELY(!mImpl))
+  {
+    mImpl = new Impl();
+  }
+
+  if(mImpl->mHash != ALWAYS_REHASH && mImpl->mHash != NOT_HASHED)
+  {
+    // Use unordered hash operation.
+    auto valueHash = value.GetHash();
+    valueHash *= valueHash;
+    mImpl->mHash += Dali::Internal::HashUtils::HashRawValue(key, valueHash);
+  }
+  mImpl->mIndexValueContainer.push_back(MakePair(key, std::move(value)));
+}
+
+Property::Value& Property::Map::GetValue(SizeType position) const
+{
+  DALI_ASSERT_ALWAYS(mImpl && "Cannot use an object previously used as an r-value");
+
+  SizeType numStringKeys = static_cast<SizeType>(mImpl->mStringValueContainer.size());
+  SizeType numIndexKeys  = static_cast<SizeType>(mImpl->mIndexValueContainer.size());
+  DALI_ASSERT_ALWAYS(position < (numStringKeys + numIndexKeys) && "position out-of-bounds");
+
+  if(position < numStringKeys)
+  {
+    return mImpl->mStringValueContainer[position].second;
+  }
+  else
+  {
+    return mImpl->mIndexValueContainer[position - numStringKeys].second;
+  }
+}
+
+Property::Key Property::Map::GetKeyAt(SizeType position) const
+{
+  DALI_ASSERT_ALWAYS(mImpl && "Cannot use an object previously used as an r-value");
+
+  SizeType numStringKeys = static_cast<SizeType>(mImpl->mStringValueContainer.size());
+  SizeType numIndexKeys  = static_cast<SizeType>(mImpl->mIndexValueContainer.size());
+  DALI_ASSERT_ALWAYS(position < (numStringKeys + numIndexKeys) && "position out-of-bounds");
+
+  if(position < numStringKeys)
+  {
+    Key key(mImpl->mStringValueContainer[position].first.CStr());
+    return key;
+  }
+  else
+  {
+    Key key(mImpl->mIndexValueContainer[position - numStringKeys].first);
+    return key;
+  }
+}
+
+KeyValuePair Property::Map::GetKeyValue(SizeType position) const
+{
+  DALI_ASSERT_ALWAYS(mImpl && "Cannot use an object previously used as an r-value");
+
+  SizeType numStringKeys = static_cast<SizeType>(mImpl->mStringValueContainer.size());
+  SizeType numIndexKeys  = static_cast<SizeType>(mImpl->mIndexValueContainer.size());
+  DALI_ASSERT_ALWAYS(position < (numStringKeys + numIndexKeys) && "position out-of-bounds");
+
+  if(position < numStringKeys)
+  {
+    Key          key(mImpl->mStringValueContainer[position].first.CStr());
+    KeyValuePair keyValue(key, mImpl->mStringValueContainer[position].second);
+    return keyValue;
+  }
+  else
+  {
+    return mImpl->mIndexValueContainer[position - numStringKeys];
+  }
+}
+
+Property::Value* Property::Map::Find(Dali::StringView key) const
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    for(auto&& iter : mImpl->mStringValueContainer)
+    {
+      if(key == iter.first)
+      {
+        if(mImpl->mHash != ALWAYS_REHASH)
+        {
+          // Mark as we cannot assume that hash is valid anymore.
+          // Recalculate hash always after now.
+          mImpl->mHash = ALWAYS_REHASH;
+        }
+        return &iter.second;
+      }
+    }
+  }
+  return nullptr; // Not found
+}
+
+Property::Value* Property::Map::Find(Property::Index key) const
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    for(auto&& iter : mImpl->mIndexValueContainer)
+    {
+      if(iter.first == key)
+      {
+        if(mImpl->mHash != ALWAYS_REHASH)
+        {
+          // Mark as we cannot assume that hash is valid anymore.
+          // Recalculate hash always after now.
+          mImpl->mHash = ALWAYS_REHASH;
+        }
+        return &iter.second;
+      }
+    }
+  }
+  return nullptr; // Not found
+}
+
+Property::Value* Property::Map::Find(Property::Index indexKey, Dali::StringView stringKey) const
+{
+  Property::Value* valuePtr = Find(indexKey);
+  if(!valuePtr)
+  {
+    valuePtr = Find(stringKey);
+  }
+  return valuePtr;
+}
+
+Property::Value* Property::Map::Find(Dali::StringView key, Property::Type type) const
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    for(auto&& iter : mImpl->mStringValueContainer)
+    {
+      if((iter.second.GetType() == type) && (key == iter.first))
+      {
+        if(mImpl->mHash != ALWAYS_REHASH)
+        {
+          // Mark as we cannot assume that hash is valid anymore.
+          // Recalculate hash always after now.
+          mImpl->mHash = ALWAYS_REHASH;
+        }
+        return &iter.second;
+      }
+    }
+  }
+  return nullptr; // Not found
+}
+
+Property::Value* Property::Map::Find(Property::Index key, Property::Type type) const
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    for(auto&& iter : mImpl->mIndexValueContainer)
+    {
+      if((iter.second.GetType() == type) && (iter.first == key))
+      {
+        if(mImpl->mHash != ALWAYS_REHASH)
+        {
+          // Mark as we cannot assume that hash is valid anymore.
+          // Recalculate hash always after now.
+          mImpl->mHash = ALWAYS_REHASH;
+        }
+        return &iter.second;
+      }
+    }
+  }
+  return nullptr; // Not found
+}
+
+void Property::Map::Clear()
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    mImpl->mStringValueContainer.clear();
+    mImpl->mIndexValueContainer.clear();
+    mImpl->mHash = NOT_HASHED;
+  }
+}
+
+bool Property::Map::Remove(Property::Index key)
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    auto iter = std::find_if(mImpl->mIndexValueContainer.begin(), mImpl->mIndexValueContainer.end(), [key](const IndexValuePair& element)
+    { return element.first == key; });
+    if(iter != mImpl->mIndexValueContainer.end())
+    {
+      if(mImpl->mHash != ALWAYS_REHASH && mImpl->mHash != NOT_HASHED)
+      {
+        // Use unordered hash operation.
+        auto valueHash = iter->second.GetHash();
+        valueHash *= valueHash;
+        mImpl->mHash -= Dali::Internal::HashUtils::HashRawValue(key, valueHash);
+      }
+      mImpl->mIndexValueContainer.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Property::Map::Remove(Dali::StringView key)
+{
+  if(DALI_LIKELY(mImpl))
+  {
+    auto iter = std::find_if(mImpl->mStringValueContainer.begin(), mImpl->mStringValueContainer.end(), [key](const StringValuePair& element)
+    { return element.first == key; });
+    if(iter != mImpl->mStringValueContainer.end())
+    {
+      if(mImpl->mHash != ALWAYS_REHASH && mImpl->mHash != NOT_HASHED)
+      {
+        // Use unordered hash operation - convert to std::string_view
+        auto valueHash = iter->second.GetHash();
+        valueHash *= valueHash;
+        mImpl->mHash -= Dali::Internal::HashUtils::HashStringView(ToStdStringView(key), valueHash);
+      }
+      mImpl->mStringValueContainer.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+
+void Property::Map::Merge(const Property::Map& from)
+{
+  if(DALI_UNLIKELY(!mImpl))
+  {
+    mImpl = new Impl();
+  }
+
+  // Ensure we're not attempting to merge with ourself
+  if(this != &from)
+  {
+    if(Count())
+    {
+      // Just reset hash as zero. (Since incremental merge is complex.)
+      if(mImpl->mHash != ALWAYS_REHASH)
+      {
+        mImpl->mHash = NOT_HASHED;
+      }
+
+      for(auto&& iter : from.mImpl->mStringValueContainer)
+      {
+        (*this)[iter.first] = iter.second;
+      }
+
+      for(auto&& iter : from.mImpl->mIndexValueContainer)
+      {
+        (*this)[iter.first] = iter.second;
+      }
+    }
+    else
+    {
+      // If we're empty, then just copy
+      *this = from;
+    }
+  }
+}
+
+const Property::Value& Property::Map::operator[](Dali::StringView key) const
+{
+  DALI_ASSERT_ALWAYS(mImpl && "Cannot use an object previously used as an r-value");
+
+  for(auto&& iter : mImpl->mStringValueContainer)
+  {
+    if(iter.first == key)
+    {
+      return iter.second;
+    }
+  }
+
+  DALI_ABORT("Invalid Key");
+}
+
+Property::Value& Property::Map::operator[](Dali::StringView key)
+{
+  if(DALI_UNLIKELY(!mImpl))
+  {
+    mImpl = new Impl();
+  }
+
+  if(mImpl->mHash != ALWAYS_REHASH)
+  {
+    // Mark as we cannot assume that hash is valid anymore.
+    // Recalculate hash always after now.
+    mImpl->mHash = ALWAYS_REHASH;
+  }
+
+  for(auto&& iter : mImpl->mStringValueContainer)
+  {
+    if(iter.first == key)
+    {
+      return iter.second;
+    }
+  }
+
+  // Create and return reference to new value
+  mImpl->mStringValueContainer.push_back(Dali::MakePair(Dali::String(key), Property::Value()));
+  return mImpl->mStringValueContainer.back().second;
+}
+
+const Property::Value& Property::Map::operator[](Property::Index key) const
+{
+  DALI_ASSERT_ALWAYS(mImpl && "Cannot use an object previously used as an r-value");
+
+  for(auto&& iter : mImpl->mIndexValueContainer)
+  {
+    if(iter.first == key)
+    {
+      return iter.second;
+    }
+  }
+
+  DALI_ABORT("Invalid Key");
+}
+
+Property::Value& Property::Map::operator[](Property::Index key)
+{
+  if(DALI_UNLIKELY(!mImpl))
+  {
+    mImpl = new Impl();
+  }
+
+  if(mImpl->mHash != ALWAYS_REHASH)
+  {
+    // Mark as we cannot assume that hash is valid anymore.
+    // Recalculate hash always after now.
+    mImpl->mHash = ALWAYS_REHASH;
+  }
+
+  for(auto&& iter : mImpl->mIndexValueContainer)
+  {
+    if(iter.first == key)
+    {
+      return iter.second;
+    }
+  }
+
+  // Create and return reference to new value
+  mImpl->mIndexValueContainer.push_back(Dali::MakePair(key, Property::Value()));
+  return mImpl->mIndexValueContainer.back().second;
+}
+
+Property::Map& Property::Map::operator=(const Property::Map& other)
+{
+  if(this != &other)
+  {
+    if(DALI_UNLIKELY(other.mImpl == nullptr))
+    {
+      Clear();
+    }
+    else
+    {
+      if(DALI_UNLIKELY(!mImpl))
+      {
+        mImpl = new Impl();
+      }
+      mImpl->mStringValueContainer = other.mImpl->mStringValueContainer;
+      mImpl->mIndexValueContainer  = other.mImpl->mIndexValueContainer;
+      mImpl->mHash                 = other.mImpl->mHash;
+    }
+  }
+  return *this;
+}
+
+Property::Map& Property::Map::operator=(Property::Map&& other) noexcept
+{
+  if(this != &other)
+  {
+    delete mImpl;
+    mImpl       = other.mImpl;
+    other.mImpl = nullptr;
+  }
+  return *this;
+}
+
+bool Property::Map::operator==(const Property::Map& rhs) const
+{
+  if(DALI_UNLIKELY(this == &rhs))
+  {
+    // Fast out for self comparision
+    return true;
+  }
+
+  if(Count() != rhs.Count())
+  {
+    return false;
+  }
+  if(DALI_UNLIKELY(mImpl == nullptr))
+  {
+    return rhs.Empty();
+  }
+  if(DALI_UNLIKELY(rhs.mImpl == nullptr))
+  {
+    return Empty();
+  }
+
+  // TODO : Should we support duplication key comparision?
+  {
+    std::unordered_map<Dali::StringView, const Property::Value*> stringValueMap;
+    for(auto&& iter : mImpl->mStringValueContainer)
+    {
+      stringValueMap[Dali::StringView(iter.first)] = &iter.second;
+    }
+    for(auto&& iter : rhs.mImpl->mStringValueContainer)
+    {
+      auto mapIter = stringValueMap.find(Dali::StringView(iter.first));
+      if(mapIter == stringValueMap.end())
+      {
+        return false;
+      }
+      if(*(mapIter->second) != iter.second)
+      {
+        return false;
+      }
+      stringValueMap.erase(mapIter);
+    }
+    if(!stringValueMap.empty())
+    {
+      return false;
+    }
+  }
+  {
+    std::unordered_map<Property::Index, const Property::Value*> indexValueMap;
+    for(auto&& iter : mImpl->mIndexValueContainer)
+    {
+      indexValueMap[iter.first] = &iter.second;
+    }
+    for(auto&& iter : rhs.mImpl->mIndexValueContainer)
+    {
+      auto mapIter = indexValueMap.find(iter.first);
+      if(mapIter == indexValueMap.end())
+      {
+        return false;
+      }
+      if(*(mapIter->second) != iter.second)
+      {
+        return false;
+      }
+      indexValueMap.erase(mapIter);
+    }
+    if(!indexValueMap.empty())
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::size_t Property::Map::GetHash() const
+{
+  return DALI_LIKELY(mImpl) ? mImpl->GetHash() : Dali::Internal::HashUtils::INITIAL_HASH_VALUE;
+}
+
+const Property::Map::Impl* Property::Map::Read() const
+{
+  return mImpl;
+}
+
+std::ostream& operator<<(std::ostream& stream, const Property::Map& map)
+{
+  stream << "Map(" << map.Count() << ") = {";
+
+  auto impl = map.Read();
+  if(impl != nullptr)
+  {
+    int32_t count = 0;
+
+    // Output the String-Value pairs
+    for(auto&& iter : impl->mStringValueContainer)
+    {
+      if(count++ > 0)
+      {
+        stream << ", ";
+      }
+      stream << iter.first << ":" << iter.second;
+    }
+
+    // Output the Index-Value pairs
+    for(auto&& iter : impl->mIndexValueContainer)
+    {
+      if(count++ > 0)
+      {
+        stream << ", ";
+      }
+      stream << iter.first << ":" << iter.second;
+    }
+
+    if(impl->mHash != NOT_HASHED)
+    {
+      stream << "(hash=" << impl->mHash << ")";
+    }
+  }
+  stream << "}";
+
+  return stream;
+}
+
+} //namespace DALI_NAMESPACE

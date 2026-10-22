@@ -1,0 +1,454 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/event/common/type-registry-impl.h>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/object/type-registry.h>
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/internal/event/actors/custom-actor-internal.h>
+#include <dali/internal/event/common/demangler.h>
+#include <dali/internal/event/common/thread-local-storage.h>
+#include <dali/public-api/object/base-handle.h>
+
+using Dali::Integration::ToDaliStringView;
+using Dali::Integration::ToStdString;
+using Dali::Integration::ToStdStringView;
+
+namespace
+{
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_TYPE_REGISTRY");
+#endif
+
+} // namespace
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+TypeRegistry* TypeRegistry::Get()
+{
+  static TypeRegistry* _reg(new TypeRegistry());
+  DALI_ASSERT_DEBUG(_reg);
+  return _reg;
+}
+
+TypeRegistry::TypeRegistry() = default;
+
+TypeRegistry::~TypeRegistry()
+{
+  for(const auto& pendingMethod : mPendingMethodRegistrations)
+  {
+    DALI_LOG_ERROR("Unresolved pending method registration for type '%s', method '%s'\n",
+                   pendingMethod.typeName.c_str(),
+                   pendingMethod.methodName.c_str());
+  }
+
+  mRegistryLut.clear();
+  mRegistryAlternativeObjectNameLut.clear();
+}
+
+TypeRegistry::TypeInfoPointer TypeRegistry::GetTypeInfo(const Dali::StringView& uniqueTypeName)
+{
+  ConstString typeName(uniqueTypeName);
+  auto        iter = mRegistryLut.Get(typeName);
+  if(iter != mRegistryLut.end())
+  {
+    return iter->second;
+  }
+
+  // Check if the type-info is registered with an alternative object name.
+  iter = mRegistryAlternativeObjectNameLut.Get(typeName);
+  if(iter != mRegistryAlternativeObjectNameLut.end())
+  {
+    return iter->second;
+  }
+
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Cannot find requested type '%s'\n", typeName.GetCString());
+
+  return TypeRegistry::TypeInfoPointer();
+}
+
+TypeRegistry::TypeInfoPointer TypeRegistry::GetTypeInfo(const std::type_info& registerType)
+{
+  std::string typeName = DemangleClassName(registerType.name());
+
+  return GetTypeInfo(ToDaliStringView(typeName));
+}
+
+uint32_t TypeRegistry::GetTypeNameCount() const
+{
+  return static_cast<uint32_t>(mRegistryLut.size());
+}
+
+const Dali::String& TypeRegistry::GetTypeName(uint32_t index) const
+{
+  static Dali::String EMPTY_STRING{};
+
+  if(index < mRegistryLut.size())
+  {
+    return mRegistryLut.GetElementByIndex(index)->GetName();
+  }
+
+  return EMPTY_STRING;
+}
+
+std::string TypeRegistry::Register(const std::type_info&          theTypeInfo,
+                                   const std::type_info&          baseTypeInfo,
+                                   Dali::TypeInfo::CreateFunction createInstance,
+                                   bool                           callCreateOnInit)
+{
+  std::string uniqueTypeName = DemangleClassName(theTypeInfo.name());
+
+  return Register(std::move(uniqueTypeName), baseTypeInfo, createInstance, callCreateOnInit);
+}
+
+std::string TypeRegistry::Register(const std::type_info&          theTypeInfo,
+                                   const std::type_info&          objectTypeInfo,
+                                   const std::type_info&          baseTypeInfo,
+                                   Dali::TypeInfo::CreateFunction createInstance,
+                                   bool                           callCreateOnInit)
+{
+  std::string uniqueTypeName       = DemangleClassName(theTypeInfo.name());
+  std::string uniqueObjectTypeName = DemangleClassName(objectTypeInfo.name());
+
+  return Register(std::move(uniqueTypeName), std::move(uniqueObjectTypeName), baseTypeInfo, createInstance, callCreateOnInit);
+}
+
+std::string TypeRegistry::Register(const std::type_info&          theTypeInfo,
+                                   const std::type_info&          baseTypeInfo,
+                                   Dali::TypeInfo::CreateFunction createInstance,
+                                   bool                           callCreateOnInit,
+                                   const Dali::PropertyDetails*   defaultProperties,
+                                   Property::Index                defaultPropertyCount)
+{
+  std::string uniqueTypeName = DemangleClassName(theTypeInfo.name());
+
+  return Register(std::move(uniqueTypeName), baseTypeInfo, createInstance, callCreateOnInit, defaultProperties, defaultPropertyCount);
+}
+
+std::string TypeRegistry::Register(const std::type_info&          theTypeInfo,
+                                   const std::type_info&          objectTypeInfo,
+                                   const std::type_info&          baseTypeInfo,
+                                   Dali::TypeInfo::CreateFunction createInstance,
+                                   bool                           callCreateOnInit,
+                                   const Dali::PropertyDetails*   defaultProperties,
+                                   Property::Index                defaultPropertyCount)
+{
+  std::string uniqueTypeName       = DemangleClassName(theTypeInfo.name());
+  std::string uniqueObjectTypeName = DemangleClassName(objectTypeInfo.name());
+
+  return Register(std::move(uniqueTypeName), std::move(uniqueObjectTypeName), baseTypeInfo, createInstance, callCreateOnInit, defaultProperties, defaultPropertyCount);
+}
+
+std::string TypeRegistry::Register(std::string                    uniqueTypeName,
+                                   const std::type_info&          baseTypeInfo,
+                                   Dali::TypeInfo::CreateFunction createInstance,
+                                   bool                           callCreateOnInit,
+                                   const Dali::PropertyDetails*   defaultProperties,
+                                   Property::Index                defaultPropertyCount)
+{
+  return Register(std::move(uniqueTypeName), {}, baseTypeInfo, createInstance, callCreateOnInit, defaultProperties, defaultPropertyCount);
+}
+
+std::string TypeRegistry::Register(std::string                    uniqueTypeName,
+                                   std::string                    uniqueObjectTypeName,
+                                   const std::type_info&          baseTypeInfo,
+                                   Dali::TypeInfo::CreateFunction createInstance,
+                                   bool                           callCreateOnInit,
+                                   const Dali::PropertyDetails*   defaultProperties,
+                                   Property::Index                defaultPropertyCount)
+{
+  std::string baseTypeName = DemangleClassName(baseTypeInfo.name());
+
+  Internal::TypeInfo* typeInfo(new Internal::TypeInfo(uniqueTypeName, baseTypeName, createInstance, defaultProperties, defaultPropertyCount));
+
+  if(!mRegistryLut.Register(ConstString(uniqueTypeName), TypeInfoPointer(typeInfo)))
+  {
+    DALI_LOG_ERROR("Duplicate name in TypeRegistry for '%s'\n", +uniqueTypeName.c_str());
+    DALI_ASSERT_ALWAYS(!"Duplicate type name in Type Registration");
+    return uniqueTypeName; // never actually happening due to the assert
+  }
+  DALI_LOG_INFO(gLogFilter, Debug::Concise, "Type Registration %s(%s)\n", uniqueTypeName.c_str(), baseTypeName.c_str());
+
+  if(!uniqueObjectTypeName.empty())
+  {
+    ConstString objectTypeName(uniqueObjectTypeName);
+    if(mRegistryLut.Get(objectTypeName) != mRegistryLut.end() ||
+       !mRegistryAlternativeObjectNameLut.Register(objectTypeName, TypeInfoPointer(typeInfo)))
+    {
+      DALI_LOG_ERROR("Duplicate object name in TypeRegistry for '%s'\n", uniqueObjectTypeName.c_str());
+      DALI_ASSERT_ALWAYS(!"Duplicate type name in Type Registration");
+      return uniqueTypeName; // never actually happening due to the assert
+    }
+  }
+
+  if(callCreateOnInit)
+  {
+    mInitFunctions.push_back(createInstance);
+  }
+
+  for(auto iter = mPendingMethodRegistrations.begin(); iter != mPendingMethodRegistrations.end();)
+  {
+    if(iter->typeName == uniqueTypeName || iter->typeName == uniqueObjectTypeName)
+    {
+      typeInfo->AddMethodFunction(std::move(iter->methodName), iter->function);
+      iter = mPendingMethodRegistrations.erase(iter);
+    }
+    else
+    {
+      ++iter;
+    }
+  }
+
+  return uniqueTypeName;
+}
+
+void TypeRegistry::Register(std::string uniqueTypeName, const std::type_info& baseTypeInfo, Dali::CSharpTypeInfo::CreateFunction createInstance)
+{
+  std::string baseTypeName = DemangleClassName(baseTypeInfo.name());
+
+  if(!mRegistryLut.Register(ConstString(uniqueTypeName), TypeRegistry::TypeInfoPointer(new Internal::TypeInfo(uniqueTypeName, baseTypeName, createInstance))))
+  {
+    DALI_LOG_ERROR("Duplicate name in TypeRegistry for '%s'\n", +uniqueTypeName.c_str());
+    DALI_ASSERT_ALWAYS(!"Duplicate type name in Type Registration");
+    return; // never actually happening due to the assert
+  }
+  DALI_LOG_INFO(gLogFilter, Debug::Concise, "Type Registration %s(%s)\n", uniqueTypeName.c_str(), baseTypeName.c_str());
+}
+
+void TypeRegistry::CallInitFunctions(void) const
+{
+  for(auto&& iter : mInitFunctions)
+  {
+    (*iter)();
+  }
+}
+
+std::string TypeRegistry::RegistrationName(const std::type_info& registerType)
+{
+  return DemangleClassName(registerType.name());
+}
+
+void TypeRegistry::RegisterSignal(TypeRegistration& typeRegistration, std::string name, Dali::TypeInfo::SignalConnectorFunction func)
+{
+  auto iter = mRegistryLut.Get(ConstString(ToStdStringView(typeRegistration.RegisteredName())));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddConnectorFunction(std::move(name), func);
+  }
+}
+
+bool TypeRegistry::RegisterAction(TypeRegistration& typeRegistration, std::string name, Dali::TypeInfo::ActionFunction f)
+{
+  auto iter = mRegistryLut.Get(ConstString(ToStdStringView(typeRegistration.RegisteredName())));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddActionFunction(std::move(name), f);
+    return true;
+  }
+  return false;
+}
+
+bool TypeRegistry::RegisterProperty(TypeRegistration& typeRegistration, std::string name, Property::Index index, Property::Type type, Dali::TypeInfo::SetPropertyFunction setFunc, Dali::TypeInfo::GetPropertyFunction getFunc)
+{
+  auto iter = mRegistryLut.Get(ConstString(ToStdStringView(typeRegistration.RegisteredName())));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddProperty(std::move(name), index, type, setFunc, getFunc);
+    return true;
+  }
+  return false;
+}
+
+bool TypeRegistry::RegisterProperty(const std::string& objectName, std::string name, Property::Index index, Property::Type type, Dali::CSharpTypeInfo::SetPropertyFunction setFunc, Dali::CSharpTypeInfo::GetPropertyFunction getFunc)
+{
+  auto iter = mRegistryLut.Get(ConstString(objectName));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddProperty(std::move(name), index, type, setFunc, getFunc);
+    return true;
+  }
+
+  return false;
+}
+
+bool TypeRegistry::RegisterMethod(TypeRegistration& typeRegistration, std::string name, Dali::TypeInfo::MethodFunction f)
+{
+  return RegisterMethod(ToStdString(typeRegistration.RegisteredName()), std::move(name), f);
+}
+
+bool TypeRegistry::RegisterMethod(const std::string& registeredTypeName, std::string name, Dali::TypeInfo::MethodFunction f)
+{
+  if(!f)
+  {
+    return false;
+  }
+
+  auto typeInfo = GetTypeInfo(ToDaliStringView(registeredTypeName));
+  if(typeInfo)
+  {
+    typeInfo->AddMethodFunction(std::move(name), f);
+    return true;
+  }
+
+  mPendingMethodRegistrations.push_back({registeredTypeName, std::move(name), f});
+  return true;
+}
+
+bool TypeRegistry::RegisterAnimatableProperty(TypeRegistration& typeRegistration, std::string name, Property::Index index, Property::Type type, Dali::TypeInfo::SetPropertyFunction setFunc, Dali::TypeInfo::GetPropertyFunction getFunc)
+{
+  auto iter = mRegistryLut.Get(ConstString(ToStdStringView(typeRegistration.RegisteredName())));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddAnimatableProperty(std::move(name), index, type, setFunc, getFunc);
+    return true;
+  }
+
+  return false;
+}
+
+bool TypeRegistry::RegisterAnimatableProperty(TypeRegistration& typeRegistration, std::string name, Property::Index index, Property::Value defaultValue, Dali::TypeInfo::SetPropertyFunction setFunc, Dali::TypeInfo::GetPropertyFunction getFunc)
+{
+  auto iter = mRegistryLut.Get(ConstString(ToStdStringView(typeRegistration.RegisteredName())));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddAnimatableProperty(std::move(name), index, std::move(defaultValue), setFunc, getFunc);
+    return true;
+  }
+
+  return false;
+}
+
+bool TypeRegistry::RegisterAnimatablePropertyComponent(TypeRegistration& typeRegistration, std::string name, Property::Index index, Property::Index baseIndex, unsigned int componentIndex)
+{
+  auto iter = mRegistryLut.Get(ConstString(ToStdStringView(typeRegistration.RegisteredName())));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddAnimatablePropertyComponent(std::move(name), index, baseIndex, componentIndex);
+    return true;
+  }
+
+  return false;
+}
+
+bool TypeRegistry::RegisterChildProperty(const std::string& registeredType, std::string name, Property::Index index, Property::Type type)
+{
+  auto iter = mRegistryLut.Get(ConstString(registeredType));
+  if(iter != mRegistryLut.end())
+  {
+    iter->second->AddChildProperty(std::move(name), index, type);
+    return true;
+  }
+
+  return false;
+}
+
+bool TypeRegistry::RegisterChildProperty(TypeRegistration& typeRegistration, std::string name, Property::Index index, Property::Type type)
+{
+  return RegisterChildProperty(ToStdString(typeRegistration.RegisteredName()), std::move(name), index, type);
+}
+
+bool TypeRegistry::DoActionTo(BaseObject* const object, const std::string& actionName, const Property::Map& properties)
+{
+  bool done = false;
+
+  auto&& type = GetTypeInfo(object);
+
+  // DoActionTo recurses through base classes
+  done = type->DoActionTo(object, actionName, properties);
+
+  if(!done)
+  {
+    DALI_LOG_ERROR("Type '%s' cannot do action '%s'\n", type->GetName().CStr(), actionName.c_str());
+  }
+
+  return done;
+}
+
+bool TypeRegistry::InvokeMethodTo(BaseObject* const object, const std::string& methodName, const InvokeArguments& arguments, InvokeResult& result)
+{
+  bool invoked = false;
+
+  auto&& type = GetTypeInfo(object);
+  if(!type)
+  {
+    DALI_LOG_ERROR("TypeRegistry cannot find type info for object while invoking method '%s'\n", methodName.c_str());
+    return false;
+  }
+
+  invoked = type->InvokeMethodTo(object, methodName, arguments, result);
+
+  if(!invoked)
+  {
+    DALI_LOG_ERROR("Type '%s' cannot invoke method '%s'\n", type->GetName().CStr(), methodName.c_str());
+  }
+
+  return invoked;
+}
+
+bool TypeRegistry::ConnectSignal(BaseObject* object, ConnectionTrackerInterface* connectionTracker, const std::string& signalName, FunctorDelegate* functor)
+{
+  bool connected(false);
+
+  auto&& type = GetTypeInfo(object);
+
+  // Connect iterates through base classes
+  connected = type->ConnectSignal(object, connectionTracker, signalName, functor);
+
+  if(!connected)
+  {
+    DALI_LOG_ERROR("Type '%s' signal '%s' connection failed \n", type->GetName().CStr(), signalName.c_str());
+    // Ownership of functor was not passed to Dali::CallbackBase, so clean-up now
+    delete functor;
+  }
+
+  return connected;
+}
+
+TypeRegistry::TypeInfoPointer TypeRegistry::GetTypeInfo(const Dali::BaseObject* const pBaseObject)
+{
+  TypeInfoPointer type;
+
+  // test for custom actor which has another indirection to get to the type hiearchy we're after
+  const Dali::Internal::CustomActor* const pCustom = dynamic_cast<const Dali::Internal::CustomActor*>(pBaseObject);
+
+  if(pCustom)
+  {
+    const Dali::CustomActorImpl& custom = pCustom->GetImplementation();
+    type                                = GetTypeInfo(typeid(custom));
+    if(!type)
+    {
+      // the most derived type is a descendant of custom actor but has not registered itself
+      // so we'll just treat it as a custom actor for now so it "inherits" all of actors properties, actions and signals
+      type = GetTypeInfo(typeid(Dali::Internal::CustomActor));
+    }
+  }
+  else
+  {
+    type = GetTypeInfo(typeid(*pBaseObject));
+  }
+
+  return type;
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

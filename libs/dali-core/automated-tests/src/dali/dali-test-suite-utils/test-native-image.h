@@ -1,0 +1,177 @@
+#ifndef TEST_NATIVE_IMAGE_H
+#define TEST_NATIVE_IMAGE_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/public-api/images/native-image-interface.h>
+
+#include <dali/integration-api/gl-defines.h>
+#include <dali/integration-api/string-utils.h>
+
+using Dali::Integration::ToDaliString;
+using Dali::Integration::ToStdString;
+
+namespace DALI_NAMESPACE
+{
+class TestNativeImage;
+typedef IntrusivePtr<TestNativeImage> TestNativeImagePointer;
+
+class TestNativeImage : public Dali::NativeImageInterface
+{
+public:
+  static TestNativeImagePointer New(uint32_t width, uint32_t height);
+
+  inline void SetGlExtensionCreateResult(bool result)
+  {
+    createResult = result;
+  }
+  inline virtual bool CreateResource() override
+  {
+    ++mExtensionCreateCalls;
+    mCallStack.PushCall("CreateResource", "");
+    return createResult;
+  };
+  inline virtual void DestroyResource() override
+  {
+    ++mExtensionDestroyCalls;
+    mCallStack.PushCall("DestroyResource", "");
+  };
+  inline virtual uint32_t TargetTexture() override
+  {
+    ++mTargetTextureCalls;
+    mCallStack.PushCall("TargetTexture", "");
+    return mTargetTextureError > 0u ? mTargetTextureError-- : 0u;
+  };
+  inline virtual Dali::NativeImageInterface::PrepareTextureResult PrepareTexture() override
+  {
+    mCallStack.PushCall("PrepareTexture", "");
+    return mPrepareTextureResult;
+  };
+  inline virtual uint32_t GetWidth() const override
+  {
+    mCallStack.PushCall("GetWidth", "");
+    return mWidth;
+  };
+  inline virtual uint32_t GetHeight() const override
+  {
+    mCallStack.PushCall("GetHeight", "");
+    return mHeight;
+  };
+  inline virtual bool RequiresBlending() const override
+  {
+    mCallStack.PushCall("RequiresBlending", "");
+    return true;
+  };
+  inline virtual int GetTextureTarget() const override
+  {
+    mCallStack.PushCall("GetTextureTarget", "");
+    return GL_TEXTURE_EXTERNAL_OES;
+  };
+  inline virtual bool ApplyNativeFragmentShader(Dali::String& shaderStr, int mask) override
+  {
+    mCallStack.PushCall("ApplyNativeFragmentShader", "");
+    std::string shader = ToStdString(shaderStr);
+
+    shader = "#extension GL_OES_EGL_image_external:require\n" + shader;
+
+    // Get custom sampler type name
+    const char* customSamplerTypename = GetCustomSamplerTypename();
+    if(customSamplerTypename)
+    {
+      size_t pos = 0;
+
+      while(mask && (pos = shader.find("sampler2D", pos)) != std::string::npos)
+      {
+        if(mask & 1)
+        {
+          shader.replace(pos, strlen("sampler2D"), customSamplerTypename);
+          pos += strlen(customSamplerTypename);
+        }
+        else
+        {
+          pos += strlen("sampler2D");
+        }
+        mask >>= 1;
+      }
+    }
+    shaderStr = ToDaliString(shader);
+    return true;
+  };
+  inline const char* GetCustomSamplerTypename() const override
+  {
+    mCallStack.PushCall("GetCustomSamplerTypename", "");
+    return mCustomSamplerTypename;
+  };
+
+  inline Any GetNativeImageHandle() const override
+  {
+    return nullptr;
+  };
+  inline bool SourceChanged() const override
+  {
+    return true;
+  };
+
+  inline Rect<uint32_t> GetUpdatedArea() override
+  {
+    return mUpdatedArea;
+  }
+
+  inline void PostRender() override
+  {
+    mCallStack.PushCall("PostRender", "");
+  }
+
+  inline virtual Dali::NativeImageInterface::Extension* GetExtension() override
+  {
+    return nullptr;
+  }
+
+  inline void SetUpdatedArea(const Rect<uint32_t>& updatedArea)
+  {
+    mUpdatedArea = updatedArea;
+  }
+
+private:
+  TestNativeImage(uint32_t width, uint32_t height);
+  virtual ~TestNativeImage();
+
+  uint32_t       mWidth;
+  uint32_t       mHeight;
+  Rect<uint32_t> mUpdatedArea{};
+
+public:
+  int32_t  mExtensionCreateCalls;
+  int32_t  mExtensionDestroyCalls;
+  int32_t  mTargetTextureCalls;
+  uint32_t mTargetTextureError{0u};
+  bool     createResult;
+
+  /// Set to nullptr for a native image that samples as a plain 2D texture, which not
+  /// every native image type needs a custom sampler to do.
+  const char* mCustomSamplerTypename{"samplerExternalOES"};
+
+  Dali::NativeImageInterface::PrepareTextureResult mPrepareTextureResult{Dali::NativeImageInterface::PrepareTextureResult::NO_ERROR};
+
+  mutable TraceCallStack mCallStack;
+};
+
+} //namespace DALI_NAMESPACE
+
+#endif // TEST_NATIVE_IMAGE_H

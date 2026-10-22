@@ -1,0 +1,399 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include "long-press-gesture-detector-impl.h"
+
+// EXTERNAL INCLUDES
+#include <algorithm>
+#include <cstring> // for strcmp
+#include <limits>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/object/type-registry.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/internal/event/common/scene-impl.h>
+#include <dali/internal/event/events/gesture-event-processor.h>
+#include <dali/internal/event/events/gesture-requests.h>
+#include <dali/internal/event/events/long-press-gesture/long-press-gesture-impl.h>
+#include <dali/internal/event/events/long-press-gesture/long-press-gesture-recognizer.h>
+
+using Dali::Integration::ToStdStringView;
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace
+{
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_LONG_PRESS_GESTURE_DETECTOR");
+#endif // defined(DEBUG_ENABLED)
+
+// Signals
+
+const char* const SIGNAL_LONG_PRESS_DETECTED = "longPressDetected";
+
+BaseHandle Create()
+{
+  return Dali::LongPressGestureDetector::New();
+}
+
+TypeRegistration mType(typeid(Dali::LongPressGestureDetector), typeid(Dali::GestureDetector), Create);
+
+SignalConnectorType signalConnector1(mType, Dali::String(SIGNAL_LONG_PRESS_DETECTED), &LongPressGestureDetector::DoConnectSignal);
+
+} // namespace
+
+namespace
+{
+const uint32_t DEFAULT_TOUCHES_REQUIRED = 1;
+} // unnamed namespace
+
+LongPressGestureDetectorPtr LongPressGestureDetector::New()
+{
+  return new LongPressGestureDetector;
+}
+
+LongPressGestureDetectorPtr LongPressGestureDetector::New(unsigned int touchesRequired)
+{
+  return new LongPressGestureDetector(touchesRequired, touchesRequired);
+}
+
+LongPressGestureDetectorPtr LongPressGestureDetector::New(unsigned int minTouches, unsigned int maxTouches)
+{
+  return new LongPressGestureDetector(minTouches, maxTouches);
+}
+
+LongPressGestureDetector::LongPressGestureDetector()
+: GestureDetector(GestureType::LONG_PRESS),
+  mDefaultProfile(),
+  mDeviceProfiles(),
+  mActiveProfile()
+{
+  mDefaultProfile.minimumTouches = DEFAULT_TOUCHES_REQUIRED;
+  mDefaultProfile.maximumTouches = DEFAULT_TOUCHES_REQUIRED;
+}
+
+LongPressGestureDetector::LongPressGestureDetector(unsigned int minTouches, unsigned int maxTouches)
+: GestureDetector(GestureType::LONG_PRESS),
+  mDefaultProfile(),
+  mDeviceProfiles(),
+  mActiveProfile()
+{
+  mDefaultProfile.minimumTouches = minTouches;
+  mDefaultProfile.maximumTouches = maxTouches;
+}
+
+LongPressGestureDetector::~LongPressGestureDetector() = default;
+
+void LongPressGestureDetector::SetTouchesRequired(unsigned int touches)
+{
+  DALI_ASSERT_ALWAYS(touches > 0 && "Can only set a positive number of required touches");
+
+  if(mDefaultProfile.minimumTouches != touches || mDefaultProfile.maximumTouches != touches)
+  {
+    mDefaultProfile.minimumTouches = touches;
+    mDefaultProfile.maximumTouches = touches;
+    NotifyProfilesChanged();
+  }
+}
+
+void LongPressGestureDetector::SetTouchesRequired(unsigned int minTouches, unsigned int maxTouches)
+{
+  DALI_ASSERT_ALWAYS(minTouches > 0 && "Can only set a positive number of minimum touches");
+  DALI_ASSERT_ALWAYS(maxTouches > 0 && "Can only set a positive number of minimum touches");
+  DALI_ASSERT_ALWAYS(minTouches <= maxTouches && "Number of minimum touches must be less than maximum");
+
+  if(mDefaultProfile.minimumTouches != minTouches || mDefaultProfile.maximumTouches != maxTouches)
+  {
+    mDefaultProfile.minimumTouches = minTouches;
+    mDefaultProfile.maximumTouches = maxTouches;
+    NotifyProfilesChanged();
+  }
+}
+
+unsigned int LongPressGestureDetector::GetMinimumTouchesRequired() const
+{
+  return mDefaultProfile.minimumTouches;
+}
+
+unsigned int LongPressGestureDetector::GetMaximumTouchesRequired() const
+{
+  return mDefaultProfile.maximumTouches;
+}
+
+const LongPressGestureProfile& LongPressGestureDetector::GetDefaultProfile() const
+{
+  return mDefaultProfile;
+}
+
+void LongPressGestureDetector::SetDeviceProfile(const GestureDeviceSelector& selector, const LongPressGestureProfile& profile)
+{
+  DALI_ASSERT_ALWAYS(profile.minimumTouches > 0u && profile.maximumTouches > 0u && "Long press options require positive touch counts");
+  DALI_ASSERT_ALWAYS(profile.minimumTouches <= profile.maximumTouches && "Long press options require minimum touches <= maximum touches");
+
+  mDeviceProfiles.Set(selector, profile);
+  NotifyProfilesChanged();
+}
+
+const LongPressGestureProfile* LongPressGestureDetector::GetDeviceProfile(const GestureDeviceSelector& selector) const
+{
+  return mDeviceProfiles.Find(selector);
+}
+
+void LongPressGestureDetector::ClearDeviceProfile(const GestureDeviceSelector& selector)
+{
+  if(mDeviceProfiles.Clear(selector))
+  {
+    NotifyProfilesChanged();
+  }
+}
+
+const LongPressGestureProfile& LongPressGestureDetector::GetActiveProfile() const
+{
+  return mActiveProfile;
+}
+
+void LongPressGestureDetector::WidenRecognitionEnvelope(uint32_t& minimumTouches, uint32_t& maximumTouches) const
+{
+  auto widen = [&](const LongPressGestureProfile& profile)
+  {
+    minimumTouches = std::min(minimumTouches, profile.minimumTouches);
+    maximumTouches = std::max(maximumTouches, profile.maximumTouches);
+  };
+
+  widen(mDefaultProfile);
+  mDeviceProfiles.ForEach(widen);
+}
+
+void LongPressGestureDetector::SelectActiveProfile(const GestureInputSource& source)
+{
+  const LongPressGestureProfile* profile = mDeviceProfiles.Resolve(source);
+  mActiveProfile                         = profile ? *profile : mDefaultProfile;
+}
+
+void LongPressGestureDetector::NotifyProfilesChanged()
+{
+  MarkRecognizerSettingsDirty();
+
+  if(!mAttachedActors.empty())
+  {
+    mGestureEventProcessor.GestureDetectorUpdated(this);
+  }
+}
+
+void LongPressGestureDetector::EmitLongPressGestureSignal(Dali::Actor pressedActor, const Dali::LongPressGesture& longPress)
+{
+  // Guard against destruction during signal emission
+  Dali::LongPressGestureDetector handle(this);
+  DALI_LOG_DEBUG_INFO("emitting longPress gesture actor id(%d)\n", pressedActor.GetProperty<int32_t>(Dali::Actor::Property::ID));
+  mDetectedSignal.Emit(pressedActor, longPress);
+}
+
+bool LongPressGestureDetector::DoConnectSignal(BaseObject* object, ConnectionTrackerInterface* tracker, const Dali::String& signalName, FunctorDelegate* functor)
+{
+  bool                      connected(true);
+  LongPressGestureDetector* gesture = static_cast<LongPressGestureDetector*>(object); // TypeRegistry guarantees that this is the correct type.
+
+  std::string_view name = ToStdStringView(signalName);
+  if(name == SIGNAL_LONG_PRESS_DETECTED)
+  {
+    gesture->DetectedSignal().Connect(tracker, functor);
+  }
+  else
+  {
+    // signalName does not match any signal
+    connected = false;
+  }
+
+  return connected;
+}
+
+void LongPressGestureDetector::OnActorAttach(Actor& actor)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "LongPressGestureDetector attach actor(%d)\n", actor.GetId());
+  if(actor.OnScene() && actor.GetScene().IsGeometryHittestEnabled())
+  {
+    actor.TouchEventSignal().Connect(this, &LongPressGestureDetector::OnTouchEvent);
+  }
+}
+
+void LongPressGestureDetector::OnActorDetach(Actor& actor)
+{
+  DALI_LOG_INFO(gLogFilter, Debug::General, "LongPressGestureDetector detach actor(%d)\n", actor.GetId());
+  if(actor.OnScene() && actor.GetScene().IsGeometryHittestEnabled())
+  {
+    actor.TouchEventSignal().Disconnect(this, &LongPressGestureDetector::OnTouchEvent);
+  }
+}
+
+void LongPressGestureDetector::OnActorDestroyed(Object& object)
+{
+  // Do nothing
+}
+
+bool LongPressGestureDetector::OnTouchEvent(Dali::Actor actor, Dali::TouchEvent touch)
+{
+  Dali::LongPressGestureDetector handle = Dali::LongPressGestureDetector(this); ///< Keep reference until HandleEvent finished.
+  return HandleEvent(actor, touch);
+}
+
+uint32_t LongPressGestureDetector::GetMinimumHoldingTime() const
+{
+  return mGestureEventProcessor.GetLongPressGestureMinimumHoldingTime();
+}
+
+bool LongPressGestureDetector::CheckGestureDetector(const GestureEvent* gestureEvent, Actor* actor, RenderTaskPtr renderTask)
+{
+  const LongPressGestureEvent* longPressEvent(static_cast<const LongPressGestureEvent*>(gestureEvent));
+
+  // A long press is checked here once, when it starts: pick the profile for the device that started it.
+  SelectActiveProfile(longPressEvent->source);
+
+  return (mActiveProfile.minimumTouches <= longPressEvent->numberOfTouches) &&
+         (mActiveProfile.maximumTouches >= longPressEvent->numberOfTouches);
+}
+
+void LongPressGestureDetector::CancelProcessing()
+{
+  if(mGestureRecognizer)
+  {
+    mGestureRecognizer->CancelEvent();
+  }
+}
+
+void LongPressGestureDetector::FillRequest(LongPressGestureRequest& request) const
+{
+  uint32_t minimumTouches = std::numeric_limits<uint32_t>::max();
+  uint32_t maximumTouches = 0u;
+  WidenRecognitionEnvelope(minimumTouches, maximumTouches);
+
+  request.minTouches         = minimumTouches;
+  request.maxTouches         = maximumTouches;
+  request.minimumHoldingTime = GetMinimumHoldingTime();
+  request.deviceThresholds   = mGestureEventProcessor.GetLongPressGestureProcessor().GetDeviceThresholds();
+}
+
+void LongPressGestureDetector::ProcessTouchEvent(Scene& scene, const Integration::TouchEvent& event)
+{
+  if(!mGestureRecognizer)
+  {
+    LongPressGestureRequest request;
+    FillRequest(request);
+
+    Size size          = scene.GetSize();
+    mGestureRecognizer = new LongPressGestureRecognizer(*this, Vector2(size.width, size.height), request);
+    ConsumeRecognizerUpdateRequired(); // The new recognizer already reflects the current settings.
+  }
+  else if(ConsumeRecognizerUpdateRequired())
+  {
+    LongPressGestureRequest request;
+    FillRequest(request);
+    mGestureRecognizer->Update(request);
+  }
+  mGestureRecognizer->SendEvent(scene, event);
+}
+
+void LongPressGestureDetector::Process(Scene& scene, const LongPressGestureEvent& longPressEvent)
+{
+  switch(longPressEvent.state)
+  {
+    case GestureState::POSSIBLE:
+    {
+      mCurrentLongPressActor.SetActor(GetCurrentGesturedActor());
+      break;
+    }
+
+    case GestureState::STARTED:
+    {
+      Actor* currentGesturedActor = mCurrentLongPressActor.GetActor();
+      if(currentGesturedActor && CheckGestureDetector(&longPressEvent, currentGesturedActor, mRenderTask))
+      {
+        Vector2 actorCoords;
+        currentGesturedActor->ScreenToLocal(*mRenderTask.Get(), actorCoords.x, actorCoords.y, longPressEvent.point.x, longPressEvent.point.y);
+        EmitLongPressSignal(currentGesturedActor, longPressEvent, actorCoords);
+      }
+      break;
+    }
+
+    case GestureState::FINISHED:
+    {
+      // The gesture should only be sent to the gesture detector which first received it so that it
+      // can be told when the gesture ends as well.
+
+      // Only send subsequent long press gesture signals if we processed the gesture when it started.
+      // Check if actor is still touchable.
+      // Only finish a long press this detector actually started: the recognizer may accept a wider
+      // touch range than the profile chosen for this gesture (see WidenRecognitionEnvelope()).
+      Actor* currentGesturedActor = mCurrentLongPressActor.GetActor();
+      if(currentGesturedActor && IsDetected())
+      {
+        if(currentGesturedActor->IsHittable() && mRenderTask)
+        {
+          Vector2     actorCoords;
+          RenderTask& renderTaskImpl = *mRenderTask.Get();
+          currentGesturedActor->ScreenToLocal(renderTaskImpl, actorCoords.x, actorCoords.y, longPressEvent.point.x, longPressEvent.point.y);
+
+          EmitLongPressSignal(currentGesturedActor, longPressEvent, actorCoords);
+        }
+      }
+      break;
+    }
+    case GestureState::CANCELLED:
+    {
+      mCurrentLongPressActor.SetActor(nullptr);
+      break;
+    }
+
+    case GestureState::CONTINUING:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CONTINUING\n");
+      break;
+    }
+
+    case GestureState::CLEAR:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CLEAR\n");
+      break;
+    }
+  }
+}
+
+void LongPressGestureDetector::EmitLongPressSignal(Actor* actor, const LongPressGestureEvent& longPressEvent, Vector2 localPoint)
+{
+  SetDetected(true);
+  Internal::LongPressGesturePtr longPress(new Internal::LongPressGesture(longPressEvent.state));
+  longPress->SetTime(longPressEvent.time);
+  longPress->SetNumberOfTouches(longPressEvent.numberOfTouches);
+  longPress->SetScreenPoint(longPressEvent.point);
+  longPress->SetLocalPoint(localPoint);
+  longPress->SetTriggerPoint(longPressEvent.triggerPoint);
+
+  Dali::Actor actorHandle(actor);
+  EmitLongPressGestureSignal(actorHandle, Dali::LongPressGesture(longPress.Get()));
+}
+
+Actor* LongPressGestureDetector::GetCurrentGesturedActor()
+{
+  // Return the current feeded actor
+  return GestureDetector::GetCurrentGesturedActor();
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

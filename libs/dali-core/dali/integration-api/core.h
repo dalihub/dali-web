@@ -1,0 +1,577 @@
+#ifndef DALI_INTEGRATION_CORE_H
+#define DALI_INTEGRATION_CORE_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <cstdint> // uint32_t
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/common/vector-wrapper.h>
+#include <dali/integration-api/core-enumerations.h>
+#include <dali/public-api/common/dali-common.h>
+#include <dali/public-api/math/rect.h>
+#include <dali/public-api/update/update-proxy.h>
+
+namespace DALI_NAMESPACE
+{
+class Layer;
+class ObjectRegistry;
+class RenderTaskList;
+class FrameCallbackInterface;
+class Actor;
+
+namespace Graphics
+{
+class Controller;
+}
+
+namespace Internal
+{
+class Core;
+}
+
+namespace Integration
+{
+class Core;
+class PlatformAbstraction;
+class Processor;
+class RenderController;
+class Scene;
+class ScenePreRenderStatus;
+struct Event;
+struct TouchEvent;
+
+/**
+ * The reasons why further updates are required.
+ */
+namespace KeepUpdating
+{
+enum Reasons
+{
+  NOT_REQUESTED          = 0,      ///< Zero means that no further updates are required
+  KEEP_RENDERING         = 1 << 1, ///< - Core::KeepRendering() is being used
+  ANIMATIONS_RUNNING     = 1 << 2, ///< - Animations are ongoing
+  MONITORING_PERFORMANCE = 1 << 3, ///< - The --enable-performance-monitor option is being used
+  RENDER_TASK_SYNC       = 1 << 4, ///< - A render task is waiting for render sync
+  FRAME_UPDATE_CALLBACK  = 1 << 5, ///< - Some FrameUpdateCallback return true
+  RENDERER_CONTINUOUSLY  = 1 << 6, ///< - Some Renderer rendering behaviour is continuously
+  OBJECT_DISCARDED       = 1 << 7  ///< - Some SceneGraph object be discarded so need to be deleted next frame.
+};
+}
+
+/**
+ * The status of the Core::Update operation.
+ */
+class UpdateStatus
+{
+public:
+  /**
+   * Constructor
+   */
+  UpdateStatus()
+  : keepUpdating(false),
+    needsNotification(false),
+    rendererAdded(false),
+    needsForceRendering(false),
+    secondsFromLastFrame(0.0f)
+  {
+  }
+
+public:
+  /**
+   * Query whether the Core has further frames to update & render e.g. when animations are ongoing.
+   * @return A bitmask of KeepUpdating values
+   */
+  uint32_t KeepUpdating()
+  {
+    return keepUpdating;
+  }
+
+  /**
+   * Query whether the Core requires an Notification event.
+   * This should be sent through the same mechanism (e.g. event loop) as input events.
+   * @return True if an Notification event should be sent.
+   */
+  bool NeedsNotification()
+  {
+    return needsNotification;
+  }
+
+  /**
+   * Query whether the Core had added any renderer, or had never added renderer.
+   * @return True if an Core had added any renderer.
+   */
+  bool RendererAdded()
+  {
+    return rendererAdded;
+  }
+
+  /**
+   * Query whether the Core requires render phase forcibly.
+   * @return True if we need to run render phase forcibly.
+   */
+  bool NeedsForceRendering()
+  {
+    return needsForceRendering;
+  }
+
+  /**
+   * This method is provided so that FPS can be easily calculated with a release version
+   * of Core.
+   * @return the seconds from last frame as float
+   */
+  float SecondsFromLastFrame()
+  {
+    return secondsFromLastFrame;
+  }
+
+public:
+  uint32_t keepUpdating; ///< A bitmask of KeepUpdating values
+  bool     needsNotification;
+  bool     rendererAdded;
+  bool     needsForceRendering;
+  float    secondsFromLastFrame;
+};
+
+/**
+ * The status of the Core::Render operation.
+ */
+class RenderStatus
+{
+public:
+  /**
+   * Constructor
+   */
+  RenderStatus()
+  : needsUpdate(false),
+    needsPostRender(false)
+  {
+  }
+
+  /**
+   * Set whether update needs to run following a render.
+   * @param[in] updateRequired Set to true if an update is required to be run
+   */
+  void SetNeedsUpdate(bool updateRequired)
+  {
+    needsUpdate = updateRequired;
+  }
+
+  /**
+   * Query the update status following rendering of a frame.
+   * @return True if update is required to be run
+   */
+  bool NeedsUpdate() const
+  {
+    return needsUpdate;
+  }
+
+  /**
+   * Sets if a post-render should be run.
+   * If nothing is rendered this frame, we can skip post-render.
+   * @param[in] postRenderRequired Set to True if post-render is required to be run
+   */
+  void SetNeedsPostRender(bool postRenderRequired)
+  {
+    needsPostRender = postRenderRequired;
+  }
+
+  /**
+   * Queries if a post-render should be run.
+   * @return True if post-render is required to be run
+   */
+  bool NeedsPostRender() const
+  {
+    return needsPostRender;
+  }
+
+private:
+  bool needsUpdate : 1;     ///< True if update is required to be run
+  bool needsPostRender : 1; ///< True if post-render is required to be run.
+};
+
+/**
+ * Integration::Core is used for integration with the native windowing system.
+ * The following integration tasks must be completed:
+ *
+ * 1) Handle Graphics context creation, and notify the Core when this occurs.
+ *
+ * 2) Provide suspend/resume behaviour (see below for more details).
+ *
+ * 3) Run an event loop, for passing events to the Core e.g. multi-touch input events.
+ * Notification events should be sent after a frame is updated (see UpdateStatus).
+ *
+ * 4) Run a rendering loop, instructing the Core to render each frame.
+ * A separate rendering thread is recommended; see multi-threading options below.
+ *
+ * 5) Provide an implementation of the PlatformAbstraction interface, used to access platform specific services.
+ *
+ *
+ * Multi-threading notes:
+ *
+ * The Dali API methods are not reentrant.  If you access the API from multiple threads simultaneously, then the results
+ * are undefined. This means that your application might segfault, or behave unpredictably.
+ *
+ * Rendering strategies:
+ *
+ * 1) Single-threaded. Call every Core method from the same thread. Event handling and rendering will occur in the same thread.
+ * This is not recommended, since processing input (slowly) can affect the smooth flow of animations.
+ *
+ * 2) Multi-threaded. The Core update & render operations can be processed in separate threads.
+ * See the method descriptions in Core to see which thread they should be called from.
+ * This is the recommended option, so that input processing will not affect the smoothness of animations.
+ * Note that the rendering thread must be halted, before destroying the GL context.
+ */
+
+class DALI_CORE_API Core
+{
+public:
+  /**
+   * Create a new Core.
+   * This object is used for integration with the native windowing system.
+   * @param[in] renderController The interface to an object which controls rendering.
+   * @param[in] platformAbstraction The interface providing platform specific services.
+   * @param[in] graphicsController The interface providing graphics services
+   * @param[in] corePolicy Flag list of update / rendering policies.
+   * @return A newly allocated Core.
+   */
+  static Core* New(RenderController&     renderController,
+                   PlatformAbstraction&  platformAbstraction,
+                   Graphics::Controller& graphicsController,
+                   CorePolicyFlags       corePolicy);
+
+  /**
+   * Non-virtual destructor. Core is not intended as a base class.
+   */
+  ~Core();
+
+  /**
+   * Initialize the core
+   */
+  void Initialize();
+
+  // Graphics Context Lifecycle
+
+  /**
+   * Notify the Core that the GL context has been created.
+   * The context must be created before the Core can render.
+   * Multi-threading note: this method should be called from the rendering thread only
+   * @post The Core is aware of the GL context.
+   */
+  void ContextCreated();
+
+  /**
+   * Notify the Core that that GL context is about to be destroyed.
+   * The Core will free any previously allocated GL resources.
+   * Multi-threading note: this method should be called from the rendering thread only
+   * @post The Core is unaware of any GL context.
+   */
+  void ContextDestroyed();
+
+  // Core Lifecycle
+
+  /**
+   * Notify Core that the scene has been created.
+   */
+  void SceneCreated();
+
+  /**
+   * Notify Core that the scene will be destroyed.
+   */
+  void SceneDestroyed();
+
+  /**
+   * Queue an event with Core.
+   * Pre-processing of events may be beneficial e.g. a series of motion events could be throttled, so that only the last event is queued.
+   * Multi-threading note: this method should be called from the main thread.
+   * @param[in] event The new event.
+   */
+  void QueueEvent(const Event& event);
+
+  /**
+   * Relayout and flush the messages forcibly.
+   * Multi-threading note: this method should be called from the main thread.
+   * @pre ForceRelayout should not be called during ProcessEvents or ForceRelayout.
+   */
+  void ForceRelayout();
+
+  /**
+   * Process the events queued with QueueEvent().
+   * Multi-threading note: this method should be called from the main thread.
+   * @pre ProcessEvents should not be called during ProcessEvents.
+   */
+  void ProcessEvents();
+
+  /**
+   * The Core::Update() method prepares a frame for rendering. This method determines how many frames
+   * may be prepared, ahead of the rendering.
+   * For example if the maximum update count is 2, then Core::Update() for frame N+1 may be processed
+   * whilst frame N is being rendered. However the Core::Update() for frame N+2 may not be called, until
+   * the Core::Render() method for frame N has returned.
+   * @return The maximum update count (>= 1).
+   */
+  uint32_t GetMaximumUpdateCount() const;
+
+  /**
+   * Update the scene for the next frame. This method must be called before each frame is rendered.
+   * Multi-threading notes: this method should be called from a dedicated update-thread.
+   * The update for frame N+1 may be processed whilst frame N is being rendered.
+   * However the update-thread must wait until frame N has been rendered, before processing frame N+2.
+   * After this method returns, messages may be queued internally for the main thread.
+   * In order to process these messages, a notification is sent via the main thread's event loop.
+   * @param[in] elapsedSeconds Number of seconds since the last call
+   * @param[in] lastVSyncTimeMilliseconds The last vsync time in milliseconds
+   * @param[in] nextVSyncTimeMilliseconds The time of the next predicted VSync in milliseconds
+   * @param[out] status showing whether further updates are required. This also shows
+   * whether a Notification event should be sent, regardless of whether the multi-threading is used.
+   * @param[in] renderToFboEnabled Whether rendering into the Frame Buffer Object is enabled.
+   * @param[in] isRenderingToFbo Whether this frame is being rendered into the Frame Buffer Object.
+   * @param[in] uploadOnly uploadOnly Upload the resource only without rendering.
+   */
+  void Update(float         elapsedSeconds,
+              uint32_t      lastVSyncTimeMilliseconds,
+              uint32_t      nextVSyncTimeMilliseconds,
+              UpdateStatus& status,
+              bool          renderToFboEnabled,
+              bool          isRenderingToFbo,
+              bool          uploadOnly);
+
+  /**
+   * This is called before rendering any scene in the next frame. This method should be preceded
+   * by a call up Update.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The GL context must have been created, and made current.
+   * @param[out] status showing whether update is required to run.
+   * @param[in] forceClear force the Clear on the framebuffer even if nothing is rendered.
+   */
+  void PreRender(RenderStatus& status, bool forceClear);
+
+  /**
+   * This is called before rendering any scene in the next frame. This method should be preceded
+   * by a call up Update.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The GL context must have been created, and made current.
+   * @param[in] scene The scene to be rendered.
+   * @param[out] status The status of pre render operation.
+   * @param[out] damagedRects containing damaged render items rects for this pass.
+   * @return true if the scene has something to render, false if there is nothing to render
+   */
+  void PreRenderScene(Integration::Scene& scene, Integration::ScenePreRenderStatus& status, std::vector<BoundsInteger>& damagedRects);
+
+  /**
+   * Render a scene in the next frame. This method should be preceded by a call up PreRender.
+   * This method should be called twice. The first pass to render off-screen frame buffers if any,
+   * and the second pass to render the surface.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The GL context must have been created, and made current.
+   * @param[out] status Contains the rendering flags.
+   * @param[in] scene The scene to be rendered.
+   * @param[in] renderToFbo True to render off-screen frame buffers only if any, and False to render the surface only.
+   */
+  void RenderScene(RenderStatus& status, Integration::Scene& scene, bool renderToFbo);
+
+  /**
+   * Render a scene in the next frame. This method should be preceded by a call to PreRender.
+   * This method should be called twice. The first pass to render off-screen frame buffers if any,
+   * and the second pass to render the surface.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The GL context must have been created, and made current.
+   * @param[out] status Contains the rendering flags.
+   * @param[in] scene The scene to be rendered.
+   * @param[in] renderToFbo True to render off-screen frame buffers only if any, and False to render the surface only.
+   * @param[in] clippingRect The rect to clip rendered scene.
+   */
+  void RenderScene(RenderStatus& status, Integration::Scene& scene, bool renderToFbo, BoundsInteger& clippingRect);
+
+  /**
+   * Clear the scene's surface if there is nothing else to draw.
+   *
+   * Don't need to call this if there is something to draw;
+   * @param[in] scene The scene to be cleared.
+   */
+  void ClearScene(Integration::Scene scene);
+
+  /**
+   * This is called after rendering all the scenes in the next frame. This method should be
+   * followed by a call to RenderScene.
+   * Multi-threading note: this method should be called from a dedicated rendering thread.
+   * @pre The GL context must have been created, and made current.
+   */
+  void PostRender();
+
+  // API for pre-initialized core.
+
+  /**
+   * @brief Change the core policy.
+   * @note We must not call this method after ContextCreated() has been called.
+   * @param[in] corePolicy Changed policy of core.
+   */
+  void ChangeCorePolicy(CorePolicyFlags corePolicy);
+
+  /**
+   * @brief Change the graphics controller.
+   * @note We must not call this method after ContextCreated() has been called.
+   * @param[in] graphicsController The interface providing graphics services
+   */
+  void ChangeGraphicsController(Graphics::Controller& graphicsController);
+
+  /**
+   * @brief Notify that pre-initialized core ready to used.
+   */
+  void PreInitializeCompleted();
+
+  // Processor
+
+  /**
+   * @brief Register a processor
+   *
+   * Note, Core does not take ownership of this processor.
+   * @param[in] processor The process to register
+   * @param[in] postProcessor set this processor required to be called after size negotiation. Default is false.
+   */
+  void RegisterProcessor(Processor& processor, bool postProcessor = false);
+
+  /**
+   * @brief Unregister a processor
+   * @param[in] processor The process to unregister
+   * @param[in] postProcessor True if the processor to be unregister is for post processor.
+   */
+  void UnregisterProcessor(Processor& processor, bool postProcessor = false);
+
+  /**
+   * @brief Register a processor for once execute
+   *
+   * Note, Core does not take ownership of this processor.
+   * @param[in] processor The process to register
+   * @param[in] postProcessor set this processor required to be called after size negotiation. Default is false.
+   */
+  void RegisterProcessorOnce(Processor& processor, bool postProcessor = false);
+
+  /**
+   * @brief Unregister a processor for once execute
+   * @param[in] processor The process to unregister
+   * @param[in] postProcessor True if the processor to be unregister is for post processor.
+   */
+  void UnregisterProcessorOnce(Processor& processor, bool postProcessor = false);
+
+  // FrameCallbackInterface
+
+  /**
+   * @brief The FrameCallbackInterface implementation added gets called on every frame from the update-thread.
+   *
+   * @param[in] frameCallback An implementation of the FrameCallbackInterface
+   * @param[in] rootActor The root-actor in the scene that the callback applies to. Or empty handle if we don't care whether the node is scene on or not.
+   *
+   * @note The frameCallback cannot be added more than once. This will assert if that is attempted.
+   * @note Only the rootActor and it's children will be parsed by the UpdateProxy.
+   * @note If the rootActor is destroyed, then the callback is automatically removed.
+   * @note If the rootActor is empty handle, given frameCallback will not be removed automatically.
+   * @see FrameCallbackInterface
+   */
+  void AddFrameCallback(FrameCallbackInterface& frameCallback, Actor rootActor);
+
+  /**
+   * @brief Removes the specified FrameCallbackInterface implementation from being called on every frame.
+   *
+   * @param[in] frameCallback The FrameCallbackInterface implementation to remove
+   *
+   * @note This function will block if the FrameCallbackInterface::Update method is being processed in the update-thread.
+   * @note If the callback implementation has already been removed, then this is a no-op.
+   */
+  void RemoveFrameCallback(FrameCallbackInterface& frameCallback);
+
+  /**
+   * @brief Notify the frame callback that there is a new sync point.
+   *
+   * The sync point can be matched during a subsequent frameCallback::Update().
+   *
+   * @param[in] frameCallback The FrameCallbackInterface implementation to notify
+   *
+   * @return NotifySyncPoint - a unique sync value that will also be sent to the
+   * UpdateProxy prior to FrameCallback::Update() being called from the update thread.
+   */
+  UpdateProxy::NotifySyncPoint NotifyFrameCallback(FrameCallbackInterface& frameCallback);
+
+  // Rendering Behavior
+
+  /**
+   * @brief Request that Core keeps rendering for the given number of seconds.
+   *
+   * This is useful for making sure that e.g. loading animations play correctly.
+   * @param[in] durationSeconds Time to keep rendering, 0 means render at least one more frame
+   */
+  void KeepRendering(float durationSeconds);
+
+  /**
+   * @brief Sets the rendering behavior.
+   *
+   * @param[in] renderingBehavior The rendering behavior required
+   * @note By default, Core uses RenderingBehavior::IF_REQUIRED.
+   */
+  void SetRenderingBehavior(Integration::RenderingBehavior renderingBehavior);
+
+  /**
+   * @brief Retrieves the rendering behavior.
+   *
+   * @return The current rendering behavior
+   */
+  Integration::RenderingBehavior GetRenderingBehavior() const;
+
+  // ETC
+
+  /**
+   * @brief Gets the Object registry.
+   * @return The object registry
+   */
+  ObjectRegistry GetObjectRegistry() const;
+
+  /**
+   * Log core's memory pool's capacities
+   */
+  void LogMemoryPools() const;
+
+private:
+  /**
+   * Private constructor; see also Core::New()
+   */
+  Core();
+
+  /**
+   * Undefined copy-constructor.
+   * This avoids accidental calls to a default copy-constructor.
+   * @param[in] core A reference to the object to copy.
+   */
+  Core(const Core& core);
+
+  /**
+   * Undefined assignment operator.
+   * This avoids accidental calls to a default assignment operator.
+   * @param[in] rhs A reference to the object to copy.
+   */
+  Core& operator=(const Core& rhs);
+
+private:
+  Internal::Core* mImpl;
+};
+
+} // namespace Integration
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTEGRATION_CORE_H

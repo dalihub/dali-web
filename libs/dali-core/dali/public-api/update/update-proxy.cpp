@@ -1,0 +1,179 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/update/update-proxy.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/common/const-string.h>
+#include <dali/internal/update/manager/update-proxy-impl.h>
+
+namespace DALI_NAMESPACE
+{
+bool UpdateProxy::GetPosition(uint32_t id, Vector3& position) const
+{
+  return mImpl.GetPosition(id, position);
+}
+
+bool UpdateProxy::SetPosition(uint32_t id, const Vector3& position)
+{
+  return mImpl.SetPosition(id, position);
+}
+
+bool UpdateProxy::BakePosition(uint32_t id, const Vector3& position)
+{
+  return mImpl.BakePosition(id, position);
+}
+
+bool UpdateProxy::GetOrientation(uint32_t id, Quaternion& orientation) const
+{
+  return mImpl.GetOrientation(id, orientation);
+}
+
+bool UpdateProxy::SetOrientation(uint32_t id, const Quaternion& orientation)
+{
+  return mImpl.SetOrientation(id, orientation);
+}
+
+bool UpdateProxy::BakeOrientation(uint32_t id, const Quaternion& orientation)
+{
+  return mImpl.BakeOrientation(id, orientation);
+}
+
+bool UpdateProxy::GetSize(uint32_t id, Vector3& size) const
+{
+  return mImpl.GetSize(id, size);
+}
+
+bool UpdateProxy::SetSize(uint32_t id, const Vector3& size)
+{
+  return mImpl.SetSize(id, size);
+}
+
+bool UpdateProxy::BakeSize(uint32_t id, const Vector3& size)
+{
+  return mImpl.BakeSize(id, size);
+}
+
+bool UpdateProxy::GetPositionAndSize(uint32_t id, Vector3& position, Vector3& size) const
+{
+  return mImpl.GetPositionAndSize(id, position, size);
+}
+
+bool UpdateProxy::GetWorldPositionScaleAndSize(uint32_t id, Vector3& position, Vector3& scale, Vector3& size) const
+{
+  return mImpl.GetWorldPositionScaleAndSize(id, position, scale, size);
+}
+
+bool UpdateProxy::GetWorldTransformAndSize(uint32_t id, Vector3& position, Vector3& scale, Quaternion& orientation, Vector3& size) const
+{
+  return mImpl.GetWorldTransformAndSize(id, position, scale, orientation, size);
+}
+
+bool UpdateProxy::GetScale(uint32_t id, Vector3& scale) const
+{
+  return mImpl.GetScale(id, scale);
+}
+
+bool UpdateProxy::SetScale(uint32_t id, const Vector3& scale)
+{
+  return mImpl.SetScale(id, scale);
+}
+
+bool UpdateProxy::BakeScale(uint32_t id, const Vector3& scale)
+{
+  return mImpl.BakeScale(id, scale);
+}
+
+bool UpdateProxy::GetPivot(uint32_t id, Vector3& pivot) const
+{
+  return mImpl.GetPivot(id, pivot);
+}
+
+bool UpdateProxy::GetColorMultiplier(uint32_t id, Vector4& multiplier) const
+{
+  return mImpl.GetColorMultiplier(id, multiplier);
+}
+
+bool UpdateProxy::GetColor(uint32_t id, Vector4& color) const
+{
+  return GetColorMultiplier(id, color);
+}
+
+bool UpdateProxy::SetColorMultiplier(uint32_t id, const Vector4& multiplier)
+{
+  return mImpl.SetColorMultiplier(id, multiplier);
+}
+
+bool UpdateProxy::SetColor(uint32_t id, const Vector4& color)
+{
+  return SetColorMultiplier(id, color);
+}
+
+bool UpdateProxy::BakeColorMultiplier(uint32_t id, const Vector4& multiplier)
+{
+  return mImpl.BakeColorMultiplier(id, multiplier);
+}
+
+bool UpdateProxy::BakeColor(uint32_t id, const Vector4& color)
+{
+  return BakeColorMultiplier(id, color);
+}
+
+UpdateProxy::NotifySyncPoint UpdateProxy::PopSyncPoint()
+{
+  return mImpl.PopSyncPoint();
+}
+
+bool UpdateProxy::GetUpdateArea(uint32_t id, Vector4& updateArea) const
+{
+  return mImpl.GetUpdateArea(id, updateArea);
+}
+
+bool UpdateProxy::SetUpdateArea(uint32_t id, const Vector4& updateArea)
+{
+  return mImpl.SetUpdateArea(id, updateArea);
+}
+
+bool UpdateProxy::SetIgnored(uint32_t id, bool ignored)
+{
+  return mImpl.SetIgnored(id, ignored);
+}
+
+bool UpdateProxy::GetIgnored(uint32_t id, bool& ignored) const
+{
+  return mImpl.GetIgnored(id, ignored);
+}
+
+bool UpdateProxy::GetCustomProperty(uint32_t id, const String& propertyName, Property::Value& value) const
+{
+  return mImpl.GetCustomProperty(id, Dali::Internal::ConstString(propertyName), value);
+}
+
+bool UpdateProxy::BakeCustomProperty(uint32_t id, const String& propertyName, const Property::Value& value)
+{
+  return mImpl.BakeCustomProperty(id, Dali::Internal::ConstString(propertyName), value);
+}
+
+UpdateProxy::UpdateProxy(Internal::UpdateProxy& impl)
+: mImpl(impl)
+{
+}
+
+UpdateProxy::~UpdateProxy() = default;
+
+} //namespace DALI_NAMESPACE

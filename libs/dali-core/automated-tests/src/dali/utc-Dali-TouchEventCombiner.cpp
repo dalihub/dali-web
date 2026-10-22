@@ -1,0 +1,1256 @@
+/*
+ * Copyright (c) 2014 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-test-suite-utils.h>
+#include <dali/integration-api/events/hover-event-integ.h>
+#include <dali/integration-api/events/touch-event-combiner.h>
+#include <dali/integration-api/events/touch-event-integ.h>
+#include <dali/public-api/dali-core.h>
+#include <stdlib.h>
+
+#include <iostream>
+
+using namespace Dali;
+using namespace Dali::Integration;
+
+namespace
+{
+Point GeneratePoint(int deviceId, PointState::Type state, float x, float y)
+{
+  Point point;
+  point.SetDeviceId(deviceId);
+  point.SetState(state);
+  point.SetScreenPosition(Vector2(x, y));
+  return point;
+}
+} // namespace
+
+void utc_dali_touch_event_combiner_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_touch_event_combiner_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+int UtcDaliTouchEventCombinerConstructors(void)
+{
+  TouchEventCombiner combiner1;
+  DALI_TEST_EQUALS(combiner1.GetMinimumMotionTimeThreshold(), static_cast<long unsigned>(1), TEST_LOCATION);
+  DALI_TEST_EQUALS(combiner1.GetMinimumMotionDistanceThreshold(), Vector2(1.0f, 1.0f), TEST_LOCATION);
+
+  TouchEventCombiner combiner2(10, 20.0f, 31.0f);
+  DALI_TEST_EQUALS(combiner2.GetMinimumMotionTimeThreshold(), static_cast<long unsigned>(10), TEST_LOCATION);
+  DALI_TEST_EQUALS(combiner2.GetMinimumMotionDistanceThreshold(), Vector2(20.0f, 31.0f), TEST_LOCATION);
+
+  TouchEventCombiner combiner3(10, Vector2(20.0f, 31.0f));
+  DALI_TEST_EQUALS(combiner3.GetMinimumMotionTimeThreshold(), static_cast<long unsigned>(10), TEST_LOCATION);
+  DALI_TEST_EQUALS(combiner3.GetMinimumMotionDistanceThreshold(), Vector2(20.0f, 31.0f), TEST_LOCATION);
+
+  // Boundary Checks
+
+  TouchEventCombiner combiner4(10, 0.0f, 0.0f);
+  DALI_TEST_EQUALS(combiner4.GetMinimumMotionDistanceThreshold(), Vector2(0.0f, 0.0f), TEST_LOCATION);
+
+  TouchEventCombiner combiner5(10, Vector2(0.0f, 0.0f));
+  DALI_TEST_EQUALS(combiner5.GetMinimumMotionDistanceThreshold(), Vector2(0.0f, 0.0f), TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerConstructorsNegative(void)
+{
+  try
+  {
+    TouchEventCombiner combiner(10, -20.0f, 31.0f);
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    TouchEventCombiner combiner(10, 20.0f, -31.0f);
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    TouchEventCombiner combiner(10, Vector2(-20.0f, 31.0f));
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    TouchEventCombiner combiner(10, Vector2(20.0f, -31.0f));
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSettersAndGetters(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(10u);
+  Vector2            distance(40.0f, 30.0f);
+
+  DALI_TEST_CHECK(combiner.GetMinimumMotionTimeThreshold() != time);
+  DALI_TEST_CHECK(combiner.GetMinimumMotionDistanceThreshold() != distance);
+
+  combiner.SetMinimumMotionTimeThreshold(time);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionTimeThreshold(), time, TEST_LOCATION);
+
+  combiner.SetMinimumMotionDistanceThreshold(distance.x);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionDistanceThreshold(), Vector2(distance.x, distance.x), TEST_LOCATION);
+
+  distance.x = 20.0f;
+  distance.y = 50.0f;
+  combiner.SetMinimumMotionDistanceThreshold(distance.x, distance.y);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionDistanceThreshold(), distance, TEST_LOCATION);
+
+  distance.x = 100.0f;
+  distance.y = 20.0f;
+  combiner.SetMinimumMotionDistanceThreshold(distance);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionDistanceThreshold(), distance, TEST_LOCATION);
+
+  // Boundary Checks
+
+  combiner.SetMinimumMotionDistanceThreshold(0.0f);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionDistanceThreshold(), Vector2::ZERO, TEST_LOCATION);
+
+  combiner.SetMinimumMotionDistanceThreshold(0.0f, 0.0f);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionDistanceThreshold(), Vector2::ZERO, TEST_LOCATION);
+
+  combiner.SetMinimumMotionDistanceThreshold(Vector2::ZERO);
+  DALI_TEST_EQUALS(combiner.GetMinimumMotionDistanceThreshold(), Vector2::ZERO, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSettersNegative(void)
+{
+  TouchEventCombiner combiner;
+
+  try
+  {
+    combiner.SetMinimumMotionDistanceThreshold(-100.0f);
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    combiner.SetMinimumMotionDistanceThreshold(-100.0f, 20.0f);
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    combiner.SetMinimumMotionDistanceThreshold(100.0f, -20.0f);
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    combiner.SetMinimumMotionDistanceThreshold(Vector2(-100.0f, 20.0f));
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+
+  try
+  {
+    combiner.SetMinimumMotionDistanceThreshold(Vector2(100.0f, -20.0f));
+    tet_printf("%s: Should have asserted\n", TEST_LOCATION);
+    tet_result(TET_FAIL);
+  }
+  catch(Dali::DaliException& e)
+  {
+    (void)e;
+    tet_result(TET_PASS);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchNormal(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion in X direction
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 101.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion in Y direction
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 101.0f, 101.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  // Motion event, but same time
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event, both X and Y movement
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event, no movement
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  // Up event, no time diff, no movement
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchMotionWithoutDown(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchMotionFollowedByDown(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 103.0f, 103.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 103.0f, 103.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_BOTH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::FINISHED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchTwoDowns(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Another down with the same ID
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchUpWithoutDown(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchTwoUps(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Another up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchUpWithDifferentId(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Up event with different ID
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchMotionWithDifferentId(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event with different ID
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::MOTION, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 102.0f, 102.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerMultiTouchNormal(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // 1st point down
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // 2nd point down
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::DOWN, 200.0f, 200.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), PointState::STATIONARY, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // 1st point motion
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 101.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetState(), PointState::STATIONARY, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  // 2nd point motion, no time diff
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::MOTION, 200.0f, 200.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  time++;
+
+  // 2nd point motion
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::MOTION, 201.0f, 201.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), PointState::STATIONARY, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // 1st point up
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 101.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[1].GetState(), PointState::STATIONARY, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // 2nd point motion
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::MOTION, 202.0f, 202.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // 2nd point up
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(2, PointState::UP, 202.0f, 202.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSeveralPoints(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+  unsigned int const maximum(200u);
+
+  // Several downs
+  for(unsigned int pointCount = 1u; pointCount < maximum; ++pointCount)
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(pointCount, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), pointCount, TEST_LOCATION);
+  }
+
+  // Several Ups
+  for(unsigned int pointCount = maximum - 1; pointCount > 0; --pointCount)
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(pointCount, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), pointCount, TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerReset(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Reset combiner, no more events should be sent to core.
+  combiner.Reset();
+
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerSingleTouchInterrupted(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Interrupted event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::INTERRUPTED, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+  }
+
+  // Send up, should not be able to send as combiner has been reset.
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  // motion event for hover
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // Interrupted event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::INTERRUPTED, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+  }
+
+  // Send up, should not be able to send as combiner has been reset.
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerMultiTouchInterrupted(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+  unsigned int const maximum(200u);
+
+  // Several downs
+  for(unsigned int pointCount = 1u; pointCount < maximum; ++pointCount)
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(pointCount, PointState::DOWN, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), pointCount, TEST_LOCATION);
+  }
+
+  // Interrupted event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::INTERRUPTED, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+  }
+
+  // Send up, should not be able to send as combiner has been reset.
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+
+  // Several motion for hover
+  for(unsigned int pointCount = 1u; pointCount < maximum; ++pointCount)
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(pointCount, PointState::MOTION, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), pointCount, TEST_LOCATION);
+  }
+
+  // Interrupted event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::INTERRUPTED, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), point.GetState(), TEST_LOCATION);
+  }
+
+  // Send up, should not be able to send as combiner has been reset.
+  // Up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerInvalidState(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Stationary event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::STATIONARY, 100.0f, 100.0f);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_NONE, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+  }
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerHoverDownAfterTouchUp(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Motion event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // down event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_BOTH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::FINISHED, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  time++;
+
+  // up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 103.0f, 103.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_BOTH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetDeviceId(), point.GetDeviceId(), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::DOWN, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), point.GetScreenPosition(), TEST_LOCATION);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerMultipleMouseButton(void)
+{
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Primary down
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+    point.SetMouseButton(MouseButton::PRIMARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1, TEST_LOCATION);
+  }
+
+  // secondary down
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+    point.SetMouseButton(MouseButton::SECONDARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, ++time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2, TEST_LOCATION);
+  }
+
+  // move
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 150.0f, 150.0f);
+    point.SetMouseButton(MouseButton::PRIMARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, ++time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2, TEST_LOCATION);
+  }
+
+  // up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 150.0f, 150.0f);
+    point.SetMouseButton(MouseButton::PRIMARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, ++time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 2, TEST_LOCATION);
+  }
+
+  // up event
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 150.0f, 150.0f);
+    point.SetMouseButton(MouseButton::SECONDARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_TOUCH, combiner.GetNextTouchEvent(point, ++time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(touchEvent.GetPointCount(), 1, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 0u, TEST_LOCATION);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerHoverInterruptedByPrimaryButton(void)
+{
+  // Regression anchor: the primary (left) mouse button must keep interrupting an in-progress
+  // hover with FINISHED, and restart it with STARTED on release, exactly as before this change.
+  TouchEventCombiner combiner;
+  unsigned long      time(0u);
+
+  // Start hovering.
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::MOTION, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_HOVER, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+  }
+
+  time++;
+
+  // Primary button down should close the hover with FINISHED.
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::DOWN, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+    point.SetMouseButton(MouseButton::PRIMARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_BOTH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::FINISHED, TEST_LOCATION);
+  }
+
+  time++;
+
+  // Primary button up should restart the hover with STARTED.
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::HoverEvent hoverEvent;
+    Dali::Integration::Point      point = GeneratePoint(1, PointState::UP, 100.0f, 100.0f);
+    point.SetDeviceClass(Device::Class::Type::MOUSE);
+    point.SetMouseButton(MouseButton::PRIMARY);
+
+    DALI_TEST_EQUALS(Dali::Integration::TouchEventCombiner::DISPATCH_BOTH, combiner.GetNextTouchEvent(point, time, touchEvent, hoverEvent), TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+    DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliTouchEventCombinerAuxiliaryButtonReleaseByDeviceClass(void)
+{
+  // Both device classes preserve hover during an auxiliary press. MOUSE
+  // re-evaluates on release; Ubuntu X11's NONE waits for the next motion.
+  for(auto deviceClass : {Device::Class::MOUSE, Device::Class::NONE})
+  {
+    for(auto button : {MouseButton::SECONDARY, MouseButton::TERTIARY})
+    {
+      TouchEventCombiner combiner;
+      uint32_t           time = 1u;
+
+      auto makePoint = [deviceClass](PointState::Type state, const Vector2& position, MouseButton::Type mouseButton)
+      {
+        Point point = GeneratePoint(1, state, position.x, position.y);
+        point.SetDeviceClass(deviceClass);
+        point.SetMouseButton(mouseButton);
+        return point;
+      };
+
+      {
+        Dali::Integration::TouchEvent touchEvent;
+        Dali::Integration::HoverEvent hoverEvent;
+        Point point = makePoint(PointState::MOTION, Vector2(10.0f, 10.0f), MouseButton::INVALID);
+        DALI_TEST_EQUALS(combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TouchEventCombiner::DISPATCH_HOVER, TEST_LOCATION);
+        DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::STARTED, TEST_LOCATION);
+      }
+      {
+        Dali::Integration::TouchEvent touchEvent;
+        Dali::Integration::HoverEvent hoverEvent;
+        Point point = makePoint(PointState::DOWN, Vector2(10.0f, 10.0f), button);
+        DALI_TEST_EQUALS(combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TouchEventCombiner::DISPATCH_TOUCH, TEST_LOCATION);
+        DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 0u, TEST_LOCATION);
+      }
+      {
+        Dali::Integration::TouchEvent touchEvent;
+        Dali::Integration::HoverEvent hoverEvent;
+        Point point = makePoint(PointState::MOTION, Vector2(300.0f, 300.0f), MouseButton::INVALID);
+        DALI_TEST_EQUALS(combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TouchEventCombiner::DISPATCH_TOUCH, TEST_LOCATION);
+      }
+      {
+        Dali::Integration::TouchEvent touchEvent;
+        Dali::Integration::HoverEvent hoverEvent;
+        Point point = makePoint(PointState::UP, Vector2(300.0f, 300.0f), button);
+        if(deviceClass == Device::Class::MOUSE)
+        {
+          DALI_TEST_EQUALS(combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TouchEventCombiner::DISPATCH_BOTH, TEST_LOCATION);
+          DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+          DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::MOTION, TEST_LOCATION);
+          DALI_TEST_EQUALS(hoverEvent.points[0].GetScreenPosition(), Vector2(300.0f, 300.0f), TEST_LOCATION);
+        }
+        else
+        {
+          DALI_TEST_EQUALS(combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TouchEventCombiner::DISPATCH_TOUCH, TEST_LOCATION);
+          DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 0u, TEST_LOCATION);
+        }
+      }
+      if(deviceClass == Device::Class::NONE)
+      {
+        Dali::Integration::TouchEvent touchEvent;
+        Dali::Integration::HoverEvent hoverEvent;
+        Point point = makePoint(PointState::MOTION, Vector2(301.0f, 301.0f), MouseButton::INVALID);
+        DALI_TEST_EQUALS(combiner.GetNextTouchEvent(point, time++, touchEvent, hoverEvent), TouchEventCombiner::DISPATCH_HOVER, TEST_LOCATION);
+        DALI_TEST_EQUALS(hoverEvent.GetPointCount(), 1u, TEST_LOCATION);
+        DALI_TEST_EQUALS(hoverEvent.points[0].GetState(), PointState::MOTION, TEST_LOCATION);
+      }
+    }
+  }
+
+  // The changed pointer must be first: geometry hover selects its target from point 0.
+  TouchEventCombiner multipleDevices;
+  for(int deviceId : {1, 2})
+  {
+    Point hoverPoint = GeneratePoint(deviceId, PointState::MOTION, 10.0f, 10.0f);
+    hoverPoint.SetDeviceClass(Device::Class::MOUSE);
+    Dali::Integration::TouchEvent nextTouch;
+    Dali::Integration::HoverEvent nextHover;
+    DALI_TEST_EQUALS(multipleDevices.GetNextTouchEvent(hoverPoint, deviceId, nextTouch, nextHover), TouchEventCombiner::DISPATCH_HOVER, TEST_LOCATION);
+  }
+  Point secondDevice = GeneratePoint(2, PointState::DOWN, 10.0f, 10.0f);
+  secondDevice.SetDeviceClass(Device::Class::MOUSE);
+  secondDevice.SetMouseButton(MouseButton::SECONDARY);
+  Dali::Integration::TouchEvent secondDownTouch;
+  Dali::Integration::HoverEvent secondDownHover;
+  DALI_TEST_EQUALS(multipleDevices.GetNextTouchEvent(secondDevice, 3u, secondDownTouch, secondDownHover), TouchEventCombiner::DISPATCH_TOUCH, TEST_LOCATION);
+  secondDevice.SetState(PointState::UP);
+  secondDevice.SetScreenPosition(Vector2(300.0f, 300.0f));
+  Dali::Integration::TouchEvent secondUpTouch;
+  Dali::Integration::HoverEvent secondUpHover;
+  DALI_TEST_EQUALS(multipleDevices.GetNextTouchEvent(secondDevice, 4u, secondUpTouch, secondUpHover), TouchEventCombiner::DISPATCH_BOTH, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondUpHover.GetPointCount(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondUpHover.points[0].GetDeviceId(), 2, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondUpHover.points[0].GetState(), PointState::MOTION, TEST_LOCATION);
+  DALI_TEST_EQUALS(secondUpHover.points[1].GetState(), PointState::STATIONARY, TEST_LOCATION);
+
+  END_TEST;
+}

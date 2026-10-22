@@ -1,0 +1,424 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/event/events/pan-gesture/pan-gesture-recognizer.h>
+
+// EXTERNAL INCLUDES
+#include <chrono>
+#include <cmath>
+
+#include <dali/devel-api/events/touch-point.h>
+
+#include <dali/integration-api/events/touch-event-integ.h>
+#include <dali/integration-api/input-options.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/common/scene-impl.h>
+#include <dali/internal/event/events/gesture-requests.h>
+#include <dali/internal/event/events/pan-gesture/pan-gesture-event.h>
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace
+{
+constexpr float         MINIMUM_MOTION_DISTANCE_BEFORE_PAN(static_cast<float>(Integration::DEFAULT_PAN_GESTURE_MINIMUM_DISTANCE));
+constexpr float         MINIMUM_MOTION_DISTANCE_BEFORE_PAN_SQUARED(MINIMUM_MOTION_DISTANCE_BEFORE_PAN* MINIMUM_MOTION_DISTANCE_BEFORE_PAN);
+constexpr float         MINIMUM_MOTION_DISTANCE_TO_THRESHOLD_ADJUSTMENTS_RATIO(2.0f / 3.0f);
+constexpr unsigned long MINIMUM_TIME_BEFORE_THRESHOLD_ADJUSTMENTS(100);
+constexpr unsigned int  MINIMUM_MOTION_EVENTS_BEFORE_PAN(static_cast<unsigned int>(Integration::DEFAULT_PAN_GESTURE_MINIMUM_PAN_EVENTS - 1));
+
+uint32_t GetMilliSeconds()
+{
+  // Get the time of a monotonic clock since its epoch.
+  auto epoch = std::chrono::steady_clock::now().time_since_epoch();
+
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(epoch);
+
+  return static_cast<uint32_t>(duration.count());
+}
+} // unnamed namespace
+
+PanGestureRecognizer::PanGestureRecognizer(Observer& observer, Vector2 screenSize, const PanGestureRequest& request)
+: GestureRecognizer(screenSize, GestureType::PAN),
+  mObserver(observer),
+  mState(CLEAR),
+  mThresholdAdjustmentsRemaining(0),
+  mThresholdTotalAdjustments(static_cast<unsigned int>(MINIMUM_MOTION_DISTANCE_BEFORE_PAN * MINIMUM_MOTION_DISTANCE_TO_THRESHOLD_ADJUSTMENTS_RATIO)),
+  mPrimaryTouchDownTime(0),
+  mMinimumTouchesRequired(request.minTouches),
+  mMaximumTouchesRequired(request.maxTouches),
+  mMinimumDistanceSquared(static_cast<unsigned int>(MINIMUM_MOTION_DISTANCE_BEFORE_PAN_SQUARED)),
+  mMinimumMotionEvents(MINIMUM_MOTION_EVENTS_BEFORE_PAN),
+  mMotionEvents(0),
+  mMaximumMotionEventAge(request.maxMotionEventAge),
+  mCurrentMotionEventAge(0u),
+  mPrimaryDeviceId(-1),
+  mBaseThresholds(),
+  mDeviceThresholds()
+{
+  ApplyRequest(request);
+}
+
+PanGestureRecognizer::~PanGestureRecognizer() = default;
+
+void PanGestureRecognizer::SendEvent(const Integration::TouchEvent& event)
+{
+  PointState::Type     primaryPointState(event.points[0].GetState());
+  GestureRecognizerPtr ptr(this); // To keep us from being destroyed during the life-time of this method
+
+  if(primaryPointState == PointState::INTERRUPTED)
+  {
+    if((mState == STARTED) || (mState == POSSIBLE))
+    {
+      // If our pan had started and we are interrupted, then tell Core that pan is cancelled.
+      mTouchEvents.push_back(event);
+      SendPan(GestureState::CANCELLED, event);
+    }
+    mState = CLEAR; // We should change our state to CLEAR.
+    mTouchEvents.clear();
+    mPrimaryDeviceId = -1;
+  }
+  else
+  {
+    switch(mState)
+    {
+      case CLEAR:
+      {
+        if((primaryPointState == PointState::DOWN) || (primaryPointState == PointState::STATIONARY) || (primaryPointState == PointState::MOTION))
+        {
+          mPrimaryTouchDownLocation = mPreviousPosition = event.points[0].GetScreenPosition();
+          mPrimaryTouchDownTime                         = event.time;
+          mMotionEvents                                 = 0;
+
+          uint32_t pointCount(event.GetPointCount());
+          if(pointCount == mMinimumTouchesRequired)
+          {
+            // We have satisfied the minimum touches required for a pan, tell core that a gesture may be possible and change our state accordingly.
+            if(SendPan(GestureState::POSSIBLE, event))
+            {
+              mState = POSSIBLE;
+            }
+          }
+
+          mTouchEvents.push_back(event);
+        }
+        break;
+      }
+
+      case POSSIBLE:
+      {
+        uint32_t pointCount(event.GetPointCount());
+        if((pointCount >= mMinimumTouchesRequired) && (pointCount <= mMaximumTouchesRequired))
+        {
+          if(primaryPointState == PointState::MOTION)
+          {
+            mTouchEvents.push_back(event);
+            mMotionEvents++;
+
+            Vector2 delta(event.points[0].GetScreenPosition() - mPrimaryTouchDownLocation);
+
+            if((mMotionEvents >= mMinimumMotionEvents) &&
+               (delta.LengthSquared() >= static_cast<float>(mMinimumDistanceSquared)))
+            {
+              // If the touch point(s) have moved enough distance to be considered a pan, then tell Core that the pan gesture has started and change our state accordingly.
+              if(SendPan(GestureState::STARTED, event))
+              {
+                mState = STARTED;
+              }
+            }
+          }
+          else if(primaryPointState == PointState::UP)
+          {
+            Vector2 delta(event.points[0].GetScreenPosition() - mPrimaryTouchDownLocation);
+            if(delta.LengthSquared() >= static_cast<float>(mMinimumDistanceSquared))
+            {
+              SendPan(GestureState::STARTED, event);
+              mTouchEvents.push_back(event);
+              SendPan(GestureState::FINISHED, event);
+            }
+            else
+            {
+              // If we have lifted the primary touch point then tell core the pan is cancelled and change our state to CLEAR.
+              SendPan(GestureState::CANCELLED, event);
+            }
+            mState = CLEAR;
+            mTouchEvents.clear();
+          }
+        }
+        else
+        {
+          // We do not satisfy pan conditions, tell Core our Gesture has been cancelled.
+          SendPan(GestureState::CANCELLED, event);
+
+          if(pointCount == 1 && primaryPointState == PointState::UP)
+          {
+            // If we have lifted the primary touch point, then change our state to CLEAR...
+            mState = CLEAR;
+            mTouchEvents.clear();
+          }
+          else
+          {
+            // ...otherwise change it to FAILED.
+            mState = FAILED;
+          }
+        }
+        break;
+      }
+
+      case STARTED:
+      {
+        mTouchEvents.push_back(event);
+
+        unsigned int pointCount(event.GetPointCount());
+        if((pointCount >= mMinimumTouchesRequired) && (pointCount <= mMaximumTouchesRequired))
+        {
+          switch(primaryPointState)
+          {
+            case PointState::MOTION:
+            {
+              // Check whether this motion event is acceptable or not.
+              // mMaximumMotionEventAge is the widest age any detector accepts; each detector applies
+              // its own limit to the age carried by the event.
+              const uint32_t motionEventAge = GetMilliSeconds() - event.time;
+              if(motionEventAge > mMaximumMotionEventAge)
+              {
+                // Too old event. Skip it.
+                mTouchEvents.pop_back();
+              }
+              else
+              {
+                // Pan is continuing, tell Core.
+                mCurrentMotionEventAge = motionEventAge;
+                SendPan(GestureState::CONTINUING, event);
+                mCurrentMotionEventAge = 0u;
+              }
+              break;
+            }
+
+            case PointState::UP:
+              // Pan is finally finished when our primary point is lifted, tell Core and change our state to CLEAR.
+              if(SendPan(GestureState::FINISHED, event))
+              {
+                mState = CLEAR;
+                mTouchEvents.clear();
+              }
+              break;
+
+            case PointState::STATIONARY:
+              if(pointCount == mMinimumTouchesRequired)
+              {
+                Integration::PointContainerConstIterator iter = event.points.begin() + 1; // We already know the state of the first point
+                for(; iter != event.points.end(); ++iter)
+                {
+                  if(iter->GetState() == PointState::UP)
+                  {
+                    // The number of touch points will be less than the minimum required.  Inform core and change our state to FINISHED.
+                    if(SendPan(GestureState::FINISHED, event))
+                    {
+                      mState = FINISHED;
+                    }
+                    break;
+                  }
+                }
+              }
+              break;
+
+            default:
+              break;
+          }
+        }
+        else
+        {
+          // We have gone outside of the pan requirements, inform Core that the gesture is finished.
+          SendPan(GestureState::FINISHED, event);
+
+          if(pointCount == 1 && primaryPointState == PointState::UP)
+          {
+            // If this was the primary point being released, then we change our state back to CLEAR...
+            mState = CLEAR;
+            mTouchEvents.clear();
+            mPrimaryDeviceId = -1;
+          }
+          else
+          {
+            // ...otherwise we change it to FINISHED.
+            mState = FINISHED;
+          }
+        }
+        break;
+      }
+
+      case FINISHED:
+      case FAILED:
+      {
+        if(primaryPointState == PointState::UP)
+        {
+          // Change our state back to clear when the primary touch point is released.
+          mState = CLEAR;
+          mTouchEvents.clear();
+          mPrimaryDeviceId = -1;
+        }
+        break;
+      }
+    }
+  }
+}
+
+void PanGestureRecognizer::CancelEvent()
+{
+  if(mState != CLEAR && mTouchEvents.size() > 0)
+  {
+    const Integration::TouchEvent& previousEvent(*(mTouchEvents.rbegin()));
+    SendPan(GestureState::CANCELLED, previousEvent);
+    mState = CLEAR;
+    mTouchEvents.clear();
+    mPrimaryDeviceId = -1;
+  }
+}
+
+void PanGestureRecognizer::Update(const GestureRequest& request)
+{
+  ApplyRequest(static_cast<const PanGestureRequest&>(request));
+}
+
+void PanGestureRecognizer::ApplyRequest(const PanGestureRequest& request)
+{
+  mMinimumTouchesRequired = request.minTouches;
+  mMaximumTouchesRequired = request.maxTouches;
+  mMaximumMotionEventAge  = request.maxMotionEventAge;
+
+  mBaseThresholds.minimumDistance  = request.minimumDistance;
+  mBaseThresholds.minimumPanEvents = request.minimumPanEvents;
+  mDeviceThresholds                = request.deviceThresholds;
+  ApplyThresholdsForSequence();
+}
+
+void PanGestureRecognizer::OnSequenceSourceChanged()
+{
+  ApplyThresholdsForSequence();
+}
+
+void PanGestureRecognizer::ApplyThresholdsForSequence()
+{
+  const PanThresholdValues* thresholds = mSequenceSource.valid ? mDeviceThresholds.Resolve(mSequenceSource) : nullptr;
+  ApplyThresholds(thresholds ? *thresholds : mBaseThresholds);
+}
+
+void PanGestureRecognizer::ApplyThresholds(const PanThresholdValues& thresholds)
+{
+  SetMinimumDistance(thresholds.minimumDistance);
+  SetMinimumPanEvents(thresholds.minimumPanEvents);
+}
+
+bool PanGestureRecognizer::SendPan(GestureState state, const Integration::TouchEvent& currentEvent)
+{
+  PanGestureEvent gesture(state);
+  gesture.currentPosition = currentEvent.points[0].GetScreenPosition();
+  gesture.numberOfTouches = currentEvent.GetPointCount();
+  gesture.motionEventAge  = mCurrentMotionEventAge;
+
+  if(mTouchEvents.size() > 1)
+  {
+    // Get the second last event in the queue, the last one is the current event
+    const Integration::TouchEvent& previousEvent(*(mTouchEvents.rbegin() + 1));
+
+    Vector2  previousPosition(mPreviousPosition);
+    uint32_t previousTime(previousEvent.time);
+
+    // If we've just started then we want to remove the threshold from Core calculations.
+    if(state == GestureState::STARTED)
+    {
+      previousPosition = mPrimaryTouchDownLocation;
+      previousTime     = mPrimaryTouchDownTime;
+      mPrimaryDeviceId = currentEvent.points[0].GetDeviceId();
+
+      // If it's a slow pan, we do not want to phase in the threshold over the first few pan-events
+      // A slow pan is defined as one that starts the specified number of milliseconds after the down-event
+      if((currentEvent.time - previousTime) > MINIMUM_TIME_BEFORE_THRESHOLD_ADJUSTMENTS)
+      {
+        mThresholdAdjustmentsRemaining = mThresholdTotalAdjustments;
+        mThresholdAdjustmentPerFrame   = (gesture.currentPosition - previousPosition) / static_cast<float>(mThresholdTotalAdjustments);
+      }
+      else
+      {
+        mThresholdAdjustmentsRemaining = 0;
+        mThresholdAdjustmentPerFrame   = Vector2::ZERO;
+      }
+    }
+    else if(state == GestureState::CONTINUING && mPrimaryDeviceId != currentEvent.points[0].GetDeviceId())
+    {
+      return false;
+    }
+
+    gesture.previousPosition = previousPosition;
+    gesture.timeDelta        = currentEvent.time - previousTime;
+
+    // Apply the threshold with a phased approach
+    if(mThresholdAdjustmentsRemaining > 0)
+    {
+      --mThresholdAdjustmentsRemaining;
+      gesture.currentPosition -= mThresholdAdjustmentPerFrame * static_cast<float>(mThresholdAdjustmentsRemaining);
+    }
+
+    mPreviousPosition = gesture.currentPosition;
+  }
+  else
+  {
+    gesture.previousPosition = gesture.currentPosition;
+    gesture.timeDelta        = 0;
+  }
+
+  gesture.time         = currentEvent.time;
+  gesture.triggerPoint = mTriggerPoint;
+  gesture.source       = mSequenceSource;
+
+  if(mScene)
+  {
+    // Create another handle so the recognizer cannot be destroyed during process function
+    GestureRecognizerPtr recognizerHandle = this;
+
+    mObserver.Process(*mScene, gesture);
+  }
+  return true;
+}
+
+void PanGestureRecognizer::SetMinimumDistance(int32_t minimumDistance)
+{
+  if(minimumDistance >= 0)
+  {
+    mMinimumDistanceSquared = minimumDistance * minimumDistance;
+
+    // Usually, we do not want to apply the threshold straight away, but phased over the first few pans
+    // Set our distance to threshold adjustments ratio here.
+    float fMinimumDistance     = static_cast<float>(minimumDistance);
+    mThresholdTotalAdjustments = static_cast<unsigned int>(fMinimumDistance * MINIMUM_MOTION_DISTANCE_TO_THRESHOLD_ADJUSTMENTS_RATIO);
+  }
+}
+
+void PanGestureRecognizer::SetMinimumPanEvents(int32_t minimumPanEvents)
+{
+  if(minimumPanEvents >= 1)
+  {
+    mMinimumMotionEvents = minimumPanEvents - 1; // Down is the first event
+  }
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

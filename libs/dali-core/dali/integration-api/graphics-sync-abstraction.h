@@ -1,0 +1,103 @@
+#ifndef DALI_INTEGRATION_GRAPHICS_SYNC_ABSTRACTION_H
+#define DALI_INTEGRATION_GRAPHICS_SYNC_ABSTRACTION_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali/public-api/common/dali-common.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Integration
+{
+/**
+ * This abstraction defines an API for syncing CPU with GPU.
+ * A typical use case is to determine when GL draw calls have finished drawing
+ * to a framebuffer.
+ */
+class GraphicsSyncAbstraction
+{
+protected:
+  /**
+   * Virtual protected destructor, no deletion through this interface
+   */
+  virtual ~GraphicsSyncAbstraction() = default;
+
+public:
+  class SyncObject
+  {
+  public:
+    /**
+     * @brief Sync object type
+     *
+     * Defines the type of sync object that can be created. Different sync types
+     * provide different synchronization capabilities and are used for different
+     * synchronization scenarios.
+     */
+    enum class SyncType
+    {
+      FENCE_SYNC,       ///< Standard fence sync for GPU-CPU synchronization within the same process
+      NATIVE_FENCE_SYNC ///< Native fence sync that supports cross-process synchronization via file descriptors
+    };
+
+  protected:
+    /**
+     * Virtual protected destructor, no deletion through this interface. This prevents
+     * Core from deleting SyncObjects - only Adaptor implementation is able to delete
+     * them.
+     */
+    virtual ~SyncObject() = default;
+
+  public:
+    /**
+     * Determine if the synchronisation object has been signalled.
+     * @return false if the sync object has not been signalled, true if it has been signalled (and
+     * can now be destroyed)
+     */
+    virtual bool IsSynced() = 0;
+
+    /**
+     * Wait in the GPU for the synchronisation object to be signalled (but can timeout)
+     */
+    virtual void Wait() = 0;
+
+    /**
+     * Wait in the CPU for the synchronisation object to be signalled.
+     * This will block the render thread - use with caution.
+     */
+    virtual void ClientWait() = 0;
+  };
+
+  /**
+   * Create a synchronisation object based on the resource id, typically that of
+   * a framebuffer texture. It can then be polled using the same resource id.
+   * @param[in] type The type of sync object to create (FENCE_SYNC or NATIVE_FENCE_SYNC)
+   * @return A pointer to an opaque sync object
+   */
+  virtual SyncObject* CreateSyncObject(SyncObject::SyncType type) = 0;
+
+  /**
+   * Destroy the synchronisation object.
+   * @param[in] syncObject The sync object to destroy
+   */
+  virtual void DestroySyncObject(SyncObject* syncObject) = 0;
+};
+
+} // namespace Integration
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTEGRATION_GRAPHICS_SYNC_ABSTRACTION_H

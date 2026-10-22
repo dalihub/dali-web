@@ -1,0 +1,392 @@
+#ifndef DALI_INTEGRATION_INPUT_OPTIONS_H
+#define DALI_INTEGRATION_INPUT_OPTIONS_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/object/type-info.h>
+#include <dali/public-api/common/dali-common.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Integration
+{
+/**
+ * @brief The default minimum holding time required to be recognized as a long press gesture (millisecond)
+ */
+constexpr uint32_t DEFAULT_LONG_PRESS_GESTURE_MINIMUM_HOLDING_TIME = 500u;
+
+/**
+ * @brief The default maximum interval allowed between the taps of a multi tap gesture (millisecond)
+ */
+constexpr uint32_t DEFAULT_TAP_GESTURE_MAXIMUM_MULTI_TAP_INTERVAL = 330u;
+
+/**
+ * @brief The default maximum time the touch point can be held down while still being recognized as a tap gesture (millisecond)
+ */
+constexpr uint32_t DEFAULT_TAP_GESTURE_MAXIMUM_HOLDING_TIME = 330u;
+
+/**
+ * @brief The default maximum distance the touch point can move while still being recognized as a tap gesture (pixel)
+ *
+ * @todo Set this according to DPI
+ */
+constexpr float DEFAULT_TAP_GESTURE_MAXIMUM_MOTION_DISTANCE = 20.0f;
+
+/**
+ * @brief The default minimum distance required to start a pan gesture (pixel)
+ */
+constexpr int DEFAULT_PAN_GESTURE_MINIMUM_DISTANCE = 15;
+
+/**
+ * @brief The default minimum number of touch events required to start a pan gesture
+ *
+ * The initial touch-down event is included in this count.
+ */
+constexpr int DEFAULT_PAN_GESTURE_MINIMUM_PAN_EVENTS = 3;
+
+/**
+ * @brief The default minimum distance required to start a pinch gesture
+ *
+ * A negative value means that the distance is calculated automatically from the scene DPI.
+ */
+constexpr float DEFAULT_PINCH_GESTURE_MINIMUM_DISTANCE = -1.0f;
+
+/**
+ * @brief The default minimum number of touch events required before a pinch can be started
+ */
+constexpr uint32_t DEFAULT_PINCH_GESTURE_MINIMUM_TOUCH_EVENTS = 4u;
+
+/**
+ * @brief The default minimum number of touch events required after a pinch has started
+ */
+constexpr uint32_t DEFAULT_PINCH_GESTURE_MINIMUM_TOUCH_EVENTS_AFTER_START = 4u;
+
+/**
+ * @brief The default minimum number of touch events required before a rotation can be started
+ */
+constexpr uint32_t DEFAULT_ROTATION_GESTURE_MINIMUM_TOUCH_EVENTS = 4u;
+
+/**
+ * @brief The default minimum number of touch events required after a rotation has started
+ */
+constexpr uint32_t DEFAULT_ROTATION_GESTURE_MINIMUM_TOUCH_EVENTS_AFTER_START = 4u;
+
+/**
+ * @brief Called by adaptor to set the pan gesture prediction mode from
+ * an environment variable
+ *
+ * @pre Should be called after Core creation.
+ * @param mode The pan gesture prediction mode.
+ */
+DALI_CORE_API void SetPanGesturePredictionMode(int mode);
+
+/**
+ * @brief Called by adaptor to set the prediction amount of the pan gesture
+ * from an environment variable
+ *
+ * @param[in] amount The prediction amount in milliseconds
+ */
+DALI_CORE_API void SetPanGesturePredictionAmount(unsigned int amount);
+
+/**
+ * @brief Sets the upper bound of the prediction amount for clamping
+ * from an environment variable
+ *
+ * @param[in] amount The prediction amount in milliseconds
+ */
+DALI_CORE_API void SetPanGestureMaximumPredictionAmount(unsigned int amount);
+
+/**
+ * @brief Sets the lower bound of the prediction amount for clamping
+ * from an environment variable
+ *
+ * @param[in] amount The prediction amount in milliseconds
+ */
+DALI_CORE_API void SetPanGestureMinimumPredictionAmount(unsigned int amount);
+
+/**
+ * @brief Sets the prediction amount to adjust when the pan velocity is changed
+ * from an environment variable. If the pan velocity is accelerating, the prediction
+ * amount will be increased by the specified amount until it reaches the upper bound.
+ * If the pan velocity is decelerating, the prediction amount will be decreased by
+ * the specified amount until it reaches the lower bound.
+ *
+ * @param[in] amount The prediction amount in milliseconds
+ */
+DALI_CORE_API void SetPanGesturePredictionAmountAdjustment(unsigned int amount);
+
+/**
+ * @brief Called to set how pan gestures smooth input
+ *
+ * @param[in] mode The smoothing mode to use
+ */
+DALI_CORE_API void SetPanGestureSmoothingMode(int mode);
+
+/**
+ * @brief Sets the smoothing amount of the pan gesture
+ *
+ * @param[in] amount The smoothing amount [0.0f,1.0f] - 0.0f would be no smoothing, 1.0f maximum smoothing
+ */
+DALI_CORE_API void SetPanGestureSmoothingAmount(float amount);
+
+/**
+ * @brief Sets whether to use actual times of the real gesture and frames or not.
+ *
+ * @param[in] value True = use actual times, False = use perfect values
+ */
+DALI_CORE_API void SetPanGestureUseActualTimes(bool value);
+
+/**
+ * @brief Sets the interpolation time range (ms) of past points to use (with weights) when interpolating.
+ *
+ * @param[in] value Time range in ms
+ */
+DALI_CORE_API void SetPanGestureInterpolationTimeRange(int value);
+
+/**
+ * @brief Sets whether to use scalar only prediction, which when enabled, ignores acceleration.
+ *
+ * @param[in] value True = use scalar prediction only
+ */
+DALI_CORE_API void SetPanGestureScalarOnlyPredictionEnabled(bool value);
+
+/**
+ * @brief Sets whether to use two point prediction. This combines two interpolated points to get more steady acceleration and velocity values.
+ *
+ * @param[in] value True = use two point prediction
+ */
+DALI_CORE_API void SetPanGestureTwoPointPredictionEnabled(bool value);
+
+/**
+ * @brief Sets the time in the past to interpolate the second point when using two point interpolation.
+ *
+ * @param[in] value Time in past in ms
+ */
+DALI_CORE_API void SetPanGestureTwoPointInterpolatePastTime(int value);
+
+/**
+ * @brief Sets the two point velocity bias. This is the ratio of first and second points to use for velocity.
+ *
+ * @param[in] value 0.0f = 100% first point. 1.0f = 100% of second point.
+ */
+DALI_CORE_API void SetPanGestureTwoPointVelocityBias(float value);
+
+/**
+ * @brief Sets the two point acceleration bias. This is the ratio of first and second points to use for acceleration.
+ *
+ * @param[in] value 0.0f = 100% first point. 1.0f = 100% of second point.
+ */
+DALI_CORE_API void SetPanGestureTwoPointAccelerationBias(float value);
+
+/**
+ * @brief Sets the range of time (ms) of points in the history to perform multitap smoothing with (if enabled).
+ *
+ * @param[in] value Time in past in ms
+ */
+DALI_CORE_API void SetPanGestureMultitapSmoothingRange(int value);
+
+/**
+ * @brief Sets the minimum distance required to start a pan gesture
+ *
+ * @param[in] value Distance to move
+ */
+DALI_CORE_API void SetPanGestureMinimumDistance(int value);
+
+/**
+ * @brief Retrieves the minimum distance required to start a pan gesture
+ *
+ * @return The distance in pixels
+ */
+DALI_CORE_API int GetPanGestureMinimumDistance();
+
+/**
+ * @brief Sets the minimum number of touch events to start a pan
+ *
+ * @param[in] value Number of pan events
+ */
+DALI_CORE_API void SetPanGestureMinimumPanEvents(int value);
+
+/**
+ * @brief Retrieves the minimum number of touch events required to start a pan gesture
+ *
+ * @return The number of touch events, including the initial touch-down event
+ */
+DALI_CORE_API int GetPanGestureMinimumPanEvents();
+
+/**
+ * @brief Sets the minimum distance required to start a pinch gesture
+ *
+ * @param[in] value Distance to move in pixels
+ */
+DALI_CORE_API void SetPinchGestureMinimumDistance(float value);
+
+/**
+ * @brief Retrieves the minimum distance required to start a pinch gesture
+ *
+ * @return The distance in pixels, or a negative value when it is calculated automatically from the scene DPI
+ */
+DALI_CORE_API float GetPinchGestureMinimumDistance();
+
+/**
+ * @brief Sets the minimum touch events required before a pinch can be started
+ *
+ * @param[in] value The number of touch events
+ */
+DALI_CORE_API void SetPinchGestureMinimumTouchEvents(uint32_t value);
+
+/**
+ * @brief Retrieves the minimum touch events required before a pinch can be started
+ *
+ * @return The number of touch events
+ */
+DALI_CORE_API uint32_t GetPinchGestureMinimumTouchEvents();
+
+/**
+ * @brief Sets the minimum touch events required after a pinch started
+ *
+ * @param[in] value The number of touch events
+ */
+DALI_CORE_API void SetPinchGestureMinimumTouchEventsAfterStart(uint32_t value);
+
+/**
+ * @brief Retrieves the minimum touch events required after a pinch has started
+ *
+ * @return The number of touch events
+ */
+DALI_CORE_API uint32_t GetPinchGestureMinimumTouchEventsAfterStart();
+
+/**
+ * @brief Sets the minimum touch events required before a rotation can be started
+ *
+ * @param[in] value The number of touch events
+ */
+DALI_CORE_API void SetRotationGestureMinimumTouchEvents(uint32_t value);
+
+/**
+ * @brief Retrieves the minimum touch events required before a rotation can be started
+ *
+ * @return The number of touch events
+ */
+DALI_CORE_API uint32_t GetRotationGestureMinimumTouchEvents();
+
+/**
+ * @brief Sets the minimum touch events required after a rotation started
+ *
+ * @param[in] value The number of touch events
+ */
+DALI_CORE_API void SetRotationGestureMinimumTouchEventsAfterStart(uint32_t value);
+
+/**
+ * @brief Retrieves the minimum touch events required after a rotation has started
+ *
+ * @return The number of touch events
+ */
+DALI_CORE_API uint32_t GetRotationGestureMinimumTouchEventsAfterStart();
+
+/**
+ * @brief Sets the minimum holding time required to be recognized as a long press gesture (millisecond)
+ *
+ * @param[in] time The time value in milliseconds
+ * @note The value must be greater than 0, otherwise it is ignored.
+ */
+DALI_CORE_API void SetLongPressGestureMinimumHoldingTime(uint32_t time);
+
+/**
+ * @brief Retrieves the minimum holding time required to be recognized as a long press gesture (millisecond)
+ *
+ * @return The time value in milliseconds
+ */
+DALI_CORE_API uint32_t GetLongPressGestureMinimumHoldingTime();
+
+/**
+ * @brief Sets the maximum interval allowed between the taps of a multi tap gesture (millisecond)
+ *
+ * If the next tap starts within this interval, the taps are recognized as a multi-tap.
+ * Otherwise, they are recognized as separate single taps.
+ *
+ * @note If it's a double tap, it's like this:
+ * |(touch down <--maximumHoldingTime--> touch up) <-- within maximumMultiTapInterval --> (touch down <--maximumHoldingTime--> touch up)|
+ *
+ * @see SetTapGestureMaximumHoldingTime()
+ *
+ * @param[in] interval The interval in milliseconds
+ * @note The value must be greater than 0, otherwise it is ignored.
+ */
+DALI_CORE_API void SetTapGestureMaximumMultiTapInterval(uint32_t interval);
+
+/**
+ * @brief Retrieves the maximum interval allowed between the taps of a multi tap gesture (millisecond)
+ *
+ * @return The interval in milliseconds
+ */
+DALI_CORE_API uint32_t GetTapGestureMaximumMultiTapInterval();
+
+/**
+ * @brief Sets the maximum time the touch point can be held down while still being recognized as a tap gesture (millisecond)
+ *
+ * This time is from touch down to touch up to recognize the tap gesture.
+ *
+ * @note The tap is like below:
+ * touch down <--maximumHoldingTime--> touch up
+ * If the time between touch down and touch up is longer than this time, it is not recognized as a tap gesture.
+ *
+ * @see SetTapGestureMaximumMultiTapInterval()
+ *
+ * @param[in] time The time value in milliseconds
+ * @note The value must be greater than 0, otherwise it is ignored.
+ */
+DALI_CORE_API void SetTapGestureMaximumHoldingTime(uint32_t time);
+
+/**
+ * @brief Retrieves the maximum time the touch point can be held down while still being recognized as a tap gesture (millisecond)
+ *
+ * @return The time value in milliseconds
+ */
+DALI_CORE_API uint32_t GetTapGestureMaximumHoldingTime();
+
+/**
+ * @brief Sets the maximum distance the touch point can move while still being recognized as a tap gesture
+ *
+ * This distance is from touch down to touch up to recognize the tap gesture.
+ *
+ * @note The tap is like below:
+ * touch down <--maximumMotionDistance--> touch up
+ * If the touch point moves further than this distance, it is not recognized as a tap gesture.
+ *
+ * @see DEFAULT_TAP_GESTURE_MAXIMUM_MOTION_DISTANCE
+ *
+ * @param[in] distance The distance in pixels
+ * @note A negative value is ignored.
+ */
+DALI_CORE_API void SetTapGestureMaximumMotionDistance(float distance);
+
+/**
+ * @brief Retrieves the maximum distance the touch point can move while still being recognized as a tap gesture
+ *
+ * @return The distance in pixels
+ */
+DALI_CORE_API float GetTapGestureMaximumMotionDistance();
+
+} // namespace Integration
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTEGRATION_INPUT_OPTIONS_H

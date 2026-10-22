@@ -1,0 +1,388 @@
+#ifndef DALI_UPDATE_PROXY_H
+#define DALI_UPDATE_PROXY_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <cstdint>
+
+// INTERNAL INCLUDES
+#include <dali/public-api/common/dali-common.h>
+#include <dali/public-api/common/dali-string.h>
+#include <dali/public-api/math/matrix.h>
+#include <dali/public-api/math/vector3.h>
+#include <dali/public-api/object/property-value.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal DALI_INTERNAL
+{
+class UpdateProxy;
+}
+
+/**
+ * @brief This class is used to access data of the actors from the update-thread.
+ *
+ * The Actor API _CANNOT_ be called directly from the update-thread.
+ * This class can be used as a proxy to that required Actor data.
+ * An actor's data can be accessed using the Actor's Unique ID.
+ * The unique ID should be passed to the callback using this class in a thread-safe manner
+ * (as you cannot call Actor::GetId from the update-thread).
+ *
+ * Some properties can be changed by both a Set method (e.g. SetPosition()) and a Bake method (e.g. BakePosition()).
+ * Both take effect immediately, so the Get methods return the new value in the same frame.
+ * The difference is what happens in the next frame:
+ * - Set: The value is used for the current frame only. In the next frame, the property returns to the value
+ *   it would have without this call (the value set via Actor::SetProperty(), the animated value or a previously baked value),
+ *   so it has to be set again in every frame to keep it. This can also be used to override an animated value for the current frame.
+ * - Bake: The value is kept in the following frames, until it is baked again or changed via Actor::SetProperty().
+ *   Avoid baking a property while it is being animated. The animation calculates its value from the kept value in every frame,
+ *   so baking changes the result of the animation, and the baked value may be overwritten when the animation finishes.
+ *
+ * Use Set for a value which is calculated in every frame (e.g. following another actor),
+ * and Bake for a change which should remain after the frame callback is removed.
+ *
+ * Neither is reflected in the value returned by Actor::GetProperty(), which keeps the value set on the event side.
+ * Use Actor::GetCurrentProperty() to retrieve the value changed from the frame callback.
+ *
+ * Properties which only have a Set method (e.g. SetIgnored(), SetUpdateArea()) are not animatable,
+ * so the value is kept in the following frames, until it is set again or changed via Actor::SetProperty().
+ * @SINCE_2_5.21
+ */
+class DALI_CORE_API UpdateProxy
+{
+public:
+  /**
+   * Type to define a unique sync point.
+   * @SINCE_2_5.21
+   */
+  using NotifySyncPoint = int;
+  static constexpr NotifySyncPoint INVALID_SYNC{-1};
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's local position.
+   * @param[in]   id        The Actor ID
+   * @param[out]  position  Set to the Actor's current position, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetPosition(uint32_t id, Vector3& position) const;
+
+  /**
+   * @brief Allows setting an Actor's local position from the Frame callback function for the current frame only.
+   * @param[in]  id        The Actor ID
+   * @param[in]  position  The position to set
+   * @return Whether the method call was successful or not.
+   * @note This will get reset to the internally calculated or previously baked value in the next frame, so will have to be set again.
+   * @SINCE_2_5.21
+   */
+  bool SetPosition(uint32_t id, const Vector3& position);
+
+  /**
+   * @brief Allows baking an Actor's local position from the Frame callback function.
+   * @param[in]  id        The Actor ID
+   * @param[in]  position  The position to bake
+   * @return Whether the method call was successful or not.
+   * @note The value is saved so will cause undesired effects if this property is being animated.
+   * @SINCE_2_5.21
+   */
+  bool BakePosition(uint32_t id, const Vector3& position);
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's local orientation.
+   * @param[in]   id        The Actor ID
+   * @param[out]  orientation  Set to the Actor's current orientation, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetOrientation(uint32_t id, Quaternion& orientation) const;
+
+  /**
+   * @brief Allows setting an Actor's local orientation from the Frame callback function for the current frame only.
+   * @param[in]  id        The Actor ID
+   * @param[in]  orientation  The orientation to set
+   * @return Whether the method call was successful or not.
+   * @note This will get reset to the internally calculated or previously baked value in the next frame, so will have to be set again.
+   * @SINCE_2_5.21
+   */
+  bool SetOrientation(uint32_t id, const Quaternion& orientation);
+
+  /**
+   * @brief Allows baking an Actor's local orientation from the Frame callback function.
+   * @param[in]  id        The Actor ID
+   * @param[in]  orientation  The orientation to bake
+   * @return Whether the method call was successful or not.
+   * @note The value is saved so will cause undesired effects if this property is being animated.
+   * @SINCE_2_5.21
+   */
+  bool BakeOrientation(uint32_t id, const Quaternion& orientation);
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's size.
+   * @param[in]   id    The Actor ID
+   * @param[out]  size  Set to the Actor's current size, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetSize(uint32_t id, Vector3& size) const;
+
+  /**
+   * @brief Allows setting an Actor's size from the Frame callback function for the current frame only.
+   * @param[in]  id    The Actor ID
+   * @param[in]  size  The size to set
+   * @return Whether the method call was successful or not.
+   * @note This will get reset to the internally calculated or previously baked value in the next frame, so will have to be set again.
+   * @SINCE_2_5.21
+   */
+  bool SetSize(uint32_t id, const Vector3& size);
+
+  /**
+   * @brief Allows baking an Actor's size from the Frame callback function.
+   * @param[in]  id    The Actor ID
+   * @param[in]  size  The size to bake
+   * @return Whether the method call was successful or not.
+   * @note The value is saved so will cause undesired effects if this property is being animated.
+   * @SINCE_2_5.21
+   */
+  bool BakeSize(uint32_t id, const Vector3& size);
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's local position and size.
+   * @param[in]   id        The Actor ID
+   * @param[out]  position  Set to the Actor's current position, if Actor ID is valid
+   * @param[out]  size      Set to the Actor's current size, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetPositionAndSize(uint32_t id, Vector3& position, Vector3& size) const;
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's world position and size.
+   * @param[in]   id        The Actor ID
+   * @param[out]  position  Set to the Actor's current world position, if Actor ID is valid
+   * @param[out]  scale     Set to the Actor's current world scale, if Actor ID is valid
+   * @param[out]  size      Set to the Actor's current size, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetWorldPositionScaleAndSize(uint32_t id, Vector3& position, Vector3& scale, Vector3& size) const;
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's world transform properties and size.
+   * @param[in]   id        The Actor ID
+   * @param[out]  position  Set to the Actor's current world position, if Actor ID is valid
+   * @param[out]  scale     Set to the Actor's current world scale, if Actor ID is valid
+   * @param[out]  orientation Set to the Actor's current world orientation, if Actor ID is valid
+   * @param[out]  size      Set to the Actor's current size, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetWorldTransformAndSize(uint32_t id, Vector3& position, Vector3& scale, Quaternion& orientation, Vector3& size) const;
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's local scale.
+   * @param[in]   id     The Actor ID
+   * @param[out]  scale  Set to the Actor's current scale, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetScale(uint32_t id, Vector3& scale) const;
+
+  /**
+   * @brief Allows setting an Actor's local scale from the Frame callback function for the current frame only.
+   * @param[in]  id     The Actor ID
+   * @param[in]  scale  The scale to set
+   * @return Whether the method call was successful or not.
+   * @note This will get reset to the internally calculated or previously baked value in the next frame, so will have to be set again.
+   * @SINCE_2_5.21
+   */
+  bool SetScale(uint32_t id, const Vector3& scale);
+
+  /**
+   * @brief Allows baking an Actor's local scale from the Frame callback function.
+   * @param[in]  id     The Actor ID
+   * @param[in]  scale  The scale to bake
+   * @return Whether the method call was successful or not.
+   * @note The value is saved so will cause undesired effects if this property is being animated.
+   * @SINCE_2_5.21
+   */
+  bool BakeScale(uint32_t id, const Vector3& scale);
+
+  /**
+   * @brief Given the Actor ID, this retrieves that Actor's pivot.
+   * @param[in]   id     The Actor ID
+   * @param[out]  pivot  Set to the Actor's current pivot, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.43
+   */
+  bool GetPivot(uint32_t id, Vector3& pivot) const;
+
+  /**
+   * @brief Given the Actor ID, retrieves that Actor's local color multiplier.
+   * @param[in]   id          The Actor ID
+   * @param[out]  multiplier  Set to the Actor's current color multiplier, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.38
+   */
+  bool GetColorMultiplier(uint32_t id, Vector4& multiplier) const;
+
+  /**
+   * @brief Given the Actor ID, retrieves that Actor's local color.
+   * @deprecated Use GetColorMultiplier() instead.
+   * @SINCE_2_5.21
+   */
+  bool GetColor(uint32_t id, Vector4& color) const;
+
+  /**
+   * @brief Allows setting an Actor's local color multiplier from the Frame callback function for the current frame only.
+   * @param[in]  id          The Actor ID
+   * @param[in]  multiplier  The color multiplier to set
+   * @return Whether the method call was successful or not.
+   * @note This will get reset to the internally calculated or previously baked value in the next frame, so will have to be set again.
+   * @SINCE_2_5.38
+   */
+  bool SetColorMultiplier(uint32_t id, const Vector4& multiplier);
+
+  /**
+   * @brief Allows setting an Actor's local color from the Frame callback function.
+   * @deprecated Use SetColorMultiplier() instead.
+   * @SINCE_2_5.21
+   */
+  bool SetColor(uint32_t id, const Vector4& color);
+
+  /**
+   * @brief Allows baking an Actor's local color multiplier from the Frame callback function.
+   * @param[in]  id          The Actor ID
+   * @param[in]  multiplier  The color multiplier to bake
+   * @return Whether the method call was successful or not.
+   * @note The value is saved so will cause undesired effects if this property is being animated.
+   * @SINCE_2_5.38
+   */
+  bool BakeColorMultiplier(uint32_t id, const Vector4& multiplier);
+
+  /**
+   * @brief Allows baking an Actor's local color from the Frame callback function.
+   * @deprecated Use BakeColorMultiplier() instead.
+   * @SINCE_2_5.21
+   */
+  bool BakeColor(uint32_t id, const Vector4& color);
+
+  /**
+   * @brief Pop a sync point off the stack.
+   *
+   * Sync points can be added from the event side using Dali::UiContext::NotifyFrameCallback().
+   * @return INVALID_SYNC if there was no SyncPoint, or a unique value if there was a sync point.
+   * @SINCE_2_5.21
+   */
+  NotifySyncPoint PopSyncPoint();
+
+  /**
+   * @brief Given the Actor ID, Gets the updated area of the actor.
+   *
+   * @param[in]   id     The Actor ID
+   * @param[out]  updateArea  Get to the Actor's current updated area, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetUpdateArea(uint32_t id, Vector4& updateArea) const;
+
+  /**
+   * @brief Given the Actor ID, Sets the updated area of the actor.
+   *
+   * @param[in]   id     The Actor ID
+   * @param[in]   updateArea  Set to the Actor's current updated area, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @note The value is kept in the following frames until it is set again.
+   *       If it is set more than once before the frame is rendered (including via Actor::Property::UPDATE_AREA_HINT),
+   *       the areas are merged.
+   * @SINCE_2_5.21
+   */
+  bool SetUpdateArea(uint32_t id, const Vector4& updateArea);
+
+  /**
+   * @brief Sets an Actor's ignored state from the Frame callback function.
+   * The change is applied immediately and persists until changed again.
+   * @param[in]  id       The Actor ID
+   * @param[in]  ignored  True to make the actor be ignored.
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool SetIgnored(uint32_t id, bool ignored);
+
+  /**
+   * @brief Gets an Actor's ignored state from the Frame callback function.
+   * @param[in]  id       The Actor ID
+   * @param[out] ignored  Set to the Actor's current ignored state, if Actor ID is valid
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetIgnored(uint32_t id, bool& ignored) const;
+
+  /**
+   * @brief Gets an Actor's custom animatable property value from the Frame callback function.
+   * @param[in]  id           The Actor ID
+   * @param[in]  propertyName The name of custom property.
+   * @param[out] value        Get to the Actor's current custom property value.
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool GetCustomProperty(uint32_t id, const String& propertyName, Property::Value& value) const;
+
+  /**
+   * @brief Bake an Actor's custom animatable property value from the Frame callback function.
+   *        The type of propety and value should be matched.
+   * @param[in]  id           The Actor ID
+   * @param[in]  propertyName The name of custom property.
+   * @param[in] value         Set to the Actor's current custom property value, if Actor ID and Property is valid.
+   * @return Whether the method call was successful or not.
+   * @SINCE_2_5.21
+   */
+  bool BakeCustomProperty(uint32_t id, const String& propertyName, const Property::Value& value);
+
+public: // Not intended for application developers
+  /// @cond internal
+
+  /**
+   * @brief Constructor.
+   * @param[in]  impl  A reference to the internal object.
+   */
+  DALI_INTERNAL UpdateProxy(Internal::UpdateProxy& impl);
+
+  /**
+   * @brief Destructor.
+   */
+  DALI_INTERNAL ~UpdateProxy();
+
+  // Not copyable or movable
+
+  UpdateProxy(const UpdateProxy&)            = delete; ///< Deleted copy constructor
+  UpdateProxy(UpdateProxy&&)                 = delete; ///< Deleted move constructor
+  UpdateProxy& operator=(const UpdateProxy&) = delete; ///< Deleted copy assignment operator
+  UpdateProxy& operator=(UpdateProxy&&)      = delete; ///< Deleted move assignment operator
+
+  /// @endcond
+
+private:
+  /// @cond internal
+  Internal::UpdateProxy& mImpl;
+  /// @endcond
+};
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_UPDATE_PROXY_H

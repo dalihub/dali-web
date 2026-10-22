@@ -1,0 +1,162 @@
+#ifndef DALI_ROTATION_GESTURE_DETECTOR_H
+#define DALI_ROTATION_GESTURE_DETECTOR_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/public-api/events/gesture-detector.h>
+#include <dali/public-api/signals/dali-signal.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal DALI_INTERNAL
+{
+class RotationGestureDetector;
+}
+
+class RotationGesture;
+
+/**
+ * @brief This class looks for a rotation gesture involving two touches.
+ *
+ * It measures the relative rotation of two touch points & emits a signal
+ * when this changes. Please see RotationGesture for more information.
+ *
+ * The application programmer can use this gesture detector as follows:
+ * @code
+ * RotationGestureDetector detector = RotationGestureDetector::New();
+ * detector.Attach( myActor );
+ * detector.DetectedSignal().Connect( this, &MyApplication::OnRotation );
+ * @endcode
+ *
+ * @see RotationGesture
+ *
+ * Signals
+ * | %Signal Name      | Method                |
+ * |-------------------|-----------------------|
+ * | rotationDetected  | @ref DetectedSignal() |
+ *
+ * @SINCE_1_9.27
+ */
+class DALI_CORE_API RotationGestureDetector : public GestureDetector
+{
+public: // Typedefs
+  /**
+   * @brief Signal type.
+   */
+  using DetectedSignalType = Signal<void(Actor, RotationGesture)>;
+
+public: // Creation & Destruction
+  /**
+   * @brief Creates an uninitialized RotationGestureDetector; this can be initialized with RotationGestureDetector::New().
+   *
+   * @SINCE_1_9.27
+   * Calling member functions with an uninitialized RotationGestureDetector handle is not allowed.
+   */
+  RotationGestureDetector();
+
+  /**
+   * @brief Creates an initialized RotationGestureDetector.
+   *
+   * @SINCE_1_9.27
+   * @return A handle to a newly allocated Dali resource
+   */
+  static RotationGestureDetector New();
+
+  /**
+   * @brief Downcasts a handle to RotationGestureDetector handle.
+   *
+   * @SINCE_1_9.27
+   * If handle points to a RotationGestureDetector object, the
+   * downcast produces valid handle. If not, the returned handle is left uninitialized.
+   * @param[in] handle Handle to an object
+   * @return Handle to a RotationGestureDetector object or an uninitialized handle
+   */
+  static RotationGestureDetector DownCast(BaseHandle handle);
+
+  /**
+   * @brief Destructor.
+   *
+   * @SINCE_1_9.27
+   * This is non-virtual since derived Handle types must not contain data or virtual methods.
+   */
+  ~RotationGestureDetector();
+
+  /**
+   * @brief This copy constructor is required for (smart) pointer semantics.
+   *
+   * @SINCE_1_9.27
+   * @param[in] handle A reference to the copied handle
+   */
+  RotationGestureDetector(const RotationGestureDetector& handle);
+
+  /**
+   * @brief This assignment operator is required for (smart) pointer semantics.
+   *
+   * @SINCE_1_9.27
+   * @param[in] rhs A reference to the copied handle
+   * @return A reference to this
+   */
+  RotationGestureDetector& operator=(const RotationGestureDetector& rhs);
+
+  /**
+   * @brief This move constructor is required for (smart) pointer semantics.
+   *
+   * @SINCE_2_2.4
+   * @param[in] handle A reference to the moved handle
+   */
+  RotationGestureDetector(RotationGestureDetector&& handle) noexcept;
+
+  /**
+   * @brief This move assignment operator is required for (smart) pointer semantics.
+   *
+   * @SINCE_2_2.4
+   * @param[in] rhs A reference to the moved handle
+   * @return A reference to this
+   */
+  RotationGestureDetector& operator=(RotationGestureDetector&& rhs) noexcept;
+
+public: // Signals
+  /**
+   * @brief This signal is emitted when the rotation gesture is detected on the attached actor.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName( Actor actor, RotationGesture gesture );
+   * @endcode
+   * @SINCE_1_9.27
+   * @return The signal to connect to
+   * @pre The gesture detector has been initialized.
+   */
+  DetectedSignalType& DetectedSignal();
+
+public: // Not intended for Application developers
+  /// @cond internal
+  /**
+   * @brief This constructor is used by RotationGestureDetector::New() methods.
+   *
+   * @SINCE_1_9.27
+   * @param[in] internal A pointer to a newly allocated Dali resource
+   */
+  explicit DALI_INTERNAL RotationGestureDetector(Internal::RotationGestureDetector* internal);
+  /// @endcond
+};
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_ROTATION_GESTURE_DETECTOR_H

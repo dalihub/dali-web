@@ -1,0 +1,176 @@
+#ifndef DALI_INTERNAL_SCENE_GRAPH_UNIFORM_MAP_H
+#define DALI_INTERNAL_SCENE_GRAPH_UNIFORM_MAP_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// EXTERNAL INCLUDES
+#include <cstddef> // std::size_t
+#include <cstdint> // uint32_t
+#include <map>
+#include <memory> ///< std::unique_ptr
+#include <string>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/common/hash.h>
+
+#include <dali/internal/common/const-string.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class PropertyInputImpl;
+
+namespace SceneGraph
+{
+/**
+ * The uniform map is used to map a uniform name to a property value.
+ */
+class UniformPropertyMapping
+{
+public:
+  using Hash = std::size_t;
+  /**
+   * Constructor
+   */
+  UniformPropertyMapping(ConstString theUniformName, const PropertyInputImpl* thePropertyPtr)
+  : propertyPtr(thePropertyPtr),
+    uniformName(theUniformName),
+    uniformNameHash(0u),
+    uniformNameHashNoArray(0u),
+    arrayIndex(0u)
+  {
+    // Look for array index closing bracket
+    auto nameStringView = theUniformName.GetStringView();
+    auto pos            = nameStringView.rfind("]");
+
+    // If found, extract the array index and store it, if it's an element in an array of basic types.
+    if(pos != std::string::npos)
+    {
+      auto pos0 = theUniformName.GetStringView().rfind("[", pos);
+      if(pos == nameStringView.length() - 1) // if element is in struct, don't set array index.
+      {
+        arrayIndex = atoi(theUniformName.GetCString() + pos0 + 1);
+      }
+      // Calculate hash from name without array index
+      uniformNameHashNoArray = Dali::CalculateHash(theUniformName.GetStringView().substr(0, pos0), '[');
+    }
+    uniformName     = theUniformName;
+    uniformNameHash = Dali::CalculateHash(theUniformName.GetStringView());
+  }
+
+  UniformPropertyMapping() = default;
+
+  const PropertyInputImpl* propertyPtr{nullptr};
+  ConstString              uniformName{};
+  Hash                     uniformNameHash{0u};
+  Hash                     uniformNameHashNoArray{0u};
+  int32_t                  arrayIndex{0u};
+};
+
+/**
+ * The UniformMap class is used to map uniform names to property values. It is available
+ * in the following rendering classes: Node, Renderer, Shader.
+ *
+ * They can test the ChangeCounter to see if the mapping has been updated.
+ *
+ * UniformMapContainer is a map that stores uniform name to property value mappings.
+ * It uses ConstString as the key for efficient string comparison and UniformPropertyMapping
+ * as the value containing the property pointer and uniform name information.
+ */
+class UniformMap
+{
+public:
+  using SizeType = uint32_t;
+
+  struct ConstStringComparator
+  {
+    bool operator()(const ConstString& lhs, const ConstString& rhs) const noexcept
+    {
+      // We don't need to keep alphabetic ordering here.
+      // Just check raw-pointer and check pointer variables order.
+      return lhs.GetCString() < rhs.GetCString();
+    }
+  };
+
+  using UniformMapContainer = std::map<ConstString, UniformPropertyMapping, ConstStringComparator>;
+  using UniformMapIter      = UniformMapContainer::iterator;
+
+  /**
+   * Add a map to the mappings table.
+   */
+  void Add(UniformPropertyMapping map);
+
+  /**
+   * Remove a map from the mappings table
+   */
+  void Remove(ConstString uniformName);
+
+  /**
+   * Find a property given the uniform name.
+   * @return The address of the property if it's in the map, or NULL otherwise.
+   */
+  const PropertyInputImpl* Find(ConstString uniformName) const;
+
+private:
+  /**
+   * Helper to call the observers when the mappings have changed
+   */
+  void MappingChanged();
+
+private:
+  struct Impl
+  {
+    UniformMapContainer  mUniformMaps;       ///< container of uniform maps
+    UniformMap::SizeType mChangeCounter{0u}; ///< Counter that is incremented when the map changes
+  };
+  std::unique_ptr<Impl> mImpl{nullptr};
+
+public: // inline functions using mImpl
+  /**
+   * Get the count of uniforms in the map
+   * @return The number of uniform mappings
+   */
+  inline UniformMap::SizeType Count() const
+  {
+    return static_cast<UniformMap::SizeType>(mImpl ? mImpl->mUniformMaps.size() : 0u);
+  }
+
+  /**
+   * Return the change counter
+   */
+  inline UniformMap::SizeType GetChangeCounter() const
+  {
+    return mImpl ? mImpl->mChangeCounter : 0u;
+  }
+
+  /**
+   * Get the raw container of uniform mappings table
+   * @return Container of uniform maps
+   */
+  inline const UniformMapContainer& GetUniformMapContainer() const
+  {
+    DALI_ASSERT_DEBUG(mImpl && "Do not call GetUniformMapContainer() without check Count() > 0u");
+    return mImpl->mUniformMaps;
+  }
+};
+
+} // namespace SceneGraph
+} // namespace Internal
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_SCENE_GRAPH_UNIFORM_MAP_H

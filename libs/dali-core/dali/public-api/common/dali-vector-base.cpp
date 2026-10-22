@@ -1,0 +1,290 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// A precompiled Windows SDK header may define CopyMemory as a macro.  Hide it
+// while defining the VectorBase member and restore it after this translation
+// unit's implementation.
+#if defined(CopyMemory)
+#pragma push_macro("CopyMemory")
+#undef CopyMemory
+#define DALI_VECTOR_BASE_CPP_RESTORE_COPY_MEMORY_MACRO
+#endif
+
+// CLASS HEADER
+#include <dali/public-api/common/dali-vector-base.h>
+
+// EXTERNAL INCLUDES
+#include <cstring> // for memcpy & memmove
+#include <utility> // std::swap
+
+namespace DALI_NAMESPACE
+{
+namespace
+{
+// Wrapper to adapt memcpy to MemMoveFunctionType signature.
+// On macOS 64-bit, size_t and uint64_t are distinct types despite having the same size,
+// so memcpy cannot be passed directly where MemMoveFunctionType is expected.
+void* MemCpyWrapper(void* dest, const void* src, VectorBase::SizeType count)
+{
+  return memcpy(dest, src, static_cast<size_t>(count));
+}
+} // namespace
+
+VectorBase::VectorBase()
+: mData(nullptr)
+{
+}
+
+VectorBase::~VectorBase() = default;
+
+VectorBase::SizeType VectorBase::Capacity() const
+{
+  SizeType capacity = 0u;
+  if(mData)
+  {
+    SizeType* metadata = reinterpret_cast<SizeType*>(mData);
+    capacity           = *(metadata - 2u);
+  }
+  return capacity;
+}
+
+void VectorBase::Release()
+{
+  if(mData)
+  {
+    // adjust pointer to real beginning
+    SizeType* metadata = reinterpret_cast<SizeType*>(mData);
+
+    free(reinterpret_cast<void*>(metadata - 2u));
+    mData = nullptr;
+  }
+}
+
+void VectorBase::ShrinkToFit(SizeType elementSize)
+{
+  if(mData)
+  {
+    auto count = Count();
+    if(count)
+    {
+      auto oldCapacity = Capacity();
+      if(count != oldCapacity)
+      {
+        DALI_ASSERT_VECTOR(count < oldCapacity && "Count is bigger than capacity!");
+
+        // Calculate real size of memory
+        const SizeType wholeAllocation = sizeof(SizeType) * 2u + count * elementSize;
+
+        // adjust pointer to real beginning
+        SizeType* oldMetaData = reinterpret_cast<SizeType*>(mData);
+
+        // Reallocation. We can assume that old data keep well. So don't need to copy the old data.
+        SizeType* newMetaData = reinterpret_cast<SizeType*>(realloc(reinterpret_cast<void*>(oldMetaData - 2u), wholeAllocation));
+        if(newMetaData)
+        {
+          *newMetaData++ = count;
+          *newMetaData++ = count;
+        }
+        else
+        {
+          free(reinterpret_cast<void*>(oldMetaData - 2u));
+          DALI_ASSERT_VECTOR(0 && "realloc failed!\n");
+        }
+
+        mData = reinterpret_cast<void*>(newMetaData);
+      }
+    }
+    else
+    {
+      Release();
+    }
+  }
+}
+
+void VectorBase::Replace(void* newData) noexcept
+{
+  if(mData)
+  {
+    // adjust pointer to real beginning
+    SizeType* metadata = reinterpret_cast<SizeType*>(mData);
+
+    // Cause timming issue, we set new data before metadata delete.
+    mData = newData;
+
+    // delete metadata address after mData setup safety.
+    free(reinterpret_cast<void*>(metadata - 2u));
+  }
+  else
+  {
+    // mData was nullptr. Just copy data address
+    mData = newData;
+  }
+}
+
+void VectorBase::SetCount(SizeType count)
+{
+  // someone can call Resize( 0u ) before ever populating the vector
+  if(mData)
+  {
+    SizeType* metadata = reinterpret_cast<SizeType*>(mData);
+    *(metadata - 1u)   = count;
+  }
+}
+
+void VectorBase::Reserve(SizeType capacity, SizeType elementSize)
+{
+  ReserveWithCustomMoveFunction(capacity, elementSize, MemCpyWrapper);
+}
+
+void VectorBase::ReserveWithCustomMoveFunction(SizeType capacity, SizeType elementSize, MemMoveFunctionType memMoveFunction)
+{
+  SizeType oldCapacity = Capacity();
+  SizeType oldCount    = Count();
+  if(capacity > oldCapacity)
+  {
+    const SizeType wholeAllocation = sizeof(SizeType) * 2u + capacity * elementSize;
+    void*          wholeData       = malloc(wholeAllocation);
+    DALI_ASSERT_ALWAYS(wholeData && "VectorBase::Reserve - Memory allocation failed");
+
+#if defined(DEBUG_ENABLED)
+    // in debug build this will help identify a vector of uninitialized data
+    memset(wholeData, 0xaa, wholeAllocation);
+#endif
+    SizeType* metaData = reinterpret_cast<SizeType*>(wholeData);
+    *metaData++        = capacity;
+    *metaData++        = oldCount;
+    if(mData)
+    {
+      // copy over the old data
+      memMoveFunction(metaData, mData, oldCount * elementSize);
+    }
+    // release old buffer and set new data as mData
+    Replace(reinterpret_cast<void*>(metaData));
+  }
+}
+
+void VectorBase::ShrinkToFitWithCustomMoveFunction(SizeType elementSize, MemMoveFunctionType memMoveFunction)
+{
+  if(mData)
+  {
+    const SizeType count = Count();
+    if(count)
+    {
+      const SizeType oldCapacity = Capacity();
+      if(count != oldCapacity)
+      {
+        DALI_ASSERT_VECTOR(count < oldCapacity && "Count is bigger than capacity!");
+
+        const SizeType wholeAllocation = sizeof(SizeType) * 2u + count * elementSize;
+        void*          wholeData       = malloc(wholeAllocation);
+        DALI_ASSERT_ALWAYS(wholeData && "VectorBase::ShrinkToFitWithCustomMoveFunction - Memory allocation failed");
+
+#if defined(DEBUG_ENABLED)
+        memset(wholeData, 0xaa, wholeAllocation);
+#endif
+        SizeType* metaData = reinterpret_cast<SizeType*>(wholeData);
+        *metaData++        = count;
+        *metaData++        = count;
+
+        memMoveFunction(metaData, mData, count * elementSize);
+        Replace(reinterpret_cast<void*>(metaData));
+      }
+    }
+    else
+    {
+      Release();
+    }
+  }
+}
+
+void VectorBase::Copy(const VectorBase& vector, SizeType elementSize)
+{
+  // reserve space based on source capacity
+  const SizeType capacity        = vector.Capacity();
+  const SizeType wholeAllocation = sizeof(SizeType) * 2u + capacity * elementSize;
+  void*          wholeData       = malloc(wholeAllocation);
+  DALI_ASSERT_ALWAYS(wholeData && "VectorBase::Copy - Memory allocation failed");
+
+  // copy over whole data
+  SizeType* srcData = reinterpret_cast<SizeType*>(vector.mData);
+  SizeType* dstData = reinterpret_cast<SizeType*>(wholeData) + 2u;
+  memcpy(dstData - 2u, srcData - 2u, wholeAllocation);
+
+  // release old buffer and set new data as mData
+  Replace(reinterpret_cast<void*>(dstData));
+}
+
+void VectorBase::Swap(VectorBase& vector)
+{
+  // just swap the data pointers, metadata will swap as side effect
+  std::swap(mData, vector.mData);
+}
+
+void VectorBase::Erase(uint8_t* address, SizeType elementSize)
+{
+  // erase can be called on an unallocated vector
+  if(mData)
+  {
+    uint8_t*       startAddress  = reinterpret_cast<uint8_t*>(address) + elementSize;
+    const uint8_t* endAddress    = reinterpret_cast<uint8_t*>(mData) + Count() * elementSize;
+    SizeType       numberOfBytes = endAddress - startAddress;
+    // addresses overlap so use memmove
+    memmove(address, startAddress, numberOfBytes);
+    SetCount(Count() - 1u);
+  }
+}
+
+uint8_t* VectorBase::Erase(uint8_t* first, uint8_t* last, SizeType elementSize)
+{
+  uint8_t* next = nullptr;
+
+  if(mData)
+  {
+    uint8_t*       startAddress  = reinterpret_cast<uint8_t*>(last);
+    const uint8_t* endAddress    = reinterpret_cast<uint8_t*>(mData) + Count() * elementSize;
+    SizeType       numberOfBytes = endAddress - startAddress;
+    // addresses overlap so use memmove
+    memmove(first, startAddress, numberOfBytes);
+    SetCount(Count() - (last - first) / elementSize);
+
+    next = first;
+  }
+
+  return next;
+}
+
+void VectorBase::CopyMemory(uint8_t* destination, const uint8_t* source, SizeType numberOfBytes)
+{
+  if(((source < destination) && (source + numberOfBytes > destination)) ||
+     ((destination < source) && (destination + numberOfBytes > source)))
+  {
+    // If there is overlap, use memmove.
+    memmove(destination, source, numberOfBytes);
+  }
+  else
+  {
+    // It's safe to use memcpy if there isn't overlap.
+    memcpy(destination, source, numberOfBytes);
+  }
+}
+
+} //namespace DALI_NAMESPACE
+
+#if defined(DALI_VECTOR_BASE_CPP_RESTORE_COPY_MEMORY_MACRO)
+#pragma pop_macro("CopyMemory")
+#undef DALI_VECTOR_BASE_CPP_RESTORE_COPY_MEMORY_MACRO
+#endif

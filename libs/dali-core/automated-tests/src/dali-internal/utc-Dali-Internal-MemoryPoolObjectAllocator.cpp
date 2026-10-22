@@ -1,0 +1,213 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-test-suite-utils.h>
+#include <dali/public-api/dali-core.h>
+
+// Internal headers are allowed here
+
+#include <dali/internal/common/memory-pool-object-allocator.h>
+#include <dali/internal/common/core-impl.h>
+#include <dali/integration-api/profiling.h>
+
+using namespace Dali;
+
+void utc_dali_internal_memorypoolobjectallocator_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void utc_dali_internal_memorypoolobjectallocator_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+struct MemoryPoolObjectAllocatorTestObjectTracking
+{
+  int testObjectDestructed;
+  int testObjectMethod;
+  int testObjectDataAccess;
+
+  MemoryPoolObjectAllocatorTestObjectTracking()
+  : testObjectDestructed(0),
+    testObjectMethod(0),
+    testObjectDataAccess(0)
+  {
+  }
+};
+
+class MemoryPoolObjectAllocatorTestObject
+{
+public:
+  MemoryPoolObjectAllocatorTestObject()
+  : mData1(0),
+    mData2(false),
+    mTracking(NULL)
+  {
+  }
+
+  ~MemoryPoolObjectAllocatorTestObject()
+  {
+    if(mTracking)
+    {
+      mTracking->testObjectDestructed++;
+    }
+  }
+
+  void Method()
+  {
+    if(mTracking)
+    {
+      mTracking->testObjectMethod++;
+    }
+  }
+
+  void DataAccess()
+  {
+    mData1++;
+    mData2 = true;
+
+    if(mTracking)
+    {
+      mTracking->testObjectDataAccess++;
+    }
+  }
+
+  void SetTracking(MemoryPoolObjectAllocatorTestObjectTracking* tracking)
+  {
+    mTracking = tracking;
+  }
+
+private:
+  int  mData1;
+  bool mData2;
+
+  MemoryPoolObjectAllocatorTestObjectTracking* mTracking;
+};
+
+int UtcDaliMemoryPoolObjectAllocatorObjectAllocation(void)
+{
+  Internal::MemoryPoolObjectAllocator<MemoryPoolObjectAllocatorTestObject> allocator;
+
+  // Allocate an object
+  void*                                ptr         = allocator.AllocateRaw();
+  MemoryPoolObjectAllocatorTestObject* testObject1 = new(ptr) MemoryPoolObjectAllocatorTestObject();
+  DALI_TEST_CHECK(testObject1);
+
+  MemoryPoolObjectAllocatorTestObjectTracking tracking1;
+  testObject1->SetTracking(&tracking1);
+
+  testObject1->Method();
+  DALI_TEST_EQUALS(tracking1.testObjectMethod, 1, TEST_LOCATION);
+
+  testObject1->DataAccess();
+  DALI_TEST_EQUALS(tracking1.testObjectDataAccess, 1, TEST_LOCATION);
+
+  allocator.Destroy(testObject1);
+  DALI_TEST_EQUALS(tracking1.testObjectDestructed, 1, TEST_LOCATION);
+
+  // Reset and allocate another object
+  allocator.ResetMemoryPool();
+
+  ptr                                              = allocator.AllocateRaw();
+  MemoryPoolObjectAllocatorTestObject* testObject2 = new(ptr) MemoryPoolObjectAllocatorTestObject();
+  DALI_TEST_CHECK(testObject2);
+
+  MemoryPoolObjectAllocatorTestObjectTracking tracking2;
+  testObject2->SetTracking(&tracking2);
+
+  testObject2->Method();
+  DALI_TEST_EQUALS(tracking2.testObjectMethod, 1, TEST_LOCATION);
+
+  testObject2->DataAccess();
+  DALI_TEST_EQUALS(tracking2.testObjectDataAccess, 1, TEST_LOCATION);
+
+  allocator.Destroy(testObject2);
+  DALI_TEST_EQUALS(tracking2.testObjectDestructed, 1, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliMemoryPoolObjectAllocatorObjectRawAllocation(void)
+{
+  Internal::MemoryPoolObjectAllocator<MemoryPoolObjectAllocatorTestObject> allocator;
+
+  MemoryPoolObjectAllocatorTestObject* testObject = new(allocator.AllocateRaw()) MemoryPoolObjectAllocatorTestObject();
+  DALI_TEST_CHECK(testObject);
+
+  MemoryPoolObjectAllocatorTestObjectTracking tracking;
+  testObject->SetTracking(&tracking);
+
+  testObject->Method();
+  DALI_TEST_EQUALS(tracking.testObjectMethod, 1, TEST_LOCATION);
+
+  testObject->DataAccess();
+  DALI_TEST_EQUALS(tracking.testObjectDataAccess, 1, TEST_LOCATION);
+
+  allocator.Destroy(testObject);
+  DALI_TEST_EQUALS(tracking.testObjectDestructed, 1, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliMemoryPoolObjectAllocatorObjectAllocationPOD(void)
+{
+  Internal::MemoryPoolObjectAllocator<bool> allocator;
+
+  void* ptr         = allocator.AllocateRaw();
+  bool* testObject1 = new(ptr) bool();
+  DALI_TEST_CHECK(testObject1);
+
+  allocator.Destroy(testObject1);
+
+  allocator.ResetMemoryPool();
+
+  ptr               = allocator.AllocateRaw();
+  bool* testObject2 = new(ptr) bool();
+  DALI_TEST_CHECK(testObject2);
+
+  allocator.Destroy(testObject2);
+
+  END_TEST;
+}
+
+
+int UtcDaliMemoryPoolLogging(void)
+{
+  setenv("DALI_MEMORY_POOL_INTERVAL", "1", 1);
+  TestApplication app;
+  tet_infoline("Testing DALi memory pool logging\n");
+
+  Actor parent = CreateRenderableActor();
+  app.GetScene().Add(parent);
+  Actor child = CreateRenderableActor();
+  parent.Add(child);
+  app.SendNotification();
+  app.Render();
+  Animation anim = Animation::New(10);
+  anim.AnimateTo(Property(child, Actor::Property::POSITION), Vector3(100.0f, 0.0f, 0.0f));
+  anim.Play();
+  app.SendNotification();
+  app.Render(1000);
+  app.GetCore().LogMemoryPools();
+
+  auto log = Dali::Integration::Profiling::LogMemoryPools();
+  tet_printf("Memory pool logging:\n%s\n", log.c_str());
+  DALI_TEST_CHECK(!log.empty());
+
+  END_TEST;
+}

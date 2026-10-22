@@ -1,0 +1,267 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/animation/constraint.h>
+
+// EXTERNAL INCLUDES
+#include <memory> ///< for std::unique_ptr
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/animation/constraint-impl.h>
+#include <dali/internal/event/animation/constraint-source-impl.h>
+#include <dali/internal/event/animation/property-constraint-ptr.h>
+#include <dali/internal/event/animation/property-constraint.h>
+
+namespace DALI_NAMESPACE
+{
+namespace // unnamed namespace
+{
+template<class P>
+Internal::PropertyConstraint<P>* CreatePropertyConstraint(CallbackBase* func)
+{
+  return new Internal::PropertyConstraint<P>(reinterpret_cast<Dali::Constraint::Function<P>*>(func));
+}
+
+} // unnamed namespace
+
+const Constraint::RemoveAction Constraint::DEFAULT_REMOVE_ACTION = Constraint::BAKE;
+
+Constraint::Constraint() = default;
+
+Constraint Constraint::Clone(Handle object)
+{
+  return Constraint(GetImplementation(*this).Clone(GetImplementation(object)));
+}
+
+Constraint::~Constraint() = default;
+
+Constraint::Constraint(const Constraint& constraint) = default;
+
+Constraint& Constraint::operator=(const Constraint& rhs) = default;
+
+Constraint::Constraint(Constraint&& rhs) noexcept = default;
+
+Constraint& Constraint::operator=(Constraint&& rhs) noexcept = default;
+
+Constraint Constraint::DownCast(BaseHandle baseHandle)
+{
+  return Constraint(dynamic_cast<Dali::Internal::ConstraintBase*>(baseHandle.GetObjectPtr()));
+}
+
+void Constraint::AddSource(ConstraintSource source)
+{
+  GetImplementation(*this).AddSource(Internal::Source(source));
+}
+
+void Constraint::Apply()
+{
+  GetImplementation(*this).Apply();
+}
+
+void Constraint::ApplyPost()
+{
+  GetImplementation(*this).ApplyPost();
+}
+
+void Constraint::Remove()
+{
+  GetImplementation(*this).Remove();
+}
+
+Handle Constraint::GetTargetObject()
+{
+  return GetImplementation(*this).GetTargetObject();
+}
+
+Property::Index Constraint::GetTargetProperty()
+{
+  return GetImplementation(*this).GetTargetProperty();
+}
+
+void Constraint::SetRemoveAction(Constraint::RemoveAction action)
+{
+  GetImplementation(*this).SetRemoveAction(action);
+}
+
+Constraint::RemoveAction Constraint::GetRemoveAction() const
+{
+  return GetImplementation(*this).GetRemoveAction();
+}
+
+void Constraint::SetApplyRate(uint32_t applyRate)
+{
+  GetImplementation(*this).SetApplyRate(applyRate);
+}
+
+uint32_t Constraint::GetApplyRate() const
+{
+  return GetImplementation(*this).GetApplyRate();
+}
+
+void Constraint::SetTag(const uint32_t tag)
+{
+  DALI_ASSERT_ALWAYS(tag <= ConstraintTagRanges::CUSTOM_CONSTRAINT_TAG_MAX && "Out of tag range!");
+  GetImplementation(*this).SetTag(tag);
+}
+
+uint32_t Constraint::GetTag() const
+{
+  return GetImplementation(*this).GetTag();
+}
+
+Constraint::State Constraint::GetState() const
+{
+  return GetImplementation(*this).GetState();
+}
+
+uint32_t Constraint::GetSourceCount() const
+{
+  return GetImplementation(*this).GetSourceCount();
+}
+
+ConstraintSource Constraint::GetSourceAt(uint32_t index) const
+{
+  return GetImplementation(*this).GetSourceAt(index);
+}
+
+Constraint::Constraint(Internal::ConstraintBase* constraint)
+: BaseHandle(constraint)
+{
+}
+
+Constraint Constraint::New(Handle handle, Property::Index targetIndex, Property::Type targetType, CallbackBase* function)
+{
+  Constraint                constraint;
+  Internal::SourceContainer sources;
+
+  std::unique_ptr<CallbackBase> functionPtr(function); // Ensure function is deleted if an exception is thrown
+
+  Internal::Object& object = GetImplementation(handle);
+
+  switch(targetType)
+  {
+    case Property::BOOLEAN:
+    {
+      Internal::PropertyConstraintPtr<bool>::Type funcPtr(CreatePropertyConstraint<bool>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<bool>::New(object,
+                                                                    targetIndex,
+                                                                    sources,
+                                                                    funcPtr));
+      break;
+    }
+
+    case Property::FLOAT:
+    {
+      Internal::PropertyConstraintPtr<float>::Type funcPtr(CreatePropertyConstraint<float>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<float>::New(object,
+                                                                     targetIndex,
+                                                                     sources,
+                                                                     funcPtr));
+      break;
+    }
+
+    case Property::INTEGER:
+    {
+      Internal::PropertyConstraintPtr<int>::Type funcPtr(CreatePropertyConstraint<int>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<int>::New(object,
+                                                                   targetIndex,
+                                                                   sources,
+                                                                   funcPtr));
+      break;
+    }
+
+    case Property::VECTOR2:
+    {
+      Internal::PropertyConstraintPtr<Vector2>::Type funcPtr(CreatePropertyConstraint<Vector2>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<Vector2>::New(object,
+                                                                       targetIndex,
+                                                                       sources,
+                                                                       funcPtr));
+      break;
+    }
+
+    case Property::VECTOR3:
+    {
+      Internal::PropertyConstraintPtr<Vector3>::Type funcPtr(CreatePropertyConstraint<Vector3>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<Vector3>::New(object,
+                                                                       targetIndex,
+                                                                       sources,
+                                                                       funcPtr));
+      break;
+    }
+
+    case Property::VECTOR4:
+    {
+      Internal::PropertyConstraintPtr<Vector4>::Type funcPtr(CreatePropertyConstraint<Vector4>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<Vector4>::New(object,
+                                                                       targetIndex,
+                                                                       sources,
+                                                                       funcPtr));
+      break;
+    }
+
+    case Property::ROTATION:
+    {
+      Internal::PropertyConstraintPtr<Quaternion>::Type funcPtr(CreatePropertyConstraint<Quaternion>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<Quaternion>::New(object,
+                                                                          targetIndex,
+                                                                          sources,
+                                                                          funcPtr));
+      break;
+    }
+
+    case Property::MATRIX:
+    {
+      Internal::PropertyConstraintPtr<Matrix>::Type funcPtr(CreatePropertyConstraint<Matrix>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<Matrix>::New(object,
+                                                                      targetIndex,
+                                                                      sources,
+                                                                      funcPtr));
+      break;
+    }
+
+    case Property::MATRIX3:
+    {
+      Internal::PropertyConstraintPtr<Matrix3>::Type funcPtr(CreatePropertyConstraint<Matrix3>(functionPtr.release()));
+
+      constraint = Dali::Constraint(Internal::Constraint<Matrix3>::New(object,
+                                                                       targetIndex,
+                                                                       sources,
+                                                                       funcPtr));
+      break;
+    }
+
+    default:
+    {
+      DALI_ABORT("Property not constrainable");
+      break;
+    }
+  }
+
+  return constraint;
+}
+
+} //namespace DALI_NAMESPACE
