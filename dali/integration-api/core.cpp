@@ -1,0 +1,236 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/integration-api/core.h>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/events/event.h>
+#include <dali/integration-api/processor-interface.h>
+#include <dali/integration-api/scene-pre-render-status.h>
+#include <dali/internal/common/core-impl.h>
+#include <dali/public-api/actors/layer.h>
+#include <dali/public-api/common/dali-common.h>
+#include <dali/public-api/render-tasks/render-task-list.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Integration
+{
+Core* Core::New(RenderController&     renderController,
+                PlatformAbstraction&  platformAbstraction,
+                Graphics::Controller& graphicsController,
+                CorePolicyFlags       corePolicy)
+{
+  Core* instance  = new Core;
+  instance->mImpl = new Internal::Core(renderController,
+                                       platformAbstraction,
+                                       graphicsController,
+                                       corePolicy);
+
+  return instance;
+}
+
+Core::~Core()
+{
+  delete mImpl;
+}
+
+void Core::Initialize()
+{
+  mImpl->Initialize();
+}
+
+// Graphics Context Lifecycle
+
+void Core::ContextCreated()
+{
+  mImpl->ContextCreated();
+}
+
+void Core::ContextDestroyed()
+{
+  mImpl->ContextDestroyed();
+}
+
+// Core Lifecycle
+
+void Core::SceneCreated()
+{
+  mImpl->SceneCreated();
+}
+
+void Core::SceneDestroyed()
+{
+  mImpl->SceneDestroyed();
+}
+
+void Core::QueueEvent(const Event& event)
+{
+  mImpl->QueueEvent(event);
+}
+
+void Core::ForceRelayout()
+{
+  mImpl->ForceRelayout();
+}
+
+void Core::ProcessEvents()
+{
+  mImpl->ProcessEvents();
+}
+
+uint32_t Core::GetMaximumUpdateCount() const
+{
+  return mImpl->GetMaximumUpdateCount();
+}
+
+void Core::Update(float elapsedSeconds, uint32_t lastVSyncTimeMilliseconds, uint32_t nextVSyncTimeMilliseconds, UpdateStatus& status, bool renderToFboEnabled, bool isRenderingToFbo, bool uploadOnly)
+{
+  mImpl->Update(elapsedSeconds, lastVSyncTimeMilliseconds, nextVSyncTimeMilliseconds, status, renderToFboEnabled, isRenderingToFbo, uploadOnly);
+}
+
+void Core::PreRender(RenderStatus& status, bool forceClear)
+{
+  mImpl->PreRender(status, forceClear);
+}
+
+void Core::PreRenderScene(Integration::Scene& scene, Integration::ScenePreRenderStatus& status, std::vector<BoundsInteger>& damagedRects)
+{
+  mImpl->PreRenderScene(scene, status, damagedRects);
+}
+
+void Core::RenderScene(RenderStatus& status, Integration::Scene& scene, bool renderToFbo)
+{
+  mImpl->RenderScene(status, scene, renderToFbo);
+}
+
+void Core::RenderScene(RenderStatus& status, Integration::Scene& scene, bool renderToFbo, BoundsInteger& clippingRect)
+{
+  mImpl->RenderScene(status, scene, renderToFbo, clippingRect);
+}
+
+void Core::ClearScene(Integration::Scene scene)
+{
+  mImpl->ClearScene(scene);
+}
+
+void Core::PostRender()
+{
+  mImpl->PostRender();
+}
+
+// API for pre-initialized core.
+
+void Core::ChangeCorePolicy(CorePolicyFlags corePolicy)
+{
+  mImpl->ChangeCorePolicy(corePolicy);
+}
+
+void Core::ChangeGraphicsController(Graphics::Controller& graphicsController)
+{
+  mImpl->ChangeGraphicsController(graphicsController);
+}
+
+void Core::PreInitializeCompleted()
+{
+  mImpl->PreInitializeCompleted();
+}
+
+// Processor
+
+void Core::RegisterProcessor(Processor& processor, bool postProcessor)
+{
+  mImpl->RegisterProcessor(processor, postProcessor);
+}
+
+void Core::UnregisterProcessor(Processor& processor, bool postProcessor)
+{
+  mImpl->UnregisterProcessor(processor, postProcessor);
+}
+
+void Core::RegisterProcessorOnce(Processor& processor, bool postProcessor)
+{
+  mImpl->RegisterProcessorOnce(processor, postProcessor);
+}
+
+void Core::UnregisterProcessorOnce(Processor& processor, bool postProcessor)
+{
+  mImpl->UnregisterProcessorOnce(processor, postProcessor);
+}
+
+// FrameCallbackInterface
+
+void Core::AddFrameCallback(FrameCallbackInterface& frameCallback, Actor rootActor)
+{
+  if(rootActor)
+  {
+    mImpl->AddFrameCallback(frameCallback, GetImplementation(rootActor));
+  }
+  else
+  {
+    mImpl->AddGlobalFrameCallback(frameCallback);
+  }
+}
+
+void Core::RemoveFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  mImpl->RemoveFrameCallback(frameCallback);
+}
+
+Dali::UpdateProxy::NotifySyncPoint Core::NotifyFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  return mImpl->NotifyFrameCallback(frameCallback);
+}
+
+// Rendering Behavior
+
+void Core::KeepRendering(float durationSeconds)
+{
+  mImpl->KeepRendering(durationSeconds);
+}
+
+void Core::SetRenderingBehavior(Integration::RenderingBehavior renderingBehavior)
+{
+  mImpl->SetRenderingBehavior(renderingBehavior);
+}
+
+Integration::RenderingBehavior Core::GetRenderingBehavior() const
+{
+  return mImpl->GetRenderingBehavior();
+}
+
+// ETC
+
+ObjectRegistry Core::GetObjectRegistry() const
+{
+  return ObjectRegistry(&mImpl->GetObjectRegistry());
+}
+
+void Core::LogMemoryPools() const
+{
+  mImpl->LogMemoryPools();
+}
+
+Core::Core()
+: mImpl(nullptr)
+{
+}
+
+} // namespace Integration
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,348 @@
+#ifndef DALI_INTERNAL_EVENT_PAN_GESTURE_EVENT_PROCESSOR_H
+#define DALI_INTERNAL_EVENT_PAN_GESTURE_EVENT_PROCESSOR_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/events/gesture-device-profile-table.h>
+#include <dali/internal/event/events/gesture-processor.h>
+#include <dali/internal/event/events/gesture-threshold-values.h>
+#include <dali/internal/event/events/pan-gesture/pan-gesture-detector-impl.h>
+#include <dali/internal/event/render-tasks/render-task-impl.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class Scene;
+struct GestureEvent;
+struct PanGestureEvent;
+struct PanGestureRequest;
+
+namespace SceneGraph
+{
+class PanGesture;
+class UpdateManager;
+} // namespace SceneGraph
+
+/**
+ * Pan Gesture Event Processing:
+ *
+ * When we receive a pan gesture event, we do the following:
+ * - Find the actor that requires a pan where the pan started from (i.e. the down position).
+ * - Emit the gesture if the event satisfies the detector conditions.
+ *
+ * The above is only checked when our gesture starts.  We continue sending the pan gesture to the
+ * same actor and detector until the pan ends or is cancelled.
+ */
+class PanGestureProcessor : public GestureProcessor, public RecognizerObserver<PanGestureEvent>
+{
+public:
+  /**
+   * Create a pan gesture processor.
+   * @param[in] updateManager The Update Manager
+   */
+  PanGestureProcessor(SceneGraph::UpdateManager& updateManager);
+
+  /**
+   * Destructor
+   */
+  ~PanGestureProcessor() override;
+
+public: // To be called by GestureEventProcessor
+  /**
+   * This method is called whenever a pan gesture event occurs.
+   * @param[in] scene The scene the pan gesture event occurs in.
+   * @param[in] panEvent The event that has occurred.
+   */
+  void Process(Scene& scene, const PanGestureEvent& panEvent) override;
+
+  /**
+   * Get the current gestured actor
+   * @return The current gestured actor, or nullptr if no actor is currently gestured
+   */
+  Actor* GetCurrentGesturedActor() override;
+
+  /**
+   * Adds a gesture detector to this gesture processor.
+   * If this is the first gesture detector being added, then this method registers the required
+   * gesture with the adaptor.
+   * @param[in] gestureDetector The gesture detector being added.
+   * @param[in] scene           The scene the pan gesture event occurs in.
+   */
+  void AddGestureDetector(PanGestureDetector* gestureDetector, Scene& scene);
+
+  /**
+   * Removes the specified gesture detector from this gesture processor.  If, after removing this
+   * gesture detector, there are no more gesture detectors registered, then this method unregisters
+   * the gesture from the adaptor.
+   * @param[in]  gestureDetector  The gesture detector being removed.
+   */
+  void RemoveGestureDetector(PanGestureDetector* gestureDetector);
+
+  /**
+   * This method updates the gesture detection parameters.
+   * @param[in]  gestureDetector  The gesture detector that has been updated.
+   */
+  void GestureDetectorUpdated(PanGestureDetector* gestureDetector);
+
+  /**
+   * Sets the pan gesture properties stored in the scene object directly,
+   * @param[in]  pan  The pan gesture to override the properties with.
+   * @return true if Core::Update required
+   * @note If we are already processing a normal pan, then this call is ignored.
+   */
+  bool SetPanGestureProperties(const Dali::PanGesture& pan);
+
+  /**
+   * Called to provide pan-gesture profiling information.
+   */
+  void EnableProfiling();
+
+  /**
+   * Called to set the prediction mode for pan gestures
+   *
+   * @param[in] mode The prediction mode
+   *
+   * Valid modes:
+   * 0 - No prediction
+   * 1 - Prediction using average acceleration
+   */
+  void SetPredictionMode(int mode);
+
+  /**
+   * @brief Sets the prediction amount of the pan gesture
+   *
+   * @param[in] amount The prediction amount in milliseconds
+   */
+  void SetPredictionAmount(unsigned int amount);
+
+  /**
+   * @brief Sets the upper bound of the prediction amount for clamping
+   *
+   * @param[in] amount The prediction amount in milliseconds
+   */
+  void SetMaximumPredictionAmount(unsigned int amount);
+
+  /**
+   * @brief Sets the lower bound of the prediction amount for clamping
+   *
+   * @param[in] amount The prediction amount in milliseconds
+   */
+  void SetMinimumPredictionAmount(unsigned int amount);
+
+  /**
+   * @brief Sets the amount of prediction interpolation to adjust when the pan velocity is changed
+   *
+   * @param[in] amount The prediction amount in milliseconds
+   */
+  void SetPredictionAmountAdjustment(unsigned int amount);
+
+  /**
+   * Called to set the prediction mode for pan gestures
+   *
+   * @param[in] mode The prediction mode
+   *
+   * Valid modes:
+   * 0 - No smoothing
+   * 1 - average between last 2 values
+   */
+  void SetSmoothingMode(int mode);
+
+  /**
+   * @brief Sets the smoothing amount of the pan gesture
+   *
+   * @param[in] amount The smotthing amount from 0.0f (none) to 1.0f (full)
+   */
+  void SetSmoothingAmount(float amount);
+
+  /*
+   * @brief Sets whether to use actual times of the real gesture and frames or not.
+   *
+   * @param[in] value True = use actual times, False = use perfect values
+   */
+  void SetUseActualTimes(bool value);
+
+  /**
+   * @brief Sets the interpolation time range (ms) of past points to use (with weights) when interpolating.
+   *
+   * @param[in] value Time range in ms
+   */
+  void SetInterpolationTimeRange(int value);
+
+  /**
+   * @brief Sets whether to use scalar only prediction, which when enabled, ignores acceleration.
+   *
+   * @param[in] value True = use scalar prediction only
+   */
+  void SetScalarOnlyPredictionEnabled(bool value);
+
+  /**
+   * @brief Sets whether to use two point prediction. This combines two interpolated points to get more steady acceleration and velocity values.
+   *
+   * @param[in] value True = use two point prediction
+   */
+  void SetTwoPointPredictionEnabled(bool value);
+
+  /**
+   * @brief Sets the time in the past to interpolate the second point when using two point interpolation.
+   *
+   * @param[in] value Time in past in ms
+   */
+  void SetTwoPointInterpolatePastTime(int value);
+
+  /**
+   * @brief Sets the two point velocity bias. This is the ratio of first and second points to use for velocity.
+   *
+   * @param[in] value 0.0f = 100% first point. 1.0f = 100% of second point.
+   */
+  void SetTwoPointVelocityBias(float value);
+
+  /**
+   * @brief Sets the two point acceleration bias. This is the ratio of first and second points to use for acceleration.
+   *
+   * @param[in] value 0.0f = 100% first point. 1.0f = 100% of second point.
+   */
+  void SetTwoPointAccelerationBias(float value);
+
+  /**
+   * @brief Sets the range of time (ms) of points in the history to perform multitap smoothing with (if enabled).
+   *
+   * @param[in] value Time in past in ms
+   */
+  void SetMultitapSmoothingRange(int value);
+
+  /**
+   * This method sets the minimum distance to start a pan
+   * @param[in] value The distance in pixels
+   */
+  void SetMinimumDistance(int32_t value);
+
+  /**
+   * Sets the minimum touch events required before a pan can be started
+   * @param[in] value The number of touch events
+   */
+  void SetMinimumPanEvents(int32_t value);
+
+public: // for PanGestureDetector
+  /**
+   * @return the pan gesture scene object
+   */
+  const SceneGraph::PanGesture& GetSceneObject() const;
+
+  /**
+   * Gets the minimum distance to start a pan
+   * @return The distance in pixels
+   */
+  int32_t GetMinimumDistance() const;
+
+  /**
+   * Gets the minimum touch events required before a pan can be started
+   * @return The number of touch events
+   */
+  int32_t GetMinimumPanEvents() const;
+
+  /**
+   * @brief Replaces the application-wide per-device thresholds and pushes them to the recognizer.
+   * @param[in] thresholds The per-device threshold table
+   */
+  void SetDeviceThresholds(const GestureDeviceProfileTable<PanThresholdValues>& thresholds);
+
+  /**
+   * @brief Retrieves the application-wide per-device thresholds.
+   * @return The per-device threshold table
+   */
+  const GestureDeviceProfileTable<PanThresholdValues>& GetDeviceThresholds() const;
+
+private:
+  // Undefined
+  PanGestureProcessor(const PanGestureProcessor&);
+  PanGestureProcessor& operator=(const PanGestureProcessor& rhs);
+
+  /**
+   * Builds the request the shared recognizer should use: the union of the attached detectors'
+   * requirements plus the current recognition thresholds.
+   * @param[out] request The request to fill.
+   */
+  void FillRequest(PanGestureRequest& request) const;
+
+  /**
+   * Rebuilds the request from the attached detectors and the current thresholds and pushes it to
+   * the recognizer. Requires an existing recognizer.
+   */
+  void UpdateDetection();
+
+  /**
+   * Creates a PanGesture and asks the specified detector to emit its detected signal.
+   * @param[in]  actor             The actor that has been panned.
+   * @param[in]  gestureDetectors  The gesture detector container that should emit the signal.
+   * @param[in]  panEvent          The panEvent received from the adaptor.
+   * @param[in]  localCurrent      Current position relative to the actor attached to the detector.
+   * @param[in]  state             The state of the gesture.
+   * @param[in]  renderTask        The renderTask to use.
+   * @param[in]  scene             The scene the pan gesture event occurs in.
+   */
+  void EmitPanSignal(Actor*                          actor,
+                     const GestureDetectorContainer& gestureDetectors,
+                     const PanGestureEvent&          panEvent,
+                     Vector2                         localCurrent,
+                     GestureState                    state,
+                     RenderTaskPtr                   renderTask,
+                     Scene*                          scene);
+
+  // GestureProcessor overrides
+
+  /**
+   * @copydoc GestureProcessor::OnGesturedActorStageDisconnection()
+   */
+  void OnGesturedActorStageDisconnection() override;
+
+  /**
+   * @copydoc GestureProcessor::CheckGestureDetector()
+   */
+  bool CheckGestureDetector(GestureDetector* detector, Actor* actor) override;
+
+  /**
+   * @copydoc GestureProcessor::EmitGestureSignal()
+   */
+  void EmitGestureSignal(Actor* actor, const GestureDetectorContainer& gestureDetectors, Vector2 actorCoordinates) override;
+
+private:
+  PanGestureDetectorContainer mPanGestureDetectors;
+  GestureDetectorContainer    mCurrentPanEmitters;
+  RenderTaskPtr               mCurrentRenderTask;
+  Vector2                     mPossiblePanPosition;
+
+  Vector2 mLastVelocity;       ///< The last recorded velocity in local actor coordinates.
+  Vector2 mLastScreenVelocity; ///< The last recorded velocity in screen coordinates.
+
+  int32_t mMinimumDistance;
+  int32_t mMinimumPanEvents;
+
+  const PanGestureEvent*  mCurrentPanEvent; ///< Pointer to current PanEvent, used when calling ProcessAndEmit()
+  Dali::Internal::Scene*  mCurrentScene;    ///< The scene where the gesture event occurred
+  SceneGraph::PanGesture* mSceneObject;     ///< Not owned, but we write to it directly
+
+  GestureDeviceProfileTable<PanThresholdValues> mDeviceThresholds; ///< Application-wide per-device thresholds.
+};
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_EVENT_PAN_GESTURE_EVENT_PROCESSOR_H

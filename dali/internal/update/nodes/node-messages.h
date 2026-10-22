@@ -1,0 +1,392 @@
+#ifndef DALI_INTERNAL_SCENE_GRAPH_NODE_MESSAGES_H
+#define DALI_INTERNAL_SCENE_GRAPH_NODE_MESSAGES_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/internal/common/message.h>
+#include <dali/internal/update/manager/update-manager.h>
+#include <dali/internal/update/nodes/node.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace SceneGraph
+{
+// Messages for Node
+
+class NodePropertyMessageBase : public MessageBase
+{
+public:
+  /**
+   * Create a message.
+   */
+  NodePropertyMessageBase(UpdateManager& updateManager);
+
+  /**
+   * Virtual destructor
+   */
+  ~NodePropertyMessageBase() override;
+
+private:
+  // Undefined
+  NodePropertyMessageBase(const NodePropertyMessageBase&);
+  NodePropertyMessageBase& operator=(const NodePropertyMessageBase& rhs);
+
+protected:
+  UpdateManager& mUpdateManager;
+};
+
+/**
+ * Templated message which bakes a Node property.
+ */
+template<typename P>
+class NodePropertyMessage : public NodePropertyMessageBase
+{
+public:
+  using MemberFunction = void (AnimatableProperty<P>::*)(typename ParameterType<P>::PassingType);
+
+  /**
+   * Send a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] eventThreadServices The object used to send messages to the scene graph
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the property.
+   */
+  static void Send(EventThreadServices&                   eventThreadServices,
+                   const Node*                            node,
+                   const AnimatableProperty<P>*           property,
+                   MemberFunction                         member,
+                   typename ParameterType<P>::PassingType value)
+  {
+    // Reserve some memory inside the message queue
+    uint32_t* slot = eventThreadServices.ReserveMessageSlot(sizeof(NodePropertyMessage));
+
+    auto& updateManager = eventThreadServices.GetUpdateManager();
+
+    // Construct message in the message queue memory; note that delete should not be called on the return value
+    new(slot) NodePropertyMessage(updateManager, node, property, member, value);
+
+    // Non-transform property doesn't get reset. Add a resetter.
+    OwnerPointer<SceneGraph::PropertyResetterBase> resetter(
+      new SceneGraph::BakerResetter(const_cast<Node*>(node),
+                                    const_cast<AnimatableProperty<P>*>(property),
+                                    BakerResetter::Lifetime::BAKE));
+    AddResetterMessage(updateManager, resetter);
+  }
+
+  /**
+   * Virtual destructor
+   */
+  ~NodePropertyMessage() override = default;
+
+  /**
+   * @copydoc MessageBase::Process
+   */
+  void Process() override
+  {
+    (mProperty->*mMemberFunction)(mParam);
+  }
+
+private:
+  /**
+   * Create a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] updateManager The update-manager.
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the property.
+   */
+  NodePropertyMessage(UpdateManager&                         updateManager,
+                      const Node*                            node,
+                      const AnimatableProperty<P>*           property,
+                      MemberFunction                         member,
+                      typename ParameterType<P>::PassingType value)
+  : NodePropertyMessageBase(updateManager),
+    mNode(const_cast<Node*>(node)),
+    mProperty(const_cast<AnimatableProperty<P>*>(property)),
+    mMemberFunction(member),
+    mParam(value)
+  {
+  }
+
+private:
+  Node*                                 mNode;
+  AnimatableProperty<P>*                mProperty;
+  MemberFunction                        mMemberFunction;
+  typename ParameterType<P>::HolderType mParam;
+};
+
+/**
+ * Templated message which bakes a Node property component.
+ */
+template<typename P>
+class NodePropertyComponentMessage : public NodePropertyMessageBase
+{
+public:
+  using MemberFunction = void (AnimatableProperty<P>::*)(float);
+
+  /**
+   * Send a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] eventThreadServices The object used to send messages to the scene graph
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the X,Y,Z or W component.
+   */
+  static void Send(EventThreadServices&         eventThreadServices,
+                   const Node*                  node,
+                   const AnimatableProperty<P>* property,
+                   MemberFunction               member,
+                   float                        value)
+  {
+    // Reserve some memory inside the message queue
+    uint32_t* slot = eventThreadServices.ReserveMessageSlot(sizeof(NodePropertyComponentMessage));
+
+    auto& updateManager = eventThreadServices.GetUpdateManager();
+
+    // Construct message in the message queue memory; note that delete should not be called on the return value
+    new(slot) NodePropertyComponentMessage(updateManager, node, property, member, value);
+
+    // Non-transform property doesn't get reset. Add a resetter.
+    OwnerPointer<SceneGraph::PropertyResetterBase> resetter(
+      new SceneGraph::BakerResetter(const_cast<Node*>(node),
+                                    const_cast<AnimatableProperty<P>*>(property),
+                                    BakerResetter::Lifetime::BAKE));
+    AddResetterMessage(updateManager, resetter);
+  }
+
+  /**
+   * Virtual destructor
+   */
+  ~NodePropertyComponentMessage() override = default;
+
+  /**
+   * @copydoc MessageBase::Process
+   */
+  void Process() override
+  {
+    (mProperty->*mMemberFunction)(mParam);
+  }
+
+private:
+  /**
+   * Create a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] updateManager The update-manager.
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the X,Y,Z or W component.
+   */
+  NodePropertyComponentMessage(UpdateManager&               updateManager,
+                               const Node*                  node,
+                               const AnimatableProperty<P>* property,
+                               MemberFunction               member,
+                               float                        value)
+  : NodePropertyMessageBase(updateManager),
+    mNode(const_cast<Node*>(node)),
+    mProperty(const_cast<AnimatableProperty<P>*>(property)),
+    mMemberFunction(member),
+    mParam(value)
+  {
+  }
+
+private:
+  Node*                  mNode;
+  AnimatableProperty<P>* mProperty;
+  MemberFunction         mMemberFunction;
+  float                  mParam;
+};
+
+/**
+ * Templated message which sets a Node transform property.
+ */
+template<typename P>
+class NodeTransformPropertyMessage : public NodePropertyMessageBase
+{
+public:
+  using MemberFunction = void (TransformManagerPropertyHandler<P>::*)(const P&);
+
+  /**
+   * Send a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] eventThreadServices The object used to send messages to the scene graph
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the property.
+   */
+  static void Send(EventThreadServices&                      eventThreadServices,
+                   const Node*                               node,
+                   const TransformManagerPropertyHandler<P>* property,
+                   MemberFunction                            member,
+                   const P&                                  value)
+  {
+    // Reserve some memory inside the message queue
+    uint32_t* slot = eventThreadServices.ReserveMessageSlot(sizeof(NodeTransformPropertyMessage));
+
+    // Construct message in the message queue memory; note that delete should not be called on the return value
+    new(slot) NodeTransformPropertyMessage(eventThreadServices.GetUpdateManager(), node, property, member, value);
+  }
+
+  /**
+   * Virtual destructor
+   */
+  ~NodeTransformPropertyMessage() override = default;
+
+  /**
+   * @copydoc MessageBase::Process
+   */
+  void Process() override
+  {
+    if(DALI_UNLIKELY(!TransformManager::IsValidTransformId(mNode->GetTransformId())))
+    {
+      return; // Will be set correctly when Node is fully initialized
+    }
+    (mProperty->*mMemberFunction)(mParam);
+  }
+
+private:
+  /**
+   * Create a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] updateManager The update-manager.
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the property.
+   */
+  NodeTransformPropertyMessage(UpdateManager&                            updateManager,
+                               const Node*                               node,
+                               const TransformManagerPropertyHandler<P>* property,
+                               MemberFunction                            member,
+                               const P&                                  value)
+  : NodePropertyMessageBase(updateManager),
+    mNode(const_cast<Node*>(node)),
+    mProperty(const_cast<TransformManagerPropertyHandler<P>*>(property)),
+    mMemberFunction(member),
+    mParam(value)
+  {
+  }
+
+private:
+  Node*                               mNode;
+  TransformManagerPropertyHandler<P>* mProperty;
+  MemberFunction                      mMemberFunction;
+  P                                   mParam;
+};
+
+/**
+ * Templated message which sets a Node transform property component.
+ */
+template<typename P>
+class NodeTransformComponentMessage : public NodePropertyMessageBase
+{
+public:
+  using MemberFunction = void (TransformManagerPropertyHandler<P>::*)(float);
+
+  /**
+   * Send a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] eventThreadServices The object used to send messages to the scene graph
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the X,Y,Z or W component.
+   */
+  static void Send(EventThreadServices&                      eventThreadServices,
+                   const Node*                               node,
+                   const TransformManagerPropertyHandler<P>* property,
+                   MemberFunction                            member,
+                   float                                     value)
+  {
+    // Reserve some memory inside the message queue
+    uint32_t* slot = eventThreadServices.ReserveMessageSlot(sizeof(NodeTransformComponentMessage));
+
+    // Construct message in the message queue memory; note that delete should not be called on the return value
+    new(slot) NodeTransformComponentMessage(eventThreadServices.GetUpdateManager(), node, property, member, value);
+  }
+
+  /**
+   * Virtual destructor
+   */
+  ~NodeTransformComponentMessage() override = default;
+
+  /**
+   * @copydoc MessageBase::Process
+   */
+  void Process() override
+  {
+    if(DALI_UNLIKELY(!TransformManager::IsValidTransformId(mNode->GetTransformId())))
+    {
+      return; // Will be set correctly when Node is fully initialized
+    }
+    (mProperty->*mMemberFunction)(mParam);
+  }
+
+private:
+  /**
+   * Create a message.
+   * @note The node is expected to be const in the thread which sends this message.
+   * However it can be modified when Process() is called in a different thread.
+   * @param[in] updateManager The update-manager.
+   * @param[in] node The node.
+   * @param[in] property The property to bake.
+   * @param[in] member The member function of the object.
+   * @param[in] value The new value of the X,Y,Z or W component.
+   */
+  NodeTransformComponentMessage(UpdateManager&                            updateManager,
+                                const Node*                               node,
+                                const TransformManagerPropertyHandler<P>* property,
+                                MemberFunction                            member,
+                                float                                     value)
+  : NodePropertyMessageBase(updateManager),
+    mNode(const_cast<Node*>(node)),
+    mProperty(const_cast<TransformManagerPropertyHandler<P>*>(property)),
+    mMemberFunction(member),
+    mParam(value)
+  {
+  }
+
+private:
+  Node*                               mNode;
+  TransformManagerPropertyHandler<P>* mProperty;
+  MemberFunction                      mMemberFunction;
+  float                               mParam;
+};
+
+} // namespace SceneGraph
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_SCENE_GRAPH_NODE_MESSAGES_H

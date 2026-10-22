@@ -1,0 +1,128 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/actors/custom-actor-impl.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/actors/custom-actor-internal.h>
+#include <dali/internal/event/rendering/renderer-impl.h>
+#include <dali/public-api/common/dali-common.h>
+
+namespace DALI_NAMESPACE
+{
+CustomActor CustomActorImpl::Self() const
+{
+  return CustomActor(mOwner);
+}
+
+void CustomActorImpl::OnPropertySet(Property::Index index, const Property::Value& propertyValue)
+{
+}
+
+void CustomActorImpl::RegisterOffScreenRenderableType(OffScreenRenderable::Type offScreenRenderableType)
+{
+  mOwner->RegisterOffScreenRenderableType(offScreenRenderableType);
+}
+
+void CustomActorImpl::UnregisterOffScreenRenderableType(OffScreenRenderable::Type offScreenRenderableType)
+{
+  mOwner->UnregisterOffScreenRenderableType(offScreenRenderableType);
+}
+
+OffScreenRenderable::Type CustomActorImpl::GetOffScreenRenderableType()
+{
+  return mOwner->GetOffScreenRenderableType();
+}
+
+void CustomActorImpl::RequestRenderTaskReorder()
+{
+  mOwner->RequestRenderTaskReorder();
+}
+
+bool CustomActorImpl::HasIntrinsicTouchHandling() const
+{
+  return false;
+}
+
+bool CustomActorImpl::OnTouchEvent(const TouchEvent& /*event*/)
+{
+  return false;
+}
+
+bool CustomActorImpl::HasIntrinsicHoverHandling() const
+{
+  return false;
+}
+
+bool CustomActorImpl::OnHoverEvent(const HoverEvent& /*event*/)
+{
+  return false;
+}
+
+bool CustomActorImpl::HasIntrinsicWheelHandling() const
+{
+  return false;
+}
+
+bool CustomActorImpl::OnWheelEvent(const WheelEvent& /*event*/)
+{
+  return false;
+}
+
+void CustomActorImpl::OnFinalizeTouchEventDispatch(const TouchEvent& /*event*/)
+{
+}
+
+void CustomActorImpl::OnFinalizeHoverEventDispatch(const HoverEvent& /*event*/)
+{
+}
+
+void CustomActorImpl::OnFinalizeWheelEventDispatch(const WheelEvent& /*event*/)
+{
+}
+
+CustomActorImpl::CustomActorImpl()
+: mOwner(nullptr)
+{
+}
+
+CustomActorImpl::~CustomActorImpl() = default;
+
+void CustomActorImpl::Initialize(Internal::CustomActor& owner)
+{
+  DALI_ASSERT_DEBUG(mOwner == NULL); // should not already be owned
+
+  mOwner = &owner;
+}
+
+Internal::CustomActor* CustomActorImpl::GetOwner() const
+{
+  return mOwner;
+}
+
+void CustomActorImpl::SetTransparent(bool transparent)
+{
+  mOwner->SetTransparent(transparent);
+}
+
+bool CustomActorImpl::IsTransparent() const
+{
+  return mOwner->IsTransparent();
+}
+
+} //namespace DALI_NAMESPACE

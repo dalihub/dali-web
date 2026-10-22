@@ -1,0 +1,369 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// CLASS HEADER
+#include <dali/internal/update/common/scene-graph-scene.h>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/core-enumerations.h>
+#include <dali/internal/update/render-tasks/scene-graph-render-task-list.h>
+#include <dali/public-api/common/dali-utility.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace SceneGraph
+{
+Scene::Scene(const Graphics::RenderTargetCreateInfo& createInfo)
+: mRenderTargetCreateInfo(createInfo),
+  mFrameRenderedCallbacks(),
+  mFramePresentedCallbacks(),
+  mSurfaceRect(),
+  mSurfaceOrientation(0),
+  mScreenOrientation(0),
+  mSurfaceRectChangedCount(0u),
+  mForceRenderingFrames(0u),
+  mRotationCompletedAcknowledgement(false),
+  mSkipRendering(false),
+  mNeedFullUpdate(false),
+  mDepthBufferEnabled(false),
+  mStencilBufferEnabled(false),
+  mPartialUpdateEnabled(false),
+  mHasRenderInstructionToScene(false),
+  mRenderPassDirty(false),
+  mVisible(true)
+{
+}
+
+Scene::~Scene()
+{
+  mFrameRenderedCallbacks.clear();
+  mFramePresentedCallbacks.clear();
+}
+
+void Scene::SetScenePolicyFlags(ScenePolicyFlagBits flags)
+{
+  const bool newDepth   = (flags & ScenePolicyFlagBits::DEPTH_BUFFER_ENABLED);
+  const bool newStencil = (flags & ScenePolicyFlagBits::STENCIL_BUFFER_ENABLED);
+
+  if(newDepth != mDepthBufferEnabled || newStencil != mStencilBufferEnabled)
+  {
+    mRenderPassDirty = true;
+  }
+
+  mDepthBufferEnabled   = newDepth;
+  mStencilBufferEnabled = newStencil;
+  mPartialUpdateEnabled = (flags & ScenePolicyFlagBits::PARTIAL_UPDATE_ENABLED);
+}
+
+void Scene::Initialize(Graphics::Controller& graphicsController)
+{
+  RenderTargetGraphicsObjects::Initialize(graphicsController);
+
+  // Create the render target for the surface. (This must happen in render thread).
+  RenderTargetGraphicsObjects::CreateRenderTarget(graphicsController, mRenderTargetCreateInfo);
+
+  BuildRenderPasses(graphicsController);
+  mRenderPassDirty = false;
+}
+
+void Scene::RebuildRenderPassesIfDirty(Graphics::Controller& graphicsController)
+{
+  if(!mRenderPassDirty)
+  {
+    return;
+  }
+  BuildRenderPasses(graphicsController);
+  mRenderPassDirty = false;
+}
+
+void Scene::BuildRenderPasses(Graphics::Controller& graphicsController)
+{
+  // Create the render pass for the surface
+  std::vector<Graphics::AttachmentDescription> attachmentDescriptions;
+
+  // Default behaviour for color attachments is to CLEAR and STORE
+  auto& clearValues = RenderTargetGraphicsObjects::GetGraphicsRenderPassClearValues();
+  clearValues.clear();
+  clearValues.emplace_back();
+
+  // Assume single color attachment
+  Graphics::AttachmentDescription desc{};
+  desc.SetLoadOp(Graphics::AttachmentLoadOp::CLEAR);
+  desc.SetStoreOp(Graphics::AttachmentStoreOp::STORE);
+  attachmentDescriptions.push_back(desc);
+
+  if(mDepthBufferEnabled || mStencilBufferEnabled)
+  {
+    // Depth
+    desc.SetLoadOp(Graphics::AttachmentLoadOp::CLEAR);
+    desc.SetStoreOp(Graphics::AttachmentStoreOp::STORE);
+
+    // Stencil
+    desc.SetStencilLoadOp(Graphics::AttachmentLoadOp::CLEAR);
+    desc.SetStencilStoreOp(Graphics::AttachmentStoreOp::STORE);
+    attachmentDescriptions.push_back(desc);
+
+    clearValues.emplace_back();
+    clearValues.back().depthStencil.depth   = 1.0f;
+    clearValues.back().depthStencil.stencil = 0;
+  }
+
+  /* Defines 2 render passes, one to clear, the other not.
+   * These are matched up to actual render pass objects in the backend.
+   * (Expect that swapchains are created with matching load/store ops)
+   */
+  Graphics::RenderPassCreateInfo rpInfo{};
+  rpInfo.SetAttachments(attachmentDescriptions);
+
+  // Add default render pass (loadOp = clear)
+  RenderTargetGraphicsObjects::CreateRenderPass(graphicsController, rpInfo);
+
+  desc.SetLoadOp(Graphics::AttachmentLoadOp::LOAD);
+  attachmentDescriptions[0] = desc;
+  if(attachmentDescriptions.size() > 1)
+  {
+    desc.SetLoadOp(Graphics::AttachmentLoadOp::LOAD);
+    desc.SetStencilLoadOp(Graphics::AttachmentLoadOp::LOAD);
+    attachmentDescriptions.back() = desc;
+  }
+
+  RenderTargetGraphicsObjects::CreateRenderPassNoClear(graphicsController, rpInfo);
+}
+
+void Scene::ContextDestroyed()
+{
+  // TODO : protected data using here
+  mRenderPass.reset();
+  mRenderPassNoClear.reset();
+
+  NotifyRenderTargetDestroyed();
+  mRenderTarget.reset();
+}
+
+void Scene::SetSurfaceRenderTargetCreateInfo(const Graphics::RenderTargetCreateInfo& renderTargetCreateInfo)
+{
+  const bool surfaceChanged = (mRenderTargetCreateInfo.surface != renderTargetCreateInfo.surface);
+
+  mRenderTargetCreateInfo = renderTargetCreateInfo;
+  if(surfaceChanged)
+  {
+    RenderTargetGraphicsObjects::CreateRenderTarget(*mGraphicsController, mRenderTargetCreateInfo);
+  }
+  else
+  {
+    mGraphicsController->UpdateRenderTarget(*mRenderTarget, mRenderTargetCreateInfo);
+  }
+}
+
+RenderInstructionContainer& Scene::GetRenderInstructions()
+{
+  return mInstructions;
+}
+
+void Scene::AddFrameRenderedCallback(CallbackBase* callback, int32_t frameId)
+{
+  mFrameRenderedCallbacks.push_back(std::make_pair(std::unique_ptr<CallbackBase>(callback), frameId));
+}
+
+void Scene::AddFramePresentedCallback(CallbackBase* callback, int32_t frameId)
+{
+  mFramePresentedCallbacks.push_back(std::make_pair(std::unique_ptr<CallbackBase>(callback), frameId));
+}
+
+void Scene::GetFrameRenderedCallback(Dali::Integration::Scene::FrameCallbackContainer& callbacks)
+{
+  // Transfer owership of the callbacks
+  for(auto&& iter : mFrameRenderedCallbacks)
+  {
+    callbacks.push_back(std::make_pair(std::move(iter.first), iter.second));
+  }
+
+  mFrameRenderedCallbacks.clear();
+}
+
+void Scene::GetFramePresentedCallback(Dali::Integration::Scene::FrameCallbackContainer& callbacks)
+{
+  // Transfer owership of the callbacks
+  for(auto&& iter : mFramePresentedCallbacks)
+  {
+    callbacks.push_back(std::make_pair(std::move(iter.first), iter.second));
+  }
+
+  mFramePresentedCallbacks.clear();
+}
+
+void Scene::SetSkipRendering(bool skip)
+{
+  mSkipRendering = skip;
+}
+
+bool Scene::IsRenderingSkipped() const
+{
+  return mSkipRendering;
+}
+
+void Scene::SetVisible(bool visible)
+{
+  mVisible = visible;
+}
+
+bool Scene::IsVisible() const
+{
+  return mVisible;
+}
+
+void Scene::SetSurfaceRect(const BoundsInteger& rect)
+{
+  DALI_LOG_RELEASE_INFO("update surfce rect in scene-graph, from width[%d], height[%d], to width[%d], height[%d]. Changed count [%d]\n", mSurfaceRect.width, mSurfaceRect.height, rect.width, rect.height, mSurfaceRectChangedCount + 1u);
+
+  mSurfaceRect = rect;
+  ++mSurfaceRectChangedCount;
+
+  if(mRoot)
+  {
+    mRoot->SetUpdated(true);
+  }
+}
+
+const BoundsInteger& Scene::GetSurfaceRect() const
+{
+  return mSurfaceRect;
+}
+
+uint32_t Scene::GetSurfaceRectChangedCount()
+{
+  uint32_t surfaceRectChangedCount = mSurfaceRectChangedCount;
+  mSurfaceRectChangedCount         = 0u;
+
+  return surfaceRectChangedCount;
+}
+
+void Scene::SetSurfaceOrientations(int32_t windowOrientation, int32_t screenOrienation)
+{
+  DALI_LOG_RELEASE_INFO("update orientation in scene-graph, from surface [%d], screen[%d], to surface [%d], screen[%d]\n", mSurfaceOrientation, mScreenOrientation, windowOrientation, screenOrienation);
+
+  mSurfaceOrientation = windowOrientation;
+  mScreenOrientation  = screenOrienation;
+
+  if(mRoot)
+  {
+    mRoot->SetUpdated(true);
+  }
+}
+
+int32_t Scene::GetSurfaceOrientation() const
+{
+  return mSurfaceOrientation;
+}
+
+int32_t Scene::GetScreenOrientation() const
+{
+  return mScreenOrientation;
+}
+
+void Scene::SetRotationCompletedAcknowledgement()
+{
+  mRotationCompletedAcknowledgement = true;
+}
+
+bool Scene::IsRotationCompletedAcknowledgementSet()
+{
+  bool setRotationCompletedAcknowledgement = mRotationCompletedAcknowledgement;
+  mRotationCompletedAcknowledgement        = false;
+  return setRotationCompletedAcknowledgement;
+}
+
+Scene::ItemsDirtyRectsContainer& Scene::GetItemsDirtyRects()
+{
+  return mItemsDirtyRects;
+}
+
+void Scene::ClearItemsDirtyRects()
+{
+  mNeedFullUpdate = true; // Full update if dirty rect cleared.
+
+  mItemsDirtyRects.clear();
+#ifndef LOW_SPEC_MEMORY_MANAGEMENT_ENABLED
+  mItemsDirtyRects.rehash(0);
+#endif
+}
+
+void Scene::SetForceRenderingFramesCount(uint32_t forceRenderingFramesCount)
+{
+  mForceRenderingFrames = Max(mForceRenderingFrames, forceRenderingFramesCount);
+}
+
+bool Scene::NeedsForceRendering()
+{
+  if(mForceRenderingFrames > 0u)
+  {
+    ClearItemsDirtyRects();
+    --mForceRenderingFrames;
+    return true;
+  }
+  return false;
+}
+
+void Scene::SetClearColor(const Vector4& color)
+{
+  auto& clearValues = RenderTargetGraphicsObjects::GetGraphicsRenderPassClearValues();
+
+  DALI_ASSERT_DEBUG(!clearValues.empty());
+  clearValues[0].color = {color.r, color.g, color.b, color.a};
+}
+
+void Scene::KeepRendering(float durationSeconds)
+{
+  mKeepRenderingSeconds = Max(mKeepRenderingSeconds, durationSeconds);
+}
+
+bool Scene::KeepRenderingCheck(float elapsedSeconds)
+{
+  if(mKeepRenderingSeconds > 0.0f)
+  {
+    mNeedFullUpdate       = true; // Full update if KeepRendering is required
+    mKeepRenderingSeconds = Max(0.0f, mKeepRenderingSeconds - elapsedSeconds);
+    return true;
+  }
+
+  mKeepRenderingSeconds = 0.0f;
+
+  // Keep update next frame if force rendering needs next frame.
+  return mForceRenderingFrames > 0u;
+}
+
+bool Scene::IsDepthBufferEnabled() const
+{
+  return mDepthBufferEnabled;
+}
+
+bool Scene::IsStencilBufferEnabled() const
+{
+  return mStencilBufferEnabled;
+}
+
+bool Scene::IsPartialUpdateEnabled() const
+{
+  return mPartialUpdateEnabled;
+}
+
+} // namespace SceneGraph
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

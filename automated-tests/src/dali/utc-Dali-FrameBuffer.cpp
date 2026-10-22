@@ -1,0 +1,1191 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-test-suite-utils.h>
+#include <dali/devel-api/rendering/frame-buffer-devel.h>
+#include <dali/devel-api/threading/thread.h>
+#include <dali/public-api/dali-core.h>
+
+using namespace Dali;
+
+#include <mesh-builder.h>
+#include <test-actor-utils.h>
+
+void framebuffer_set_startup(void)
+{
+  test_return_value = TET_UNDEF;
+}
+
+void framebuffer_set_cleanup(void)
+{
+  test_return_value = TET_PASS;
+}
+
+namespace
+{
+RenderTask CreateRenderTask(TestApplication& application,
+                            FrameBuffer      framebuffer)
+{
+  Actor rootActor = Actor::New();
+  application.GetScene().Add(rootActor);
+  Texture img         = CreateTexture(TextureType::TEXTURE_2D, Pixel::RGBA8888, 1, 1);
+  Actor   sourceActor = CreateRenderableActor(img);
+  application.GetScene().Add(sourceActor);
+
+  CameraActor offscreenCameraActor = CameraActor::New(Size(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                                           TestApplication::DEFAULT_SURFACE_HEIGHT));
+  application.GetScene().Add(offscreenCameraActor);
+
+  // Change main render task to use a different root
+  RenderTaskList taskList = application.GetScene().GetRenderTaskList();
+  taskList.GetTask(0u).SetSourceActor(rootActor);
+
+  RenderTask newTask = taskList.CreateTask();
+  newTask.SetCameraActor(offscreenCameraActor);
+  newTask.SetSourceActor(sourceActor);
+  newTask.SetInputEnabled(false);
+  newTask.SetClearColor(Vector4(0.f, 0.f, 0.f, 0.f));
+  newTask.SetClearEnabled(true);
+  newTask.SetExclusive(true);
+  newTask.SetFrameBuffer(framebuffer);
+
+  return newTask;
+}
+} // namespace
+
+int UtcDaliFrameBufferNew01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  framebuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+
+  DALI_TEST_CHECK(framebuffer);
+
+  CreateRenderTask(application, framebuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(framebuffer), 0u, TEST_LOCATION);
+  Texture colorAttachment = DevelFrameBuffer::GetColorTexture(framebuffer, 0u);
+  Texture depthAttachment = DevelFrameBuffer::GetDepthTexture(framebuffer);
+  DALI_TEST_CHECK(!colorAttachment);
+  DALI_TEST_CHECK(!depthAttachment);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNew02(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH);
+  DALI_TEST_CHECK(frameBuffer);
+  Texture depthTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_FLOAT, width, height);
+  DevelFrameBuffer::AttachDepthTexture(frameBuffer, depthTexture);
+
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 0u, TEST_LOCATION);
+  Texture colorAttachment = DevelFrameBuffer::GetColorTexture(frameBuffer, 0u);
+  Texture depthAttachment = DevelFrameBuffer::GetDepthTexture(frameBuffer);
+  DALI_TEST_CHECK(!colorAttachment);
+  DALI_TEST_CHECK(depthAttachment && depthAttachment == depthTexture);
+
+  DALI_TEST_EQUALS((int)DevelFrameBuffer::GetMask(frameBuffer), (int)FrameBuffer::Attachment::DEPTH, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNew03(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::STENCIL);
+  DALI_TEST_CHECK(frameBuffer);
+  Texture stencilTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, stencilTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 0u, TEST_LOCATION);
+  Texture colorAttachment        = DevelFrameBuffer::GetColorTexture(frameBuffer, 0u);
+  Texture depthAttachment        = DevelFrameBuffer::GetDepthTexture(frameBuffer);
+  Texture depthStencilAttachment = DevelFrameBuffer::GetDepthStencilTexture(frameBuffer);
+  DALI_TEST_CHECK(!colorAttachment);
+  DALI_TEST_CHECK(!depthAttachment);
+  DALI_TEST_CHECK(depthStencilAttachment && depthStencilAttachment == stencilTexture);
+
+  DALI_TEST_EQUALS((int)DevelFrameBuffer::GetMask(frameBuffer), (int)FrameBuffer::Attachment::STENCIL, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNew04(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH_STENCIL);
+  DALI_TEST_CHECK(frameBuffer);
+
+  Texture stencilTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, stencilTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  DALI_TEST_EQUALS((int)DevelFrameBuffer::GetMask(frameBuffer), (int)FrameBuffer::Attachment::DEPTH_STENCIL, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNew05(void)
+{
+  TestApplication application;
+  FrameBuffer     frameBuffer;
+  DALI_TEST_CHECK(!frameBuffer);
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNew06(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, static_cast<FrameBuffer::Attachment::Mask>(FrameBuffer::Attachment::DEPTH | FrameBuffer::Attachment::STENCIL));
+  DALI_TEST_CHECK(frameBuffer);
+
+  Texture stencilTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, stencilTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNewWithColor01(void)
+{
+  TestApplication application;
+  uint32_t        width       = 64;
+  uint32_t        height      = 64;
+  FrameBuffer     frameBuffer = FrameBuffer::New(width, height);
+
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  // check that texture is not empty handle
+  DALI_TEST_CHECK(frameBuffer.GetColorTexture());
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 1u, TEST_LOCATION);
+  Texture colorAttachment        = DevelFrameBuffer::GetColorTexture(frameBuffer, 0u);
+  Texture depthAttachment        = DevelFrameBuffer::GetDepthTexture(frameBuffer);
+  Texture depthStencilAttachment = DevelFrameBuffer::GetDepthStencilTexture(frameBuffer);
+  DALI_TEST_CHECK(colorAttachment && colorAttachment == frameBuffer.GetColorTexture());
+  DALI_TEST_CHECK(!depthAttachment);
+  DALI_TEST_CHECK(!depthStencilAttachment);
+
+  auto size = DevelFrameBuffer::GetSize(frameBuffer);
+  DALI_TEST_EQUALS(size.GetWidth(), width, TEST_LOCATION);
+  DALI_TEST_EQUALS(size.GetHeight(), height, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNewWithColor02(void)
+{
+  TestApplication application;
+  uint32_t        width       = 64;
+  uint32_t        height      = 64;
+  FrameBuffer     frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::COLOR);
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  // check that texture is not empty handle
+  DALI_TEST_CHECK(frameBuffer.GetColorTexture());
+
+  DALI_TEST_EQUALS((int)DevelFrameBuffer::GetMask(frameBuffer), (int)FrameBuffer::Attachment::COLOR, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNewWithColor03(void)
+{
+  TestApplication application;
+  uint32_t        width       = 64;
+  uint32_t        height      = 64;
+  FrameBuffer     frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::COLOR_DEPTH);
+
+  Texture depthTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_UNSIGNED_INT, width, height);
+  DevelFrameBuffer::AttachDepthTexture(frameBuffer, depthTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  // check that texture is not empty handle
+  DALI_TEST_CHECK(frameBuffer.GetColorTexture());
+  Texture colorAttachment = DevelFrameBuffer::GetColorTexture(frameBuffer, 0u);
+  DALI_TEST_CHECK(colorAttachment && colorAttachment == frameBuffer.GetColorTexture());
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNewWithColor04(void)
+{
+  TestApplication application;
+  uint32_t        width        = 64;
+  uint32_t        height       = 64;
+  FrameBuffer     frameBuffer  = FrameBuffer::New(width, height, FrameBuffer::Attachment::COLOR_STENCIL);
+  Texture         depthTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, depthTexture);
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  // check that texture is not empty handle
+  DALI_TEST_CHECK(frameBuffer.GetColorTexture());
+  END_TEST;
+}
+
+int UtcDaliFrameBufferNewWithColor05(void)
+{
+  TestApplication application;
+  uint32_t        width  = 64;
+  uint32_t        height = 64;
+
+  FrameBuffer frameBuffer  = FrameBuffer::New(width, height, FrameBuffer::Attachment::COLOR_DEPTH_STENCIL);
+  Texture     depthTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, depthTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  // check that texture is not empty handle
+  DALI_TEST_CHECK(frameBuffer.GetColorTexture());
+  END_TEST;
+}
+
+int UtcDaliFrameBufferCopyConstructor(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+
+  FrameBuffer frameBufferCopy(frameBuffer);
+
+  DALI_TEST_CHECK(frameBufferCopy);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAssignmentOperator(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+
+  FrameBuffer frameBuffer2;
+  DALI_TEST_CHECK(!frameBuffer2);
+
+  frameBuffer2 = frameBuffer;
+  DALI_TEST_CHECK(frameBuffer2);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferMoveConstructor(void)
+{
+  TestApplication application;
+
+  uint32_t    width       = 64;
+  uint32_t    height      = 64;
+  FrameBuffer frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH_STENCIL);
+  DALI_TEST_CHECK(frameBuffer);
+  DALI_TEST_EQUALS(1, frameBuffer.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+
+  Texture texture = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+  DALI_TEST_EQUALS(frameBuffer.GetColorTexture(), texture, TEST_LOCATION);
+
+  FrameBuffer move = std::move(frameBuffer);
+  DALI_TEST_CHECK(move);
+  DALI_TEST_EQUALS(1, move.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(move.GetColorTexture(), texture, TEST_LOCATION);
+  DALI_TEST_CHECK(!frameBuffer);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferMoveAssignment(void)
+{
+  TestApplication application;
+
+  uint32_t    width       = 64;
+  uint32_t    height      = 64;
+  FrameBuffer frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH_STENCIL);
+  DALI_TEST_CHECK(frameBuffer);
+  DALI_TEST_EQUALS(1, frameBuffer.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+
+  Texture texture = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+  DALI_TEST_EQUALS(frameBuffer.GetColorTexture(), texture, TEST_LOCATION);
+
+  FrameBuffer move;
+  move = std::move(frameBuffer);
+  DALI_TEST_CHECK(move);
+  DALI_TEST_EQUALS(1, move.GetBaseObject().ReferenceCount(), TEST_LOCATION);
+  DALI_TEST_EQUALS(move.GetColorTexture(), texture, TEST_LOCATION);
+  DALI_TEST_CHECK(!frameBuffer);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferDownCast01(void)
+{
+  TestApplication application;
+  unsigned int    width(64);
+  unsigned int    height(64);
+  FrameBuffer     frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+
+  BaseHandle  handle(frameBuffer);
+  FrameBuffer frameBuffer2 = FrameBuffer::DownCast(handle);
+  DALI_TEST_CHECK(frameBuffer2);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferDownCast02(void)
+{
+  TestApplication application;
+
+  Handle      handle      = Handle::New(); // Create a custom object
+  FrameBuffer frameBuffer = FrameBuffer::DownCast(handle);
+  DALI_TEST_CHECK(!frameBuffer);
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTexture01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH_STENCIL);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  CreateRenderTask(application, frameBuffer);
+  frameBuffer.AttachColorTexture(texture);
+
+  Texture depthTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, depthTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 1u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTexture02(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  texture.GenerateMipmaps();
+
+  //Attach mipmap 1
+  frameBuffer.AttachColorTexture(texture, 0u, 1u);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 1u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTexture03(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_CUBE, Pixel::RGBA8888, width, height);
+  texture.GenerateMipmaps();
+
+  //Attach NEGATIVE_Y face of the cubemap
+  frameBuffer.AttachColorTexture(texture, 0u, CubeMapLayer::NEGATIVE_Y);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 1u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTexture04(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, static_cast<FrameBuffer::Attachment::Mask>(FrameBuffer::Attachment::DEPTH | FrameBuffer::Attachment::STENCIL));
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  Texture depthTexture = CreateTexture(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, depthTexture);
+  CreateRenderTask(application, frameBuffer);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), 1u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTexture05(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+
+  std::vector<Texture> textures;
+  for(int i = 0; i < Dali::DevelFrameBuffer::MAX_COLOR_ATTACHMENTS + 1; ++i)
+  {
+    textures.push_back(Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height));
+    frameBuffer.AttachColorTexture(textures.back());
+  }
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), Dali::DevelFrameBuffer::MAX_COLOR_ATTACHMENTS, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorAttachmentCount(frameBuffer), Dali::DevelFrameBuffer::MAX_COLOR_ATTACHMENTS, TEST_LOCATION);
+  auto colorTexture2 = DevelFrameBuffer::GetColorTexture(frameBuffer, 2);
+  DALI_TEST_CHECK(colorTexture2 == textures[2]);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachDepthTexture01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  Texture textureDepth = Texture::New(TextureType::TEXTURE_2D, Pixel::DEPTH_UNSIGNED_INT, width, height);
+  DevelFrameBuffer::AttachDepthTexture(frameBuffer, textureDepth);
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachDepthStencilTexture01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH_STENCIL);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  Texture textureStencil = Texture::New(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, textureStencil);
+
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferSetMultiSampingLevel(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::DEPTH_STENCIL);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  DevelFrameBuffer::SetMultiSamplingLevel(frameBuffer, 4u);
+
+  CreateRenderTask(application, frameBuffer);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 1u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetMultiSamplingLevel(frameBuffer), 4u, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetColorTexture01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  DALI_TEST_EQUALS(frameBuffer.GetColorTexture(), texture, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetColorTexture02(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture, 0u, 1u);
+
+  DALI_TEST_EQUALS(frameBuffer.GetColorTexture(), texture, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetColorTexture03(void)
+{ // FrameBuffer::GetColorTexture() and GetColorTexture(0) are equivalent
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture, 0u, 1u);
+
+  DALI_TEST_EQUALS(frameBuffer.GetColorTexture(), texture, TEST_LOCATION);
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetColorTexture(frameBuffer, 0), texture, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetColorTexture04(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      textures[]  = {
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+    Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height),
+  };
+
+  for(auto& t : textures)
+  {
+    frameBuffer.AttachColorTexture(t, 0u, 1u);
+  }
+
+  for(unsigned int i = 0; i < std::extent<decltype(textures)>::value; ++i)
+  {
+    DALI_TEST_EQUALS(DevelFrameBuffer::GetColorTexture(frameBuffer, i), textures[i], TEST_LOCATION);
+  }
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetDepthTexture01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  Texture textureDepth = Texture::New(TextureType::TEXTURE_2D, Pixel::DEPTH_FLOAT, width, height);
+  DevelFrameBuffer::AttachDepthTexture(frameBuffer, textureDepth);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetDepthTexture(frameBuffer), textureDepth, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetDepthStencilTexture01(void)
+{
+  TestApplication application;
+
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  Texture      texture     = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  frameBuffer.AttachColorTexture(texture);
+
+  Texture textureStencil = Texture::New(TextureType::TEXTURE_2D, Pixel::DEPTH_STENCIL, width, height);
+  DevelFrameBuffer::AttachDepthStencilTexture(frameBuffer, textureStencil);
+
+  DALI_TEST_EQUALS(DevelFrameBuffer::GetDepthStencilTexture(frameBuffer), textureStencil, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFramebufferContextLoss(void)
+{
+  tet_infoline("UtcDaliFramebufferContextLoss\n");
+  TestApplication application;
+
+  //Create the texture
+  unsigned int width(64);
+  unsigned int height(64);
+  Texture      texture = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, width, height);
+  DALI_TEST_CHECK(texture);
+  FrameBuffer frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::NONE);
+  DALI_TEST_CHECK(frameBuffer);
+  frameBuffer.AttachColorTexture(texture, 0u, 1u);
+
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+
+  application.SendNotification();
+  application.Render(16);
+
+  // Lose & regain context (in render 'thread')
+  application.ResetContext();
+  DALI_TEST_CHECK(frameBuffer);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferGetColorTextureNegative(void)
+{
+  TestApplication   application;
+  Dali::FrameBuffer instance;
+  try
+  {
+    instance.GetColorTexture();
+    DALI_TEST_CHECK(false); // Should not get here
+  }
+  catch(...)
+  {
+    DALI_TEST_CHECK(true); // We expect an assert
+  }
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTextureNegative01(void)
+{
+  TestApplication   application;
+  Dali::FrameBuffer instance;
+  try
+  {
+    Dali::Texture arg1 = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, 400u, 400u);
+    instance.AttachColorTexture(arg1);
+    DALI_TEST_CHECK(false); // Should not get here
+  }
+  catch(...)
+  {
+    DALI_TEST_CHECK(true); // We expect an assert
+  }
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachColorTextureNegative02(void)
+{
+  TestApplication   application;
+  Dali::FrameBuffer instance;
+  try
+  {
+    Dali::Texture arg1 = Texture::New(TextureType::TEXTURE_2D, Pixel::RGBA8888, 400u, 400u);
+    unsigned int  arg2(0u);
+    unsigned int  arg3(0u);
+    instance.AttachColorTexture(arg1, arg2, arg3);
+    DALI_TEST_CHECK(false); // Should not get here
+  }
+  catch(...)
+  {
+    DALI_TEST_CHECK(true); // We expect an assert
+  }
+  END_TEST;
+}
+
+int UtcDaliFrameBufferDestructWorkerThreadN(void)
+{
+  TestApplication application;
+  tet_infoline("UtcDaliFrameBufferDestructWorkerThreadN Test, for line coverage");
+
+  try
+  {
+    class TestThread : public Thread
+    {
+    public:
+      virtual void Run()
+      {
+        tet_printf("Run TestThread\n");
+        // Destruct at worker thread.
+        mFrameBuffer.Reset();
+      }
+
+      Dali::FrameBuffer mFrameBuffer;
+    };
+    TestThread thread;
+
+    Dali::FrameBuffer frameBuffer = Dali::FrameBuffer::New(100, 100);
+    thread.mFrameBuffer           = std::move(frameBuffer);
+    frameBuffer.Reset();
+
+    thread.Start();
+
+    thread.Join();
+  }
+  catch(...)
+  {
+  }
+
+  // Always success
+  DALI_TEST_CHECK(true);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachmentAutoRequiresDepthStencil01(void)
+{
+  TestApplication application;
+
+  // Test case 1: No depth or stencil required
+  // Create a simple renderer with no depth/stencil operations
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::AUTO);
+  DALI_TEST_CHECK(frameBuffer);
+
+  // Create render task with framebuffer
+  RenderTask renderTask = CreateRenderTask(application, frameBuffer);
+
+  Actor sourceActor = renderTask.GetSourceActor();
+  sourceActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  sourceActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DALI_TEST_EQUALS(sourceActor.GetRendererCount(), 1u, TEST_LOCATION);
+
+  Renderer renderer = sourceActor.GetRendererAt(0);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::OFF);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  application.SendNotification();
+  application.Render();
+
+  // Check no depth/stencil buffer be used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachmentAutoRequiresDepthStencil02(void)
+{
+  TestApplication application;
+
+  // Test case 2: Only depth required
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::AUTO);
+  DALI_TEST_CHECK(frameBuffer);
+
+  // Create render task with framebuffer
+  RenderTask renderTask = CreateRenderTask(application, frameBuffer);
+
+  Actor sourceActor = renderTask.GetSourceActor();
+  sourceActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  sourceActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DALI_TEST_EQUALS(sourceActor.GetRendererCount(), 1u, TEST_LOCATION);
+
+  Renderer renderer = sourceActor.GetRendererAt(0);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::ON);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  application.SendNotification();
+  application.Render();
+
+  // Check depth buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachmentAutoRequiresDepthStencil03(void)
+{
+  TestApplication application;
+
+  // Test case 3: Only stencil required (via clipping)
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::AUTO);
+  DALI_TEST_CHECK(frameBuffer);
+
+  // Create render task with framebuffer
+  RenderTask renderTask = CreateRenderTask(application, frameBuffer);
+
+  Actor sourceActor = renderTask.GetSourceActor();
+  sourceActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  sourceActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DALI_TEST_EQUALS(sourceActor.GetRendererCount(), 1u, TEST_LOCATION);
+
+  Renderer renderer = sourceActor.GetRendererAt(0);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::OFF);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  sourceActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::CLIP_CHILDREN); // Requires stencil
+
+  application.SendNotification();
+  application.Render();
+
+  // Check stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachmentAutoRequiresDepthStencil04(void)
+{
+  TestApplication application;
+
+  // Test case 4: Both depth and stencil required
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::AUTO);
+  DALI_TEST_CHECK(frameBuffer);
+
+  // Create render task with framebuffer
+  RenderTask renderTask = CreateRenderTask(application, frameBuffer);
+
+  Actor sourceActor = renderTask.GetSourceActor();
+  sourceActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  sourceActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DALI_TEST_EQUALS(sourceActor.GetRendererCount(), 1u, TEST_LOCATION);
+
+  Renderer renderer = sourceActor.GetRendererAt(0);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::ON);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  sourceActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::CLIP_CHILDREN); // Requires stencil
+
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachmentAutoRequiresDepthStencil05(void)
+{
+  TestApplication application;
+
+  // Test case 5: Both depth and stencil required after property changed.
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::AUTO);
+  DALI_TEST_CHECK(frameBuffer);
+
+  // Create render task with framebuffer
+  RenderTask renderTask = CreateRenderTask(application, frameBuffer);
+
+  Actor sourceActor = renderTask.GetSourceActor();
+  sourceActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  sourceActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DALI_TEST_EQUALS(sourceActor.GetRendererCount(), 1u, TEST_LOCATION);
+
+  Renderer renderer = sourceActor.GetRendererAt(0);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::OFF);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  application.SendNotification();
+  application.Render();
+
+  // Check no depth/stencil buffer be used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::ON);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  sourceActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::CLIP_CHILDREN); // Requires stencil
+
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  // Keep it several frames.
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  // Reset buffer attachment as previous version.
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::OFF);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  sourceActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::DISABLED);
+
+  application.SendNotification();
+  application.Render();
+
+  // Check not depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_FALSE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferAttachmentAutoRequiresDepthStencil06(void)
+{
+  TestApplication application;
+
+  auto& graphicsController = application.GetGraphicsController();
+  graphicsController.SetDeviceLimitation(Graphics::DeviceCapability::SUPPORTED_GRAPHICS_FEATURE_FLAGS,
+                                         static_cast<uint32_t>(Graphics::GraphicsFeatureFlagBits::HAS_CLIP_MATRIX_BIT));
+
+  // Test case 6: Case when graphics don't support RUNTIME_RENDERBUFFER_ATTACHMENT_CHANGE_BIT.
+  unsigned int width(64);
+  unsigned int height(64);
+  FrameBuffer  frameBuffer = FrameBuffer::New(width, height, FrameBuffer::Attachment::AUTO);
+  DALI_TEST_CHECK(frameBuffer);
+
+  // Create render task with framebuffer
+  RenderTask renderTask = CreateRenderTask(application, frameBuffer);
+
+  Actor sourceActor = renderTask.GetSourceActor();
+  sourceActor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  sourceActor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  DALI_TEST_EQUALS(sourceActor.GetRendererCount(), 1u, TEST_LOCATION);
+
+  Renderer renderer = sourceActor.GetRendererAt(0);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::OFF);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer be used as default
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::ON);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  sourceActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::CLIP_CHILDREN); // Requires stencil
+
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  // Keep it several frames.
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  // Reset buffer attachment as previous version.
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::OFF);
+  renderer.SetProperty(Renderer::Property::DEPTH_WRITE_MODE, DepthWriteMode::OFF);
+
+  sourceActor.SetProperty(Actor::Property::CLIPPING_MODE, ClippingMode::DISABLED);
+
+  application.SendNotification();
+  application.Render();
+
+  // Check depth/stencil buffer used
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferColorAttachmentCount(), 0u, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetGlAbstraction().CheckFramebufferRenderbufferDepthStencilAttachment(), (GLenum)GL_TRUE, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliFrameBufferDepthStencilIgnoresScenePolicy(void)
+{
+  TestApplication application;
+  tet_infoline("Test that a framebuffer's own attachments drive the depth/stencil state, not the scene policy");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // Take the depth and stencil buffers away from the scene; the framebuffer keeps its own.
+  scene.SetDepthBufferEnabled(false);
+  scene.SetStencilBufferEnabled(false);
+  application.SendNotification();
+  application.Render();
+
+  FrameBuffer framebuffer = FrameBuffer::New(64u, 64u, FrameBuffer::Attachment::DEPTH_STENCIL);
+  RenderTask  task        = CreateRenderTask(application, framebuffer);
+
+  Renderer renderer = task.GetSourceActor().GetRendererAt(0u);
+  renderer.SetProperty(Renderer::Property::DEPTH_TEST_MODE, DepthTestMode::ON);
+  renderer.SetProperty(Renderer::Property::RENDER_MODE, RenderMode::COLOR_STENCIL);
+
+  TestGlAbstraction& glAbstraction        = application.GetGlAbstraction();
+  TraceCallStack&    glEnableDisableStack = glAbstraction.GetEnableDisableTrace();
+  glEnableDisableStack.Enable(true);
+  glEnableDisableStack.Reset();
+
+  application.SendNotification();
+  application.Render();
+
+  std::stringstream depthTest;
+  depthTest << std::hex << GL_DEPTH_TEST;
+  std::stringstream stencilTest;
+  stencilTest << std::hex << GL_STENCIL_TEST;
+
+  tet_infoline("The framebuffer has both attachments, so both tests are set up despite the scene having neither");
+  DALI_TEST_CHECK(glEnableDisableStack.FindMethodAndParams("Enable", depthTest.str()));
+  DALI_TEST_CHECK(glEnableDisableStack.FindMethodAndParams("Enable", stencilTest.str()));
+
+  END_TEST;
+}

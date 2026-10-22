@@ -1,0 +1,151 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/actors/actor-devel.h>
+#include <dali/devel-api/actors/actor-enumerations-devel.h>
+#include <dali/internal/event/actors/actor-coords.h>
+#include <dali/internal/event/actors/actor-impl.h>
+
+namespace DALI_NAMESPACE
+{
+namespace DevelActor
+{
+Bounds CalculateCurrentScreenExtents(Actor actor)
+{
+  return GetImplementation(actor).CalculateCurrentScreenExtents();
+}
+
+Actor GetVisiblityChangedActor()
+{
+  return Dali::Actor(Internal::Actor::GetVisiblityChangedActor().Get());
+}
+
+ChildOrderChangedSignalType& ChildOrderChangedSignal(Actor actor)
+{
+  return GetImplementation(actor).ChildOrderChangedSignal();
+}
+
+OnRelayoutSignalType& OnRelayoutSignal(Actor actor)
+{
+  return GetImplementation(actor).OnRelayoutSignal();
+}
+
+OnSceneVisibilityChangedSignalType& OnSceneVisibilityChangedSignal(Actor actor)
+{
+  return GetImplementation(actor).OnSceneVisibilityChangedSignal();
+}
+
+bool IsOnSceneVisible(Actor actor)
+{
+  return GetImplementation(actor).IsOnSceneVisible();
+}
+
+void SetNeedGesturePropagation(Actor actor, bool propagation)
+{
+  return GetImplementation(actor).SetNeedGesturePropagation(propagation);
+}
+
+void SwitchParent(Actor actor, Actor newParent)
+{
+  return GetImplementation(actor).SwitchParent(GetImplementation(newParent));
+}
+
+Actor::TouchEventSignalType& HitTestResultSignal(Actor actor)
+{
+  return GetImplementation(actor).HitTestResultSignal();
+}
+
+Matrix GetWorldTransform(Actor actor)
+{
+  return CalculateActorWorldTransform(GetImplementation(actor));
+}
+
+Vector4 GetWorldColorMultiplier(Actor actor)
+{
+  return CalculateActorWorldColorMultiplier(GetImplementation(actor));
+}
+
+Vector4 GetWorldColor(Actor actor)
+{
+  return GetWorldColorMultiplier(actor);
+}
+
+void LookAt(Actor actor, Vector3 target, Vector3 up, Vector3 localForward, Vector3 localUp)
+{
+  auto orientation = CalculateActorLookAtOrientation(GetImplementation(actor), target, up, localForward, localUp);
+  GetImplementation(actor).SetOrientation(orientation);
+}
+
+bool IsHittable(Actor actor)
+{
+  return GetImplementation(actor).IsHittable();
+}
+
+bool GetTouchRequired(Actor actor)
+{
+  return GetImplementation(actor).GetTouchRequired();
+}
+
+void SetResizePolicy(Actor actor, ResizePolicy::Type policy, Dimension::Type dimension)
+{
+  return GetImplementation(actor).SetResizePolicy(policy, dimension);
+}
+
+ResizePolicy::Type GetResizePolicy(Actor actor, Dimension::Type dimension)
+{
+  return GetImplementation(actor).GetResizePolicy(dimension);
+}
+
+float GetHeightForWidth(Actor actor, float width)
+{
+  return GetImplementation(actor).GetHeightForWidth(width);
+}
+
+float GetWidthForHeight(Actor actor, float height)
+{
+  return GetImplementation(actor).GetWidthForHeight(height);
+}
+
+float GetRelayoutSize(Actor actor, Dimension::Type dimension)
+{
+  return GetImplementation(actor).GetRelayoutSize(dimension);
+}
+
+void SetRelayoutEnabled(Actor actor, bool relayoutEnabled)
+{
+  GetImplementation(actor).SetRelayoutEnabled(relayoutEnabled);
+}
+
+Vector3 GetTargetSize(const Actor& actor)
+{
+  return GetImplementation(actor).GetTargetSize();
+}
+
+Vector3 GetNaturalSize(const Actor& actor)
+{
+  return GetImplementation(actor).GetNaturalSize();
+}
+
+void Add(Actor actor, Actor child)
+{
+  GetImplementation(actor).Add(GetImplementation(child));
+}
+
+} // namespace DevelActor
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,388 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-test-suite-utils.h>
+#include <mesh-builder.h>
+#include <stdlib.h>
+
+// access private members
+#define private public
+#include <dali/internal/render/renderers/pipeline-cache.h>
+
+#include <dlfcn.h>
+
+using namespace Dali;
+
+template<class Object, class... Args>
+void InvokeNext(Object* obj, Args... args)
+{
+  auto    addr = __builtin_return_address(0);
+  Dl_info info;
+  dladdr(addr, &info);
+  auto func = dlsym(RTLD_NEXT, info.dli_sname);
+  typedef void (*FuncPtr)(void*, Args...);
+  auto memb = FuncPtr(func);
+  memb(obj, args...);
+}
+
+template<class Ret, class Object, class... Args>
+Ret InvokeReturnNext(Object* obj, Args... args)
+{
+  auto    addr = __builtin_return_address(0);
+  Dl_info info;
+  dladdr(addr, &info);
+  auto func = dlsym(RTLD_NEXT, info.dli_sname);
+  typedef Ret (*FuncPtr)(void*, Args...);
+  auto memb = FuncPtr(func);
+  return memb(obj, args...);
+}
+
+static Dali::Internal::Render::PipelineCache* gPipelineCache{nullptr};
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Render
+{
+// Store internal PipelineCache as singleton
+
+PipelineCache::PipelineCache(Dali::Graphics::Controller& controller)
+: mPipelineUseRenderTarget(controller.GetDeviceLimitation(Graphics::DeviceCapability::SUPPORTED_GRAPHICS_FEATURE_FLAGS) & Graphics::GraphicsFeatureFlagBits::PIPELINE_USE_RENDER_TARGET_BIT)
+{
+  gPipelineCache = this;
+  InvokeNext(this, &controller);
+}
+
+} // namespace Render
+} // namespace Internal
+} //namespace DALI_NAMESPACE
+
+int UtcDaliCorePipelineCacheTest(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Internal::Render::Pipeline");
+
+  using Dali::Internal::Render::PipelineCache;
+
+  // PipelineCache* cache = PipelineCache::GetPipelineCacheWithController( &application.GetGraphicsController() );
+  // Pipeline cache must be initialized
+  DALI_TEST_EQUALS(gPipelineCache != 0, true, TEST_LOCATION);
+
+  // Test size of level0 nodes (should be 0, nothing added yet)
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 0, TEST_LOCATION);
+
+  // Create something to render
+  Geometry   geometry   = CreateQuadGeometry();
+  Shader     shader     = Shader::New("vertexSrc", "fragmentSrc");
+  TextureSet textureSet = TextureSet::New();
+  Texture    image      = CreateTexture(TextureType::TEXTURE_2D, Pixel::RGBA8888, 50, 50);
+
+  textureSet.SetTexture(0u, image);
+  Renderer renderer = Renderer::New(geometry, shader);
+  renderer.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::ON);
+  renderer.SetTextures(textureSet);
+
+  Actor actor = Actor::New();
+  actor.AddRenderer(renderer);
+  actor.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+  application.Render();
+
+  // 1 pipeline should be added
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+
+  // Add another actor, new pipeline will be created
+  Shader   shader1   = Shader::New("newVertexSrc", "newFragmentSrc");
+  Actor    actor1    = Actor::New();
+  Renderer renderer1 = Renderer::New(geometry, shader1);
+  renderer1.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::ON);
+  actor1.AddRenderer(renderer1);
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor1);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  // Now add 3rd actor reusing first pipeline
+  {
+    Actor    actor2    = Actor::New();
+    Renderer renderer2 = Renderer::New(geometry, shader);
+    renderer2.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::ON);
+    actor2.AddRenderer(renderer2);
+    actor2.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+    application.GetScene().Add(actor2);
+  }
+  application.SendNotification();
+  application.Render();
+
+  // Number of pipelines shouldn't change
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  // Test final 'noBlend' path on first pipeline
+  {
+    Actor    actor3    = Actor::New();
+    Renderer renderer3 = Renderer::New(geometry, shader);
+    renderer3.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::OFF);
+    actor3.AddRenderer(renderer3);
+    actor3.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+    application.GetScene().Add(actor3);
+  }
+  application.SendNotification();
+  application.Render();
+
+  // Test whether noBlend pipeline is set in cache
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+  DALI_TEST_CHECK(!gPipelineCache->level0nodes.front().level1nodes.front().noBlends.empty());
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().noBlends.front().pipeline != nullptr, true, TEST_LOCATION);
+
+  // Test another actor with seperated scene.
+
+  // Create a new Scene with compatible render target
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+  Dali::Integration::Scene newScene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(newScene);
+
+  application.AddScene(newScene);
+  {
+    Actor    actor4    = Actor::New();
+    Renderer renderer4 = Renderer::New(geometry, shader);
+    actor4.AddRenderer(renderer4);
+    actor4.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+    newScene.Add(actor4);
+  }
+  application.SendNotification();
+  application.Render();
+
+  // Test that there is no new pipelone
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  // Remove renderer to test whether pipeline is removed
+  application.GetScene().Remove(actor1);
+  actor1.RemoveRenderer(renderer1);
+  renderer1.Reset();
+
+  // Make the frame count of the pipeline cache large to clean cache
+  gPipelineCache->mFrameCount = 1000;
+
+  application.SendNotification();
+  application.Render();
+
+  // Test whether both newScene and actor exist.
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+
+  // Remove scene
+  application.RemoveScene(newScene);
+  newScene.RemoveSceneObject();
+  newScene.Discard();
+  newScene.Reset();
+
+  // Make the frame count of the pipeline cache large to clean cache
+  gPipelineCache->mFrameCount = 1000;
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+  delete surface;
+
+  END_TEST;
+}
+
+int UtcDaliCorePipelineCacheWithDynamicBlendTest(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Internal::Render::Pipeline with DynamicBlend");
+
+  auto& graphicsController = application.GetGraphicsController();
+  graphicsController.SetDeviceLimitation(Graphics::DeviceCapability::SUPPORTED_DYNAMIC_STATES,
+                                         Graphics::PipelineDynamicStateBits::COLOR_BLEND_ENABLE_BIT |
+                                           Graphics::PipelineDynamicStateBits::COLOR_BLEND_EQUATION_BIT);
+
+  using Dali::Internal::Render::PipelineCache;
+
+  // Pipeline cache must be initialized
+  DALI_TEST_EQUALS(gPipelineCache != 0, true, TEST_LOCATION);
+
+  // Test size of level0 nodes (should be 0, nothing added yet)
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 0, TEST_LOCATION);
+
+  // Create something to render
+  Geometry   geometry   = CreateQuadGeometry();
+  Shader     shader     = Shader::New("vertexSrc", "fragmentSrc");
+  TextureSet textureSet = TextureSet::New();
+  Texture    image      = CreateTexture(TextureType::TEXTURE_2D, Pixel::RGBA8888, 50, 50);
+
+  textureSet.SetTexture(0u, image);
+  Renderer renderer = Renderer::New(geometry, shader);
+  renderer.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::ON);
+  renderer.SetTextures(textureSet);
+
+  Actor actor = Actor::New();
+  actor.AddRenderer(renderer);
+  actor.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+  application.Render();
+
+  // 1 pipeline should be added
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+  DALI_TEST_CHECK(!gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.empty());
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.front().pipeline != nullptr, true, TEST_LOCATION);
+
+  // Add another actor, with seperated blend factor, new pipeline will not be created
+  Actor    actor1    = Actor::New();
+  Renderer renderer1 = Renderer::New(geometry, shader);
+  renderer1.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::ON);
+  renderer1.SetProperty(Renderer::Property::BLEND_FACTOR_SRC_RGB, BlendFactor::SRC_ALPHA);
+  renderer1.SetProperty(Renderer::Property::BLEND_FACTOR_DEST_RGB, BlendFactor::ONE_MINUS_SRC_ALPHA);
+  renderer1.SetProperty(Renderer::Property::BLEND_FACTOR_SRC_ALPHA, BlendFactor::ONE);
+  renderer1.SetProperty(Renderer::Property::BLEND_FACTOR_DEST_ALPHA, BlendFactor::ONE_MINUS_SRC_ALPHA);
+  actor1.AddRenderer(renderer1);
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor1);
+
+  application.SendNotification();
+  application.Render();
+
+  // Number of pipelines shouldn't change
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+  DALI_TEST_CHECK(!gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.empty());
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.front().pipeline != nullptr, true, TEST_LOCATION);
+
+  // Add another actor, with 'noBlend' blend mode, new pipeline will not be created
+  Actor    actor2    = Actor::New();
+  Renderer renderer2 = Renderer::New(geometry, shader);
+  renderer2.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::OFF);
+  actor2.AddRenderer(renderer2);
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor2);
+
+  application.SendNotification();
+  application.Render();
+
+  // Number of pipelines shouldn't change
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+
+  // noBlend not exist.
+  DALI_TEST_CHECK(gPipelineCache->level0nodes.front().level1nodes.front().noBlends.empty());
+  DALI_TEST_CHECK(!gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.empty());
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.front().level1nodes.front().dynamicBlendPipelines.front().pipeline != nullptr, true, TEST_LOCATION);
+
+  // Add new Shader create new cache.
+  Shader   shader3   = Shader::New("newVertexSrc", "newFragmentSrc");
+  Actor    actor3    = Actor::New();
+  Renderer renderer3 = Renderer::New(geometry, shader3);
+  renderer3.SetProperty(Dali::Renderer::Property::BLEND_MODE, Dali::BlendMode::OFF);
+  actor3.AddRenderer(renderer3);
+  actor3.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor3);
+
+  application.SendNotification();
+  application.Render();
+
+  // Number of pipelines should be changed
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  // noBlend not exist.
+  for(auto& level0 : gPipelineCache->level0nodes)
+  {
+    for(auto& level1 : level0.level1nodes)
+    {
+      DALI_TEST_CHECK(level1.noBlends.empty());
+      DALI_TEST_CHECK(!level1.dynamicBlendPipelines.empty());
+      DALI_TEST_EQUALS(level1.dynamicBlendPipelines.size(), 1, TEST_LOCATION);
+      DALI_TEST_EQUALS(level1.dynamicBlendPipelines.front().pipeline != nullptr, true, TEST_LOCATION);
+    }
+  }
+
+  // Test another actor with seperated scene.
+
+  // Create a new Scene with compatible render target
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+  Dali::Integration::Scene newScene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(newScene);
+  application.AddScene(newScene);
+  {
+    Actor    actor4    = Actor::New();
+    Renderer renderer4 = Renderer::New(geometry, shader);
+    actor4.AddRenderer(renderer4);
+    actor4.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+    newScene.Add(actor4);
+  }
+  application.SendNotification();
+  application.Render();
+
+  // Test that there is no new pipelone
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  // Remove renderer to test whether pipeline is removed
+  application.GetScene().Remove(actor1);
+  actor1.RemoveRenderer(renderer1);
+  renderer1.Reset();
+
+  // Make the frame count of the pipeline cache large to clean cache
+  gPipelineCache->mFrameCount = 1000;
+
+  application.SendNotification();
+  application.Render();
+
+  // Test whether both newScene and actor exist.
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  // Remove scene
+  application.RemoveScene(newScene);
+  newScene.RemoveSceneObject();
+  newScene.Discard();
+  newScene.Reset();
+
+  // Make the frame count of the pipeline cache large to clean cache
+  gPipelineCache->mFrameCount = 1000;
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 2, TEST_LOCATION);
+
+  renderer3.Reset();
+  actor3.Unparent();
+  actor3.Reset();
+
+  // Make the frame count of the pipeline cache large to clean cache
+  gPipelineCache->mFrameCount = 1000;
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(gPipelineCache->level0nodes.size(), 1, TEST_LOCATION);
+
+  delete surface;
+  END_TEST;
+}

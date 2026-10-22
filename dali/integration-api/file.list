@@ -1,0 +1,112 @@
+# Set the source directory
+SET( platform_abstraction_src_dir ${ROOT_SRC_DIR}/dali/integration-api )
+
+# Add platform abstraction source files here
+SET( platform_abstraction_src_files
+   ${platform_abstraction_src_dir}/addon-manager.cpp
+   ${platform_abstraction_src_dir}/constraint-integ.cpp
+   ${platform_abstraction_src_dir}/core.cpp
+   ${platform_abstraction_src_dir}/dali-string-impl.cpp
+   ${platform_abstraction_src_dir}/debug.cpp
+   ${platform_abstraction_src_dir}/input-options.cpp
+   ${platform_abstraction_src_dir}/lockless-buffer.cpp
+   ${platform_abstraction_src_dir}/pixel-data-integ.cpp
+   ${platform_abstraction_src_dir}/profiling.cpp
+   ${platform_abstraction_src_dir}/render-task-list-integ.cpp
+   ${platform_abstraction_src_dir}/scene.cpp
+   ${platform_abstraction_src_dir}/shader-integ.cpp
+   ${platform_abstraction_src_dir}/stream-operators.cpp
+   ${platform_abstraction_src_dir}/string-utils.cpp
+   ${platform_abstraction_src_dir}/testing.cpp
+   ${platform_abstraction_src_dir}/texture-integ.cpp
+   ${platform_abstraction_src_dir}/trace.cpp
+)
+
+SET( platform_abstraction_events_src_files
+   ${platform_abstraction_src_dir}/events/event.cpp
+   ${platform_abstraction_src_dir}/events/hover-event-integ.cpp
+   ${platform_abstraction_src_dir}/events/key-event-integ.cpp
+   ${platform_abstraction_src_dir}/events/multi-point-event-integ.cpp
+   ${platform_abstraction_src_dir}/events/point.cpp
+   ${platform_abstraction_src_dir}/events/touch-event-combiner.cpp
+   ${platform_abstraction_src_dir}/events/touch-event-integ.cpp
+   ${platform_abstraction_src_dir}/events/touch-integ.cpp
+   ${platform_abstraction_src_dir}/events/wheel-event-integ.cpp
+)
+
+SET( platform_abstraction_rendering_src_files
+  ${platform_abstraction_src_dir}/rendering/decorated-visual-renderer.cpp
+  ${platform_abstraction_src_dir}/rendering/visual-renderer.cpp
+)
+
+SET( platform_abstraction_queue_src_files
+  ${platform_abstraction_src_dir}/queue/queue-benchmark-instrumentation.cpp
+)
+
+SET( platform_abstraction_header_files
+   ${platform_abstraction_src_dir}/addon-manager.h
+   ${platform_abstraction_src_dir}/constraint-integ.h
+   ${platform_abstraction_src_dir}/core.h
+   ${platform_abstraction_src_dir}/core-enumerations.h
+   ${platform_abstraction_src_dir}/dali-string-impl.h
+   ${platform_abstraction_src_dir}/debug.h
+   ${platform_abstraction_src_dir}/gl-abstraction.h
+   ${platform_abstraction_src_dir}/gl-defines.h
+   ${platform_abstraction_src_dir}/graphics-config.h
+   ${platform_abstraction_src_dir}/graphics-sync-abstraction.h
+   ${platform_abstraction_src_dir}/input-options.h
+   ${platform_abstraction_src_dir}/locale-numeric-guard.h
+   ${platform_abstraction_src_dir}/lockless-buffer.h
+   ${platform_abstraction_src_dir}/open-hash-map.h
+   ${platform_abstraction_src_dir}/ordered-set.h
+   ${platform_abstraction_src_dir}/pixel-data-integ.h
+   ${platform_abstraction_src_dir}/platform-abstraction.h
+   ${platform_abstraction_src_dir}/profiling.h
+   ${platform_abstraction_src_dir}/processor-interface.h
+   ${platform_abstraction_src_dir}/render-controller.h
+   ${platform_abstraction_src_dir}/render-task-list-integ.h
+   ${platform_abstraction_src_dir}/scene.h
+   ${platform_abstraction_src_dir}/scene-pre-render-status.h
+   ${platform_abstraction_src_dir}/shader-integ.h
+   ${platform_abstraction_src_dir}/stream-operators.h
+   ${platform_abstraction_src_dir}/string-utils.h
+   ${platform_abstraction_src_dir}/testing.h
+   ${platform_abstraction_src_dir}/texture-integ.h
+   ${platform_abstraction_src_dir}/trace.h
+)
+
+
+SET( platform_abstraction_events_header_files
+   ${platform_abstraction_src_dir}/events/event.h
+   ${platform_abstraction_src_dir}/events/hover-event-integ.h
+   ${platform_abstraction_src_dir}/events/key-event-integ.h
+   ${platform_abstraction_src_dir}/events/multi-point-event-integ.h
+   ${platform_abstraction_src_dir}/events/point.h
+   ${platform_abstraction_src_dir}/events/touch-event-combiner.h
+   ${platform_abstraction_src_dir}/events/touch-event-integ.h
+   ${platform_abstraction_src_dir}/events/touch-integ.h
+   ${platform_abstraction_src_dir}/events/wheel-event-integ.h
+)
+
+SET( platform_abstraction_rendering_header_files
+  ${platform_abstraction_src_dir}/rendering/decorated-visual-renderer.h
+  ${platform_abstraction_src_dir}/rendering/visual-renderer.h
+)
+
+SET( platform_abstraction_queue_header_files
+  ${platform_abstraction_src_dir}/queue/queue-benchmark-instrumentation.h
+)
+
+SET( SOURCES ${SOURCES}
+  ${platform_abstraction_src_files}
+  ${platform_abstraction_events_src_files}
+  ${platform_abstraction_rendering_src_files}
+  ${platform_abstraction_queue_src_files}
+)
+
+SET( INTEGRATION_API_HEADERS ${INTEGRATION_API_HEADERS}
+  ${platform_abstraction_header_files}
+  ${platform_abstraction_events_header_files}
+  ${platform_abstraction_rendering_header_files}
+  ${platform_abstraction_queue_header_files}
+)

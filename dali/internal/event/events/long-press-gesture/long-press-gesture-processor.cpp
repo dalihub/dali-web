@@ -1,0 +1,393 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/event/events/long-press-gesture/long-press-gesture-processor.h>
+
+// EXTERNAL INCLUDES
+#include <algorithm>
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/input-options.h>
+#include <dali/integration-api/trace.h>
+#include <dali/internal/event/actors/actor-impl.h>
+#include <dali/internal/event/common/scene-impl.h>
+#include <dali/internal/event/events/gesture-requests.h>
+#include <dali/internal/event/events/long-press-gesture/long-press-gesture-event.h>
+#include <dali/internal/event/events/long-press-gesture/long-press-gesture-impl.h>
+#include <dali/internal/event/events/long-press-gesture/long-press-gesture-recognizer.h>
+#include <dali/internal/event/render-tasks/render-task-impl.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/common/dali-common.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace
+{
+DALI_INIT_TRACE_FILTER(gTraceFilter, DALI_TRACE_PERFORMANCE_MARKER, false);
+
+/**
+ * Creates a LongPressGesture and asks the specified detector to emit its detected signal.
+ * @param[in]  actor             The actor on which the long press gesture has occurred.
+ * @param[in]  gestureDetectors  A reference to gesture detectors that should emit the signal.
+ * @param[in]  longPressEvent    The longPressEvent received from the adaptor.
+ * @param[in]  localPoint        Relative to the actor attached to the detector.
+ */
+void EmitLongPressSignal(
+  Actor*                          actor,
+  const GestureDetectorContainer& gestureDetectors,
+  const LongPressGestureEvent&    longPressEvent,
+  Vector2                         localPoint,
+  GestureState                    state)
+{
+  Internal::LongPressGesturePtr longPress(new Internal::LongPressGesture(state));
+  longPress->SetTime(longPressEvent.time);
+  longPress->SetNumberOfTouches(longPressEvent.numberOfTouches);
+  longPress->SetScreenPoint(longPressEvent.point);
+  longPress->SetLocalPoint(localPoint);
+  longPress->SetTriggerPoint(longPressEvent.triggerPoint);
+
+  DALI_TRACE_BEGIN_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_EMIT_LONG_PRESS_GESTURE_SIGNAL", [&](std::ostringstream& oss)
+  {
+    oss << "[" << gestureDetectors.size() << "]";
+  });
+
+  std::vector<GestureDetectorPtr> detectorSnapshot;
+  detectorSnapshot.reserve(gestureDetectors.size());
+  for(GestureDetector* detector : gestureDetectors)
+  {
+    detectorSnapshot.emplace_back(detector);
+  }
+
+  Dali::Actor actorHandle(actor);
+  for(const GestureDetectorPtr& detector : detectorSnapshot)
+  {
+    static_cast<LongPressGestureDetector*>(detector.Get())->EmitLongPressGestureSignal(actorHandle, Dali::LongPressGesture(longPress.Get()));
+  }
+
+  DALI_TRACE_END_WITH_MESSAGE_GENERATOR(gTraceFilter, "DALI_EMIT_LONG_PRESS_GESTURE_SIGNAL", [&](std::ostringstream& oss)
+  {
+    oss << "[" << gestureDetectors.size() << "]";
+  });
+}
+
+/**
+ * Functor which checks whether the specified actor is attached to the gesture detector.
+ * It returns true if it is no longer attached.  This can be used in remove_if functions.
+ */
+struct IsNotAttachedFunctor
+{
+  /**
+   * Constructor
+   * @param[in]  actor  The actor to check whether it is attached.
+   */
+  IsNotAttachedFunctor(Actor* actor)
+  : actorToCheck(actor)
+  {
+  }
+
+  /**
+   * Returns true if not attached, false if it is still attached.
+   * @param[in]  detector  The detector to check.
+   * @return true, if not attached, false otherwise.
+   */
+  bool operator()(const GestureDetector* detector) const
+  {
+    return !detector->IsAttached(*actorToCheck);
+  }
+
+  Actor* actorToCheck; ///< The actor to check whether it is attached or not.
+};
+
+} // unnamed namespace
+
+LongPressGestureProcessor::LongPressGestureProcessor()
+: GestureProcessor(GestureType::LONG_PRESS),
+  mLongPressGestureDetectors(),
+  mCurrentEmitters(),
+  mCurrentRenderTask(),
+  mCurrentLongPressEvent(nullptr),
+  mMinimumHoldingTime(Integration::DEFAULT_LONG_PRESS_GESTURE_MINIMUM_HOLDING_TIME)
+{
+}
+
+LongPressGestureProcessor::~LongPressGestureProcessor() = default;
+
+void LongPressGestureProcessor::Process(Scene& scene, const LongPressGestureEvent& longPressEvent)
+{
+  DALI_TRACE_SCOPE(gTraceFilter, "DALI_PROCESS_LONG_PRESS_GESTURE");
+  switch(longPressEvent.state)
+  {
+    case GestureState::POSSIBLE:
+    {
+      mCurrentEmitters.clear();
+      ResetActor();
+
+      HitTestAlgorithm::Results hitTestResults;
+      if(HitTest(scene, longPressEvent.point, hitTestResults))
+      {
+        SetActor(&GetImplementation(hitTestResults.actor));
+      }
+      break;
+    }
+
+    case GestureState::STARTED:
+    {
+      Actor* currentGesturedActor = GetCurrentGesturedActor();
+      if(currentGesturedActor)
+      {
+        HitTestAlgorithm::Results hitTestResults;
+        HitTest(scene, longPressEvent.point, hitTestResults);
+
+        if(hitTestResults.actor && (currentGesturedActor == &GetImplementation(hitTestResults.actor)))
+        {
+          // Record the current render-task for Screen->Actor coordinate conversions
+          mCurrentRenderTask = hitTestResults.renderTask;
+
+          // Set mCurrentLongPressEvent to use inside overridden methods called from ProcessAndEmit()
+          mCurrentLongPressEvent = &longPressEvent;
+          ProcessAndEmit(hitTestResults);
+          mCurrentLongPressEvent = nullptr;
+        }
+        else
+        {
+          mCurrentEmitters.clear();
+          ResetActor();
+        }
+      }
+      break;
+    }
+
+    case GestureState::FINISHED:
+    {
+      // The gesture should only be sent to the gesture detector which first received it so that it
+      // can be told when the gesture ends as well.
+
+      // Only send subsequent long press gesture signals if we processed the gesture when it started.
+      // Check if actor is still touchable.
+
+      Actor* currentGesturedActor = GetCurrentGesturedActor();
+      if(currentGesturedActor)
+      {
+        if(currentGesturedActor->IsHittable() && !mCurrentEmitters.empty() && mCurrentRenderTask)
+        {
+          // Ensure actor is still attached to the emitters, if it is not then remove the emitter.
+          GestureDetectorContainer::iterator endIter = std::remove_if(mCurrentEmitters.begin(), mCurrentEmitters.end(), IsNotAttachedFunctor(currentGesturedActor));
+          mCurrentEmitters.erase(endIter, mCurrentEmitters.end());
+
+          if(!mCurrentEmitters.empty())
+          {
+            Vector2     actorCoords;
+            RenderTask& renderTaskImpl = *mCurrentRenderTask.Get();
+            currentGesturedActor->ScreenToLocal(renderTaskImpl, actorCoords.x, actorCoords.y, longPressEvent.point.x, longPressEvent.point.y);
+
+            EmitLongPressSignal(currentGesturedActor, mCurrentEmitters, longPressEvent, actorCoords, longPressEvent.state);
+          }
+        }
+
+        else
+        {
+          if(!mCurrentEmitters.empty() && mCurrentRenderTask)
+          {
+            // If the actor is no longer hittable, but we still have emitters, we should cancel the gesture
+            Vector2 actorCoords;
+            currentGesturedActor->ScreenToLocal(*mCurrentRenderTask.Get(), actorCoords.x, actorCoords.y, longPressEvent.point.x, longPressEvent.point.y);
+            EmitLongPressSignal(currentGesturedActor, mCurrentEmitters, longPressEvent, actorCoords, GestureState::CANCELLED);
+          }
+          // Clear current emitters and emitted actor
+          mCurrentEmitters.clear();
+          ResetActor();
+        }
+      }
+      break;
+    }
+
+    case GestureState::CANCELLED:
+    {
+      mCurrentEmitters.clear();
+      ResetActor();
+      break;
+    }
+
+    case GestureState::CONTINUING:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CONTINUING\n");
+      break;
+    }
+
+    case GestureState::CLEAR:
+    {
+      DALI_ABORT("Incorrect state received from Integration layer: CLEAR\n");
+      break;
+    }
+  }
+}
+
+void LongPressGestureProcessor::AddGestureDetector(LongPressGestureDetector* gestureDetector, Scene& scene)
+{
+  bool firstRegistration(mLongPressGestureDetectors.empty());
+
+  mLongPressGestureDetectors.push_back(gestureDetector);
+
+  if(firstRegistration)
+  {
+    LongPressGestureRequest request;
+    FillRequest(request);
+
+    Size size          = scene.GetSize();
+    mGestureRecognizer = new LongPressGestureRecognizer(*this, Vector2(size.width, size.height), request);
+  }
+  else
+  {
+    UpdateDetection();
+  }
+}
+
+void LongPressGestureProcessor::RemoveGestureDetector(LongPressGestureDetector* gestureDetector)
+{
+  // Find detector ...
+  LongPressGestureDetectorContainer::iterator endIter = std::remove(mLongPressGestureDetectors.begin(), mLongPressGestureDetectors.end(), gestureDetector);
+  DALI_ASSERT_DEBUG(endIter != mLongPressGestureDetectors.end());
+
+  // ... and remove it
+  mLongPressGestureDetectors.erase(endIter, mLongPressGestureDetectors.end());
+
+  if(mLongPressGestureDetectors.empty())
+  {
+    mGestureRecognizer = nullptr;
+  }
+  else
+  {
+    UpdateDetection();
+  }
+}
+
+void LongPressGestureProcessor::GestureDetectorUpdated(LongPressGestureDetector* gestureDetector)
+{
+  DALI_ASSERT_DEBUG(find(mLongPressGestureDetectors.begin(), mLongPressGestureDetectors.end(), gestureDetector) != mLongPressGestureDetectors.end());
+
+  UpdateDetection();
+}
+
+Actor* LongPressGestureProcessor::GetCurrentGesturedActor()
+{
+  // Call the base class implementation
+  return GestureProcessor::GetCurrentGesturedActor();
+}
+
+void LongPressGestureProcessor::SetMinimumHoldingTime(uint32_t time)
+{
+  if(time > 0u && mMinimumHoldingTime != time)
+  {
+    mMinimumHoldingTime = time;
+
+    if(mGestureRecognizer)
+    {
+      UpdateDetection();
+    }
+  }
+}
+
+uint32_t LongPressGestureProcessor::GetMinimumHoldingTime() const
+{
+  return mMinimumHoldingTime;
+}
+
+void LongPressGestureProcessor::FillRequest(LongPressGestureRequest& request) const
+{
+  unsigned int minimumRequired = UINT_MAX;
+  unsigned int maximumRequired = 0u;
+
+  // The shared recognizer must let through anything any detector's profile may accept; each detector
+  // filters against its own active profile when the long press starts.
+  for(LongPressGestureDetector* detector : mLongPressGestureDetectors)
+  {
+    if(detector)
+    {
+      detector->WidenRecognitionEnvelope(minimumRequired, maximumRequired);
+    }
+  }
+
+  request.minTouches         = minimumRequired;
+  request.maxTouches         = maximumRequired;
+  request.minimumHoldingTime = mMinimumHoldingTime;
+  request.deviceThresholds   = mDeviceThresholds;
+}
+
+void LongPressGestureProcessor::SetDeviceThresholds(const GestureDeviceProfileTable<LongPressThresholdValues>& thresholds)
+{
+  mDeviceThresholds = thresholds;
+
+  if(mGestureRecognizer)
+  {
+    UpdateDetection();
+  }
+}
+
+const GestureDeviceProfileTable<LongPressThresholdValues>& LongPressGestureProcessor::GetDeviceThresholds() const
+{
+  return mDeviceThresholds;
+}
+
+void LongPressGestureProcessor::UpdateDetection()
+{
+  DALI_ASSERT_DEBUG(!mLongPressGestureDetectors.empty());
+  DALI_ASSERT_DEBUG(mGestureRecognizer);
+
+  LongPressGestureRequest request;
+  FillRequest(request);
+  mGestureRecognizer->Update(request);
+}
+
+void LongPressGestureProcessor::OnGesturedActorStageDisconnection()
+{
+  mCurrentEmitters.clear();
+}
+
+bool LongPressGestureProcessor::CheckGestureDetector(GestureDetector* detector, Actor* actor)
+{
+  DALI_ASSERT_DEBUG(mCurrentLongPressEvent);
+  bool ret = false;
+  if(detector)
+  {
+    ret = detector->CheckGestureDetector(mCurrentLongPressEvent, actor, mCurrentRenderTask);
+  }
+  return ret;
+}
+
+void LongPressGestureProcessor::EmitGestureSignal(Actor* actor, const GestureDetectorContainer& gestureDetectors, Vector2 actorCoordinates)
+{
+  DALI_ASSERT_DEBUG(mCurrentLongPressEvent);
+
+  mCurrentEmitters.clear();
+  ResetActor();
+
+  EmitLongPressSignal(actor, gestureDetectors, *mCurrentLongPressEvent, actorCoordinates, mCurrentLongPressEvent->state);
+
+  if(actor->OnScene())
+  {
+    mCurrentEmitters = gestureDetectors;
+    SetActor(actor);
+  }
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

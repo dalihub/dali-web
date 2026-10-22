@@ -1,0 +1,77 @@
+#ifndef DALI_INTERNAL_WHEEL_EVENT_PROCESSOR_H
+#define DALI_INTERNAL_WHEEL_EVENT_PROCESSOR_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali/public-api/common/dali-namespace.h>
+#include <vector>
+
+namespace DALI_NAMESPACE
+{
+namespace Integration
+{
+struct WheelEvent;
+}
+
+namespace Internal
+{
+class Scene;
+
+/**
+ *  WheelEventProcessor receives the wheel events from the Dali Event processor.
+ *
+ *  When a wheel event is received the WheelEvent Processor emits the Wheeled signal
+ *  on the hit actor (and its parents).
+ *
+ * - Hit Testing is described in Dali::Actor.
+ */
+class WheelEventProcessor
+{
+public:
+  /**
+   * Create a wheel event processor.
+   */
+  WheelEventProcessor(Scene& scenes);
+
+  /**
+   * Non-virtual destructor; WheelEventProcessor is not a base class
+   */
+  ~WheelEventProcessor();
+
+  /**
+   * This function is called by the event processor whenever a nouse wheel event occurs.
+   * @param[in] event The wheel event that has occurred.
+   */
+  void ProcessWheelEvent(const Integration::WheelEvent& event);
+
+private:
+  // Undefined
+  WheelEventProcessor(const WheelEventProcessor&);
+
+  // Undefined
+  WheelEventProcessor& operator=(const WheelEventProcessor& rhs);
+
+private:
+  Scene& mScene; ///< Used to deliver the wheel events
+};
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_WHEEL_EVENT_PROCESSOR_H

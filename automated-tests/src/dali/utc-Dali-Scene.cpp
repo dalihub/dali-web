@@ -1,0 +1,4201 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali-test-suite-utils.h>
+#include <dali/devel-api/actors/actor-devel.h>
+#include <dali/devel-api/actors/actor-enumerations-devel.h>
+#include <dali/devel-api/events/key-event-devel.h>
+#include <dali/devel-api/threading/thread.h>
+#include <dali/integration-api/events/key-event-integ.h>
+#include <dali/integration-api/events/touch-event-integ.h>
+#include <dali/integration-api/events/wheel-event-integ.h>
+#include <dali/integration-api/scene.h>
+#include <dali/public-api/events/key-event.h>
+#include <mesh-builder.h>
+#include <stdlib.h>
+
+#include <iostream>
+
+// Internal headers are allowed here
+#include "test-graphics-command-buffer.h"
+#include "test-graphics-controller.h"
+#include "test-graphics-render-pass.h"
+#include "test-render-surface.h"
+
+namespace
+{
+const Dali::String DEFAULT_DEVICE_NAME("hwKeyboard");
+
+// Walks the graphics submit stack and returns one entry per BeginRenderPass command, describing
+// whether that render pass has a depth/stencil attachment and whether the depth/stencil load ops
+// are CLEAR. Lets tests verify that the core library requested the correct render pass setup
+// from the graphics abstraction, rather than relying on GL-level mocks like GetLastClearMask()
+// which get overwritten by subsequent Clear() calls (e.g. LAYER_3D's per-task depth clear).
+struct RenderPassClearInfo
+{
+  bool hasDepthStencilAttachment{false};
+  bool depthLoadOpClear{false};
+  bool stencilLoadOpClear{false};
+};
+
+std::vector<RenderPassClearInfo> CollectRenderPassInfos(Dali::TestGraphicsController& gc)
+{
+  std::vector<RenderPassClearInfo> result;
+  for(auto& submitInfo : gc.mSubmitStack)
+  {
+    for(auto* graphicsCommandBuffer : submitInfo.cmdBuffer)
+    {
+      auto* commandBuffer = Dali::Uncast<Dali::TestGraphicsCommandBuffer>(graphicsCommandBuffer);
+      if(!commandBuffer) continue;
+      for(auto& cmd : commandBuffer->GetCommands())
+      {
+        if(cmd.type != Dali::CommandType::BEGIN_RENDER_PASS) continue;
+        auto* rp = static_cast<Dali::TestGraphicsRenderPass*>(cmd.data.beginRenderPass.renderPass);
+        if(!rp) continue;
+        RenderPassClearInfo info;
+        info.hasDepthStencilAttachment = (rp->attachments.size() >= 2);
+        if(info.hasDepthStencilAttachment)
+        {
+          const auto& ds          = rp->attachments.back();
+          info.depthLoadOpClear   = (ds.loadOp == Dali::Graphics::AttachmentLoadOp::CLEAR);
+          info.stencilLoadOpClear = (ds.stencilLoadOp == Dali::Graphics::AttachmentLoadOp::CLEAR);
+        }
+        result.push_back(info);
+      }
+    }
+  }
+  return result;
+}
+
+// Functor for EventProcessingFinished signal
+struct EventProcessingFinishedFunctor
+{
+  /**
+   * @param[in] eventProcessingFinished reference to a boolean variable used to check if signal has been called.
+   */
+  EventProcessingFinishedFunctor(bool& eventProcessingFinished)
+  : mEventProcessingFinished(eventProcessingFinished)
+  {
+  }
+
+  void operator()()
+  {
+    mEventProcessingFinished = true;
+  }
+
+  bool& mEventProcessingFinished;
+};
+
+// Stores data that is populated in the key-event callback and will be read by the TET cases
+struct KeyEventSignalData
+{
+  KeyEventSignalData()
+  : functorCalled(false)
+  {
+  }
+
+  void Reset()
+  {
+    functorCalled = false;
+
+    receivedKeyEvent.Reset();
+  }
+
+  bool     functorCalled;
+  KeyEvent receivedKeyEvent;
+};
+
+// Functor that sets the data when called
+struct KeyEventReceivedFunctor
+{
+  KeyEventReceivedFunctor(KeyEventSignalData& data)
+  : signalData(data)
+  {
+  }
+
+  bool operator()(KeyEvent keyEvent)
+  {
+    signalData.functorCalled    = true;
+    signalData.receivedKeyEvent = keyEvent;
+
+    return true;
+  }
+
+  KeyEventSignalData& signalData;
+};
+
+// Stores data that is populated in the touch event signal callback and will be read by the TET cases
+struct TouchEventSignalData
+{
+  TouchEventSignalData()
+  : functorCalled(false),
+    createNewScene(false),
+    newSceneCreated(false)
+  {
+  }
+
+  void Reset()
+  {
+    functorCalled   = false;
+    createNewScene  = false;
+    newSceneCreated = false;
+    receivedTouchEvent.Reset();
+    functorCalled = false;
+  }
+
+  bool       functorCalled;
+  bool       createNewScene;
+  bool       newSceneCreated;
+  TouchEvent receivedTouchEvent;
+};
+
+// Functor that sets the data when touch event signal is received
+struct TouchFunctor
+{
+  TouchFunctor(TouchEventSignalData& data)
+  : signalData(data),
+    mRenderSurface{nullptr}
+  {
+  }
+
+  ~TouchFunctor()
+  {
+    if(mRenderSurface)
+    {
+      delete mRenderSurface;
+    }
+    mRenderSurface = nullptr;
+  }
+
+  void operator()(TouchEvent touch)
+  {
+    signalData.functorCalled      = true;
+    signalData.receivedTouchEvent = touch;
+
+    if(signalData.createNewScene)
+    {
+      mRenderSurface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+      Graphics::RenderTargetCreateInfo rtInfo{};
+      rtInfo.SetExtent({480, 800});
+      rtInfo.SetSurface(mRenderSurface);
+
+      Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+      DALI_TEST_CHECK(scene);
+
+      signalData.newSceneCreated = true;
+    }
+  }
+
+  void operator()()
+  {
+    signalData.functorCalled = true;
+  }
+
+  TouchEventSignalData& signalData;
+  TestRenderSurface*    mRenderSurface;
+};
+
+// Stores data that is populated in the wheel-event callback and will be read by the TET cases
+struct WheelEventSignalData
+{
+  WheelEventSignalData()
+  : functorCalled(false)
+  {
+  }
+
+  void Reset()
+  {
+    functorCalled = false;
+  }
+
+  bool       functorCalled;
+  WheelEvent receivedWheelEvent;
+};
+
+// Functor that sets the data when wheel-event signal is received
+struct WheelEventReceivedFunctor
+{
+  WheelEventReceivedFunctor(WheelEventSignalData& data)
+  : signalData(data)
+  {
+  }
+
+  bool operator()(WheelEvent wheelEvent)
+  {
+    signalData.functorCalled      = true;
+    signalData.receivedWheelEvent = wheelEvent;
+
+    return true;
+  }
+
+  WheelEventSignalData& signalData;
+};
+
+// Stores data that is populated in the KeyEventGeneratedSignal callback and will be read by the TET cases
+struct KeyEventGeneratedSignalData
+{
+  KeyEventGeneratedSignalData()
+  : functorCalled(false)
+  {
+  }
+
+  void Reset()
+  {
+    functorCalled = false;
+
+    receivedKeyEvent.Reset();
+  }
+
+  bool     functorCalled;
+  KeyEvent receivedKeyEvent;
+};
+
+// Functor that sets the data when called
+struct KeyEventGeneratedReceivedFunctor
+{
+  KeyEventGeneratedReceivedFunctor(KeyEventGeneratedSignalData& data)
+  : signalData(data)
+  {
+  }
+
+  bool operator()(KeyEvent keyEvent)
+  {
+    signalData.functorCalled    = true;
+    signalData.receivedKeyEvent = keyEvent;
+
+    return true;
+  }
+
+  bool operator()()
+  {
+    signalData.functorCalled = true;
+    return true;
+  }
+
+  KeyEventGeneratedSignalData& signalData;
+};
+
+// Stores data that is populated in the WheelEventGeneratedSignal callback and will be read by the TET cases
+struct WheelEventGeneratedSignalData
+{
+  WheelEventGeneratedSignalData()
+  : functorCalled(false)
+  {
+  }
+
+  void Reset()
+  {
+    functorCalled = false;
+
+    receivedWheelEvent.Reset();
+  }
+
+  bool       functorCalled;
+  WheelEvent receivedWheelEvent;
+};
+
+// Functor that sets the data when called
+struct WheelEventGeneratedReceivedFunctor
+{
+  WheelEventGeneratedReceivedFunctor(WheelEventGeneratedSignalData& data)
+  : signalData(data)
+  {
+  }
+
+  bool operator()(WheelEvent wheelEvent)
+  {
+    signalData.functorCalled      = true;
+    signalData.receivedWheelEvent = wheelEvent;
+
+    return true;
+  }
+
+  bool operator()()
+  {
+    signalData.functorCalled = true;
+    return true;
+  }
+
+  WheelEventGeneratedSignalData& signalData;
+};
+
+// Functor whose return value is fixed at construction time.
+// Used to verify how a consuming signal combines the return values of several
+// connected callbacks: last-callback-wins (Emit) or any-callback-wins (EmitOr).
+struct KeyEventGeneratedConsumeFunctor
+{
+  KeyEventGeneratedConsumeFunctor(KeyEventGeneratedSignalData& data, bool consume)
+  : signalData(data),
+    mConsume(consume)
+  {
+  }
+
+  bool operator()(KeyEvent keyEvent)
+  {
+    signalData.functorCalled    = true;
+    signalData.receivedKeyEvent = keyEvent;
+
+    return mConsume;
+  }
+
+  KeyEventGeneratedSignalData& signalData;
+  bool                         mConsume;
+};
+
+// As above, for the wheel event generated signal.
+struct WheelEventGeneratedConsumeFunctor
+{
+  WheelEventGeneratedConsumeFunctor(WheelEventGeneratedSignalData& data, bool consume)
+  : signalData(data),
+    mConsume(consume)
+  {
+  }
+
+  bool operator()(WheelEvent wheelEvent)
+  {
+    signalData.functorCalled      = true;
+    signalData.receivedWheelEvent = wheelEvent;
+
+    return mConsume;
+  }
+
+  WheelEventGeneratedSignalData& signalData;
+  bool                           mConsume;
+};
+
+void GenerateTouch(TestApplication& application, PointState::Type state, const Vector2& screenPosition)
+{
+  Dali::Integration::TouchEvent touchEvent;
+  Dali::Integration::Point      point;
+  point.SetState(state);
+  point.SetScreenPosition(screenPosition);
+  touchEvent.points.push_back(point);
+  application.ProcessEvent(touchEvent);
+}
+
+bool DummyTouchCallback(Actor actor, TouchEvent touch)
+{
+  return true;
+}
+
+void FrameCallback(int frameId)
+{
+}
+
+} // unnamed namespace
+
+int UtcDaliSceneAdd(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::Add");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = Actor::New();
+  DALI_TEST_CHECK(!actor.GetProperty<bool>(Actor::Property::CONNECTED_TO_SCENE));
+
+  scene.Add(actor);
+  DALI_TEST_CHECK(actor.GetProperty<bool>(Actor::Property::CONNECTED_TO_SCENE));
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetStencilBufferEnabled(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::SetStencilBufferEnabled");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // TestApplication creates its scene with STENCIL_BUFFER_ENABLED
+  DALI_TEST_CHECK(scene.IsStencilBufferEnabled());
+
+  // Test setting to false
+  scene.SetStencilBufferEnabled(false);
+  DALI_TEST_CHECK(!scene.IsStencilBufferEnabled());
+
+  // Test setting to true
+  scene.SetStencilBufferEnabled(true);
+  DALI_TEST_CHECK(scene.IsStencilBufferEnabled());
+
+  // Test setting to false
+  scene.SetStencilBufferEnabled(false);
+  DALI_TEST_CHECK(!scene.IsStencilBufferEnabled());
+  END_TEST;
+}
+
+int UtcDaliSceneStencilBufferClearWithLayer3D(void)
+{
+  TestApplication application;
+  tet_infoline("Testing that the scene's render pass clears the stencil attachment when stencil buffer is enabled and root layer has LAYER_3D behavior");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // TestApplication creates its scene with STENCIL_BUFFER_ENABLED, so stencil is already enabled.
+  scene.SetStencilBufferEnabled(true);
+  DALI_TEST_CHECK(scene.IsStencilBufferEnabled());
+
+  Layer rootLayer = scene.GetRootLayer();
+  rootLayer.SetProperty(Layer::Property::BEHAVIOR, Layer::LAYER_3D);
+  DALI_TEST_EQUALS(rootLayer.GetProperty<Layer::Behavior>(Layer::Property::BEHAVIOR), Layer::LAYER_3D, TEST_LOCATION);
+
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+  Actor    actor    = Actor::New();
+  actor.AddRenderer(renderer);
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::CENTER);
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::CENTER);
+  scene.Add(actor);
+
+  application.GetGraphicsController().ClearSubmitStack();
+  application.SendNotification();
+  application.Render();
+
+  // Inspect the render pass passed to the graphics abstraction rather than GL mock state:
+  // the default scene's render pass must have a depth/stencil attachment whose stencil load
+  // op is CLEAR.
+  auto infos = CollectRenderPassInfos(application.GetGraphicsController());
+  bool found = false;
+  for(auto& i : infos)
+  {
+    if(i.hasDepthStencilAttachment && i.stencilLoadOpClear) found = true;
+  }
+  DALI_TEST_CHECK(found);
+  END_TEST;
+}
+
+int UtcDaliSceneStencilBufferDisabledNoClear(void)
+{
+  TestApplication application;
+  tet_infoline("Testing the render pass' stencil attachment reflects the scene's stencil-buffer flag");
+
+  // First, verify that a scene created WITHOUT stencil buffer has no stencil-clearing
+  // attachment in its render pass. Use a newly-created scene with its own render target so
+  // that we inspect only that scene's BeginRenderPass command.
+  TestRenderSurface*               noStencilSurface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(noStencilSurface);
+
+  Dali::Integration::Scene noStencilScene = Dali::Integration::Scene::New(rtInfo,
+                                                                          Size(480.0f, 800.0f), 0, 0, ScenePolicyFlagBits::PARTIAL_UPDATE_ENABLED);
+
+  noStencilScene.SetSurfaceRenderTarget(rtInfo);
+  application.AddScene(noStencilScene);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  noStencilScene.Add(actor);
+
+  application.GetGraphicsController().ClearSubmitStack();
+  application.SendNotification();
+  application.Render();
+
+  // Walk all BeginRenderPass commands. The stencil-less scene's render pass must not have a
+  // depth/stencil attachment, i.e. some render pass in this frame must lack one. The default
+  // scene (created with stencil enabled) continues to use its own pass with stencil CLEAR,
+  // so we also assert that both setups were seen in the same frame.
+  auto infos                 = CollectRenderPassInfos(application.GetGraphicsController());
+  bool sawStencilClearPass   = false;
+  bool sawNoDepthStencilPass = false;
+  for(auto& i : infos)
+  {
+    if(i.hasDepthStencilAttachment && i.stencilLoadOpClear) sawStencilClearPass = true;
+    if(!i.hasDepthStencilAttachment) sawNoDepthStencilPass = true;
+  }
+  DALI_TEST_CHECK(sawStencilClearPass);
+  DALI_TEST_CHECK(sawNoDepthStencilPass);
+
+  application.RemoveScene(noStencilScene);
+  delete noStencilSurface;
+  END_TEST;
+}
+
+int UtcDaliSceneDepthBufferDisabledNoClear(void)
+{
+  TestApplication application;
+  tet_infoline("Testing the render pass' depth attachment reflects the scene's depth-buffer flag");
+
+  // Verify that a scene created WITHOUT depth buffer has no depth-clearing attachment in its
+  // render pass.
+  TestRenderSurface*               noDepthSurface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(noDepthSurface);
+  Dali::Integration::Scene noDepthScene = Dali::Integration::Scene::New(
+    rtInfo, Size(480.0f, 800.0f), 0, 0, ScenePolicyFlagBits::PARTIAL_UPDATE_ENABLED);
+
+  noDepthScene.SetSurfaceRenderTarget(rtInfo);
+  application.AddScene(noDepthScene);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  noDepthScene.Add(actor);
+
+  application.GetGraphicsController().ClearSubmitStack();
+  application.SendNotification();
+  application.Render();
+
+  // Walk all BeginRenderPass commands. The depth-less scene's render pass must not have a
+  // depth/stencil attachment. The default scene (created with depth enabled) still uses its
+  // own pass with depth CLEAR, so we assert both setups were seen in the same frame.
+  auto infos                 = CollectRenderPassInfos(application.GetGraphicsController());
+  bool sawDepthClearPass     = false;
+  bool sawNoDepthStencilPass = false;
+  for(auto& i : infos)
+  {
+    if(i.hasDepthStencilAttachment && i.depthLoadOpClear) sawDepthClearPass = true;
+    if(!i.hasDepthStencilAttachment) sawNoDepthStencilPass = true;
+  }
+  DALI_TEST_CHECK(sawDepthClearPass);
+  DALI_TEST_CHECK(sawNoDepthStencilPass);
+
+  application.RemoveScene(noDepthScene);
+  delete noDepthSurface;
+  END_TEST;
+}
+
+int UtcDaliSceneDepthBufferRuntimeToggleRebuildsRenderPass(void)
+{
+  TestApplication application;
+  tet_infoline("Testing that SetDepthBufferEnabled rebuilds the surface render pass at runtime");
+
+  // Create a dedicated scene with depth OFF. The default scene created by TestApplication
+  // also renders each frame and may contribute its own depth-enabled pass, so we count
+  // passes-with-depth and assert the count changes as we toggle our scene.
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(
+    rtInfo, Size(480.0f, 800.0f), 0, 0, ScenePolicyFlagBits::PARTIAL_UPDATE_ENABLED);
+  scene.SetSurfaceRenderTarget(rtInfo);
+  application.AddScene(scene);
+
+  DALI_TEST_CHECK(!scene.IsDepthBufferEnabled());
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  scene.Add(actor);
+
+  auto countDepthPasses = [&]()
+  {
+    int n = 0;
+    for(auto& i : CollectRenderPassInfos(application.GetGraphicsController()))
+    {
+      if(i.hasDepthStencilAttachment && i.depthLoadOpClear) ++n;
+    }
+    return n;
+  };
+
+  // Baseline: render once with our scene depth-off.
+  application.GetGraphicsController().ClearSubmitStack();
+  application.SendNotification();
+  application.Render();
+  const int baselineDepthPasses = countDepthPasses();
+
+  // Toggle depth on — Task 4 lazy rebuild should add a depth-enabled pass.
+  scene.SetDepthBufferEnabled(true);
+  DALI_TEST_CHECK(scene.IsDepthBufferEnabled());
+
+  application.GetGraphicsController().ClearSubmitStack();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(countDepthPasses(), baselineDepthPasses + 1, TEST_LOCATION);
+
+  // Toggle back off — pass count returns to baseline.
+  scene.SetDepthBufferEnabled(false);
+  DALI_TEST_CHECK(!scene.IsDepthBufferEnabled());
+
+  application.GetGraphicsController().ClearSubmitStack();
+  application.SendNotification();
+  application.Render();
+  DALI_TEST_EQUALS(countDepthPasses(), baselineDepthPasses, TEST_LOCATION);
+
+  application.RemoveScene(scene);
+  delete surface;
+  END_TEST;
+}
+
+int UtcDaliSceneSetDepthBufferEnabled(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::SetDepthBufferEnabled");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // TestApplication creates its scene with DEPTH_BUFFER_ENABLED
+  DALI_TEST_CHECK(scene.IsDepthBufferEnabled());
+
+  // Test setting to false
+  scene.SetDepthBufferEnabled(false);
+  DALI_TEST_CHECK(!scene.IsDepthBufferEnabled());
+
+  // Test setting to true
+  scene.SetDepthBufferEnabled(true);
+  DALI_TEST_CHECK(scene.IsDepthBufferEnabled());
+  END_TEST;
+}
+
+int UtcDaliSceneDepthBufferClearWithLayer3D(void)
+{
+  TestApplication application;
+  tet_infoline("Testing that glClear is called with depth mask when depth buffer is enabled and root layer has LAYER_3D behavior");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // Enable depth buffer
+  scene.SetDepthBufferEnabled(true);
+  DALI_TEST_CHECK(scene.IsDepthBufferEnabled());
+
+  // Set root layer behavior to LAYER_3D
+  Layer rootLayer = scene.GetRootLayer();
+  rootLayer.SetProperty(Layer::Property::BEHAVIOR, Layer::LAYER_3D);
+
+  // Check that layer behavior is set correctly
+  DALI_TEST_EQUALS(rootLayer.GetProperty<Layer::Behavior>(Layer::Property::BEHAVIOR), Layer::LAYER_3D, TEST_LOCATION);
+
+  // Create a simple renderable actor
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+  Actor    actor    = Actor::New();
+  actor.AddRenderer(renderer);
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::CENTER);
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::CENTER);
+
+  // Add actor to scene
+  scene.Add(actor);
+
+  // Get GL abstraction to check clear calls
+  TestGlAbstraction& glAbstraction    = application.GetGlAbstraction();
+  unsigned int       clearCountBefore = glAbstraction.GetClearCountCalled();
+
+  // Render the scene
+  application.SendNotification();
+  application.Render();
+
+  // Check that clear was called
+  unsigned int clearCountAfter = glAbstraction.GetClearCountCalled();
+  DALI_TEST_GREATER(clearCountAfter, clearCountBefore, TEST_LOCATION);
+
+  // Check that the clear mask includes depth buffer
+  GLbitfield lastClearMask = glAbstraction.GetLastClearMask();
+  DALI_TEST_CHECK((lastClearMask & GL_DEPTH_BUFFER_BIT) != 0);
+  END_TEST;
+}
+
+int UtcDaliSceneRemove(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::Remove");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = Actor::New();
+  DALI_TEST_CHECK(!actor.GetProperty<bool>(Actor::Property::CONNECTED_TO_SCENE));
+
+  scene.Add(actor);
+  DALI_TEST_CHECK(actor.GetProperty<bool>(Actor::Property::CONNECTED_TO_SCENE));
+
+  scene.Remove(actor);
+  DALI_TEST_CHECK(!actor.GetProperty<bool>(Actor::Property::CONNECTED_TO_SCENE));
+
+  END_TEST;
+}
+
+int UtcDaliSceneRequestFullUpdateP(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::RequestFullUpdate");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  scene.RequestFullUpdate();
+
+  application.SendNotification();
+  application.Render();
+
+  // Just check their is no exceptions
+  tet_result(TET_PASS);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGetSize(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::GetSize");
+
+  Dali::Integration::Scene scene = application.GetScene();
+  Size                     size  = scene.GetSize();
+  DALI_TEST_EQUALS(TestApplication::DEFAULT_SURFACE_WIDTH, size.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(TestApplication::DEFAULT_SURFACE_HEIGHT, size.height, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGetDpi(void)
+{
+  TestApplication application; // Initializes core DPI to default values
+
+  // Test that setting core DPI explicitly also sets up the scene's DPI.
+  Dali::Integration::Scene scene = application.GetScene();
+  scene.SetDpi(Vector2(200.0f, 180.0f));
+  Vector2 dpi = scene.GetDpi();
+  DALI_TEST_EQUALS(dpi.x, 200.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(dpi.y, 180.0f, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliSceneGetRenderTaskList(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::GetRenderTaskList");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // Check we get a valid instance.
+  const RenderTaskList& tasks = scene.GetRenderTaskList();
+
+  // There should be 1 task by default.
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 1u, TEST_LOCATION);
+
+  // RenderTaskList has it's own UTC tests.
+  // But we can confirm that GetRenderTaskList in Scene retrieves the same RenderTaskList each time.
+  RenderTask newTask = scene.GetRenderTaskList().CreateTask();
+
+  DALI_TEST_EQUALS(scene.GetRenderTaskList().GetTask(1), newTask, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGetRootLayer(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::GetRootLayer");
+
+  Dali::Integration::Scene scene = application.GetScene();
+  Layer                    layer = scene.GetLayer(0);
+  DALI_TEST_CHECK(layer);
+
+  // Check that GetRootLayer() correctly retreived layer 0.
+  DALI_TEST_CHECK(scene.GetRootLayer() == layer);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGetLayerCount(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::GetLayerCount");
+
+  Dali::Integration::Scene scene = application.GetScene();
+  // Initially we have a default layer
+  DALI_TEST_EQUALS(scene.GetLayerCount(), 1u, TEST_LOCATION);
+
+  Layer layer = Layer::New();
+  scene.Add(layer);
+
+  DALI_TEST_EQUALS(scene.GetLayerCount(), 2u, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliSceneGetLayer(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::GetLayer");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Layer rootLayer = scene.GetLayer(0);
+  DALI_TEST_CHECK(rootLayer);
+
+  Layer layer = Layer::New();
+  scene.Add(layer);
+
+  Layer sameLayer = scene.GetLayer(1);
+  DALI_TEST_CHECK(layer == sameLayer);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGet(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::Get");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor parent = Actor::New();
+  Actor child  = Actor::New();
+
+  parent.Add(child);
+
+  // Should be empty scene
+  DALI_TEST_CHECK(Dali::Integration::Scene() == Dali::Integration::Scene::Get(parent));
+  DALI_TEST_CHECK(Dali::Integration::Scene() == Dali::Integration::Scene::Get(child));
+
+  scene.Add(parent);
+
+  // Should return the valid scene
+  DALI_TEST_CHECK(scene == Dali::Integration::Scene::Get(parent));
+  DALI_TEST_CHECK(scene == Dali::Integration::Scene::Get(child));
+
+  parent.Unparent();
+
+  // Should be empty scene
+  DALI_TEST_CHECK(Dali::Integration::Scene() == Dali::Integration::Scene::Get(parent));
+  DALI_TEST_CHECK(Dali::Integration::Scene() == Dali::Integration::Scene::Get(child));
+
+  END_TEST;
+}
+
+int UtcDaliSceneDiscard(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Scene::Discard");
+
+  // Create a new Scene
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(scene);
+
+  // One reference of scene kept here and the other one kept in the Core
+  DALI_TEST_CHECK(scene.GetBaseObject().ReferenceCount() == 2);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  // Keep the reference of the root layer handle so it will still be alive after the scene is deleted
+  Layer rootLayer = scene.GetRootLayer();
+  DALI_TEST_CHECK(rootLayer);
+  DALI_TEST_CHECK(rootLayer.GetBaseObject().ReferenceCount() == 2);
+
+  // Request to discard the scene from the Core
+  scene.RemoveSceneObject(); // Scene's scene graph lifecycle is NOT managed by scene handle
+  scene.Discard();
+  DALI_TEST_CHECK(scene.GetBaseObject().ReferenceCount() == 1);
+
+  // Reset the scene handle
+  scene.Reset();
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  // At this point, the scene should have been automatically deleted
+  // To prove this, the ref count of the root layer handle should be decremented to 1
+  DALI_TEST_CHECK(rootLayer.GetBaseObject().ReferenceCount() == 1);
+
+  // Delete the root layer handle
+  rootLayer.Reset();
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  delete surface;
+  END_TEST;
+}
+
+int UtcDaliSceneCreateNewSceneDuringCoreEventProcessing(void)
+{
+  TestApplication application;
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  TouchEventSignalData data;
+  data.createNewScene = true;
+  TouchFunctor functor(data);
+  scene.TouchEventSignal().Connect(&application, functor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data.createNewScene, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data.newSceneCreated, TEST_LOCATION);
+  data.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliSceneRootLayerAndSceneAlignment(void)
+{
+  TestApplication application;
+
+  // Create a Scene
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(scene);
+
+  // One reference of scene kept here and the other one kept in the Core
+  DALI_TEST_CHECK(scene.GetBaseObject().ReferenceCount() == 2);
+
+  // Add a renderable actor to the scene
+  auto actor = CreateRenderableActor();
+  scene.Add(actor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  // Keep the reference of the root layer handle so it will still be alive after the scene is deleted
+  Layer rootLayer = scene.GetRootLayer();
+  DALI_TEST_CHECK(rootLayer);
+  DALI_TEST_CHECK(rootLayer.GetBaseObject().ReferenceCount() == 2);
+
+  // Request to discard the scene from the Core
+  scene.RemoveSceneObject(); // Scene's scene graph lifecycle is NOT managed by scene handle
+  scene.Discard();
+  DALI_TEST_CHECK(scene.GetBaseObject().ReferenceCount() == 1);
+
+  // Reset the scene handle
+  scene.Reset();
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  // At this point, the scene should have been automatically deleted
+  // To prove this, the ref count of the root layer handle should be decremented to 1
+  DALI_TEST_CHECK(rootLayer.GetBaseObject().ReferenceCount() == 1);
+
+  // Create a new Scene while the root layer of the deleted scene is still alive
+  TestRenderSurface*               surface2 = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo2{};
+  rtInfo2.SetExtent({480u, 800u});
+  rtInfo2.SetSurface(surface2);
+
+  Dali::Integration::Scene newScene = Dali::Integration::Scene::New(rtInfo2, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(newScene);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  // At this point, we have only one scene but two root layers
+  // The root layer of the deleted scene is still alive
+  DALI_TEST_CHECK(rootLayer.GetBaseObject().ReferenceCount() == 1);
+
+  // Delete the root layer of the deleted scene
+  rootLayer.Reset();
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  delete surface;
+  delete surface2;
+  END_TEST;
+}
+
+int UtcDaliSceneEventProcessingFinishedP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  bool                           eventProcessingFinished = false;
+  EventProcessingFinishedFunctor functor(eventProcessingFinished);
+  scene.EventProcessingFinishedSignal().Connect(&application, functor);
+
+  Actor actor(Actor::New());
+  scene.Add(actor);
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_CHECK(eventProcessingFinished);
+
+  END_TEST;
+}
+
+int UtcDaliSceneEventProcessingFinishedN(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  bool                           eventProcessingFinished = false;
+  EventProcessingFinishedFunctor functor(eventProcessingFinished);
+  scene.EventProcessingFinishedSignal().Connect(&application, functor);
+
+  Actor actor(Actor::New());
+  scene.Add(actor);
+
+  // Do not complete event processing and confirm the signal has not been emitted.
+  DALI_TEST_CHECK(!eventProcessingFinished);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSignalKeyEventP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventSignalData      data;
+  KeyEventReceivedFunctor functor(data);
+  scene.KeyEventSignal().Connect(&application, functor);
+
+  Dali::Integration::KeyEvent event("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+
+  data.Reset();
+
+  Dali::Integration::KeyEvent event2("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::UP, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event2);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event2.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event2.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event2.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event2.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+
+  data.Reset();
+
+  Dali::Integration::KeyEvent event3("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event3);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event3.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event3.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event3.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event3.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+
+  data.Reset();
+
+  Dali::Integration::KeyEvent event4("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::UP, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event4);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event4.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event4.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event4.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event4.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+  END_TEST;
+}
+
+int UtcDaliSceneSignalKeyEventN(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventSignalData      data;
+  KeyEventReceivedFunctor functor(data);
+  scene.KeyEventSignal().Connect(&application, functor);
+
+  // Check that a non-pressed key events data is not modified.
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneTouchEventSignalP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  TouchEventSignalData data;
+  TouchFunctor         functor(data);
+  scene.TouchEventSignal().Connect(&application, functor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Basic test: No actors, single touch (down then up).
+  {
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    data.Reset();
+
+    GenerateTouch(application, PointState::UP, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    data.Reset();
+  }
+
+  // Add an actor to the scene.
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  actor.TouchEventSignal().Connect(&DummyTouchCallback);
+  scene.Add(actor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Actor on scene, single touch, down in actor, motion, then up outside actor.
+  {
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetHitActor(0) == actor);
+    data.Reset();
+
+    GenerateTouch(application, PointState::MOTION, Vector2(150.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    GenerateTouch(application, PointState::UP, Vector2(150.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    data.Reset();
+  }
+
+  // Multiple touch. Should only receive a touch on first down and last up.
+  {
+    Dali::Integration::TouchEvent touchEvent;
+    Dali::Integration::Point      point;
+
+    // 1st point
+    point.SetState(PointState::DOWN);
+    point.SetScreenPosition(Vector2(10.0f, 10.0f));
+    touchEvent.points.push_back(point);
+    application.ProcessEvent(touchEvent);
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_EQUALS(data.receivedTouchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    data.Reset();
+
+    // 2nd point
+    touchEvent.points[0].SetState(PointState::STATIONARY);
+    point.SetDeviceId(1);
+    point.SetScreenPosition(Vector2(50.0f, 50.0f));
+    touchEvent.points.push_back(point);
+    application.ProcessEvent(touchEvent);
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    // Primary point is up
+    touchEvent.points[0].SetState(PointState::UP);
+    touchEvent.points[1].SetState(PointState::STATIONARY);
+    application.ProcessEvent(touchEvent);
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    // Remove 1st point now, 2nd point is now in motion
+    touchEvent.points.erase(touchEvent.points.begin());
+    touchEvent.points[0].SetState(PointState::MOTION);
+    touchEvent.points[0].SetScreenPosition(Vector2(150.0f, 50.0f));
+    application.ProcessEvent(touchEvent);
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    // Final point Up
+    touchEvent.points[0].SetState(PointState::UP);
+    application.ProcessEvent(touchEvent);
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_EQUALS(data.receivedTouchEvent.GetPointCount(), 1u, TEST_LOCATION);
+    data.Reset();
+  }
+  END_TEST;
+}
+
+int UtcDaliSceneTouchEventSignalN(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  TouchEventSignalData data;
+  TouchFunctor         functor(data);
+  scene.TouchEventSignal().Connect(&application, functor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Confirm functor not called before there has been any touch event.
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  // No actors, single touch, down, motion then up.
+  {
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+
+    data.Reset();
+
+    // Confirm there is no signal when the touchpoint is only moved.
+    GenerateTouch(application, PointState::MOTION, Vector2(1200.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    // Confirm a following up event generates a signal.
+    GenerateTouch(application, PointState::UP, Vector2(1200.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    data.Reset();
+  }
+
+  // Add an actor to the scene.
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  actor.TouchEventSignal().Connect(&DummyTouchCallback);
+  scene.Add(actor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Actor on scene. Interrupted before down and interrupted after down.
+  {
+    GenerateTouch(application, PointState::INTERRUPTED, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetState(0) == PointState::INTERRUPTED);
+    data.Reset();
+
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetHitActor(0) == actor);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetState(0) == PointState::DOWN);
+    data.Reset();
+
+    GenerateTouch(application, PointState::INTERRUPTED, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetState(0) == PointState::INTERRUPTED);
+
+    DALI_TEST_EQUALS(data.receivedTouchEvent.GetPointCount(), 1u, TEST_LOCATION);
+
+    // Check that getting info about a non-existent point returns an empty handle
+    Actor actor = data.receivedTouchEvent.GetHitActor(1);
+    DALI_TEST_CHECK(!actor);
+
+    data.Reset();
+  }
+
+  END_TEST;
+}
+
+int UtcDaliSceneSignalWheelEventP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  WheelEventSignalData      data;
+  WheelEventReceivedFunctor functor(data);
+  scene.WheelEventSignal().Connect(&application, functor);
+
+  Dali::Integration::WheelEvent event(Dali::Integration::WheelEvent::CUSTOM_WHEEL, 0, 0u, Vector2(0.0f, 0.0f), 1, 1000u);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(static_cast<WheelEvent::Type>(event.type) == data.receivedWheelEvent.GetType());
+  DALI_TEST_CHECK(event.direction == data.receivedWheelEvent.GetDirection());
+  DALI_TEST_CHECK(event.modifiers == data.receivedWheelEvent.GetModifiers());
+  DALI_TEST_CHECK(event.point == data.receivedWheelEvent.GetPoint());
+  DALI_TEST_CHECK(event.delta == data.receivedWheelEvent.GetDelta());
+  DALI_TEST_CHECK(event.timeStamp == data.receivedWheelEvent.GetTime());
+
+  data.Reset();
+
+  Dali::Integration::WheelEvent event2(Dali::Integration::WheelEvent::CUSTOM_WHEEL, 0, 0u, Vector2(0.0f, 0.0f), -1, 1000u);
+  application.ProcessEvent(event2);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(static_cast<WheelEvent::Type>(event2.type) == data.receivedWheelEvent.GetType());
+  DALI_TEST_CHECK(event2.direction == data.receivedWheelEvent.GetDirection());
+  DALI_TEST_CHECK(event2.modifiers == data.receivedWheelEvent.GetModifiers());
+  DALI_TEST_CHECK(event2.point == data.receivedWheelEvent.GetPoint());
+  DALI_TEST_CHECK(event2.delta == data.receivedWheelEvent.GetDelta());
+  DALI_TEST_CHECK(event2.timeStamp == data.receivedWheelEvent.GetTime());
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceResizedDefaultScene(void)
+{
+  tet_infoline("Ensure resizing of the surface is handled properly");
+
+  TestApplication application;
+
+  auto defaultScene = application.GetScene();
+  DALI_TEST_CHECK(defaultScene);
+
+  // Resize the scene
+  Vector2 newSize(1000.0f, 2000.0f);
+  DALI_TEST_CHECK(defaultScene.GetSize() != newSize);
+  defaultScene.SurfaceResized(newSize.width, newSize.height);
+
+  DALI_TEST_EQUALS(defaultScene.GetSize(), newSize, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceResizedDefaultSceneViewport(void)
+{
+  tet_infoline("Ensure resizing of the surface & viewport is handled properly");
+
+  TestApplication    application;
+  TestGlAbstraction& glAbstraction = application.GetGlAbstraction();
+  TraceCallStack&    callStack     = glAbstraction.GetViewportTrace();
+  glAbstraction.EnableViewportCallTrace(true);
+
+  // Initial scene setup
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+
+  Actor actor = Actor::New();
+  actor.AddRenderer(renderer);
+  actor.SetProperty(Actor::Property::SIZE, Vector2(400.0f, 400.0f));
+  application.GetScene().Add(actor);
+
+  // Render before resizing surface
+  application.SendNotification();
+  application.Render(0);
+  glAbstraction.ResetViewportCallStack();
+
+  auto defaultScene = application.GetScene();
+  DALI_TEST_CHECK(defaultScene);
+
+  // consume the resize flag by first rendering
+  defaultScene.GetSurfaceRectChangedCount();
+
+  BoundsInteger surfaceRect = defaultScene.GetCurrentSurfaceRect();
+
+  uint32_t surfaceResized;
+  // check resized flag before surface is resized.
+  surfaceResized = defaultScene.GetSurfaceRectChangedCount();
+  DALI_TEST_EQUALS(surfaceResized, 0u, TEST_LOCATION);
+
+  // Resize the scene
+  Vector2     newSize(1000.0f, 2000.0f);
+  std::string viewportParams("0, 0, 1000, 2000"); // to match newSize
+  DALI_TEST_CHECK(defaultScene.GetSize() != newSize);
+  defaultScene.SurfaceResized(newSize.width, newSize.height);
+
+  DALI_TEST_EQUALS(defaultScene.GetSize(), newSize, TEST_LOCATION);
+
+  // Check current surface rect
+  BoundsInteger newSurfaceRect = defaultScene.GetCurrentSurfaceRect();
+
+  // It should not be changed yet.
+  DALI_TEST_CHECK(surfaceRect == newSurfaceRect);
+
+  // Render after resizing surface
+  application.SendNotification();
+  application.Render(0);
+
+  surfaceResized = defaultScene.GetSurfaceRectChangedCount();
+  DALI_TEST_EQUALS(surfaceResized, 1u, TEST_LOCATION);
+
+  // Check that the viewport is handled properly
+  DALI_TEST_CHECK(callStack.FindIndexFromMethodAndParams("Viewport", viewportParams) >= 0);
+
+  // Check current surface rect
+  newSurfaceRect = defaultScene.GetCurrentSurfaceRect();
+
+  // It should be changed
+  DALI_TEST_EQUALS(newSurfaceRect.x, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(newSurfaceRect.y, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(newSurfaceRect.width, 1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(newSurfaceRect.height, 2000, TEST_LOCATION);
+
+  // SurfaceRect should be changed.
+  surfaceRect = newSurfaceRect;
+
+  // Resize the scene multiple times
+  uint32_t resizeCount = 10u;
+
+  for(uint32_t i = 0u; i < resizeCount; ++i)
+  {
+    Vector2 newSize(1000.0f, 2100.0f + i);
+    DALI_TEST_CHECK(defaultScene.GetSize() != newSize);
+    defaultScene.SurfaceResized(newSize.width, newSize.height);
+
+    DALI_TEST_EQUALS(defaultScene.GetSize(), newSize, TEST_LOCATION);
+    DALI_TEST_EQUALS(defaultScene.GetSize(), newSize, TEST_LOCATION);
+
+    // Check current surface rect
+    BoundsInteger newSurfaceRect = defaultScene.GetCurrentSurfaceRect();
+
+    // It should not be changed yet.
+    DALI_TEST_CHECK(surfaceRect == newSurfaceRect);
+  }
+
+  // Render after resizing surface
+  application.SendNotification();
+  application.Render(0);
+
+  // Check whether the number of surface resized count get well.
+  surfaceResized = defaultScene.GetSurfaceRectChangedCount();
+  DALI_TEST_EQUALS(surfaceResized, resizeCount, TEST_LOCATION);
+
+  // Check current surface rect
+  newSurfaceRect = defaultScene.GetCurrentSurfaceRect();
+
+  // It should be changed
+  DALI_TEST_EQUALS(newSurfaceRect.x, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(newSurfaceRect.y, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(newSurfaceRect.width, 1000, TEST_LOCATION);
+  DALI_TEST_EQUALS(newSurfaceRect.height, 2100 + (resizeCount - 1), TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceResizedMultipleRenderTasks(void)
+{
+  tet_infoline("Ensure resizing of the surface & viewport is handled properly");
+
+  TestApplication    application;
+  TestGlAbstraction& glAbstraction = application.GetGlAbstraction();
+  TraceCallStack&    callStack     = glAbstraction.GetViewportTrace();
+  glAbstraction.EnableViewportCallTrace(true);
+
+  // Initial scene setup
+  auto scene = application.GetScene();
+
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+
+  Actor actor = Actor::New();
+  actor.AddRenderer(renderer);
+  int testWidth  = 400;
+  int testHeight = 400;
+  actor.SetProperty(Actor::Property::SIZE, Vector2(static_cast<float>(testWidth), static_cast<float>(testHeight)));
+  scene.Add(actor);
+
+  CameraActor offscreenCameraActor = CameraActor::New(Size(static_cast<float>(testWidth), static_cast<float>(testHeight)));
+  application.GetScene().Add(offscreenCameraActor);
+
+  FrameBuffer newFrameBuffer = FrameBuffer::New(testWidth, testHeight, FrameBuffer::Attachment::NONE);
+
+  RenderTask newTask = scene.GetRenderTaskList().CreateTask();
+  newTask.SetCameraActor(offscreenCameraActor);
+  newTask.SetSourceActor(actor);
+  newTask.SetFrameBuffer(newFrameBuffer);
+  newTask.SetViewportPosition(Vector2(0, 0));
+  newTask.SetViewportSize(Vector2(static_cast<float>(testWidth), static_cast<float>(testHeight)));
+
+  // Render before resizing surface
+  application.SendNotification();
+  application.Render(0);
+  glAbstraction.ResetViewportCallStack();
+
+  BoundsInteger initialViewport = newTask.GetViewport();
+  int           initialWidth    = initialViewport.width;
+  int           initialHeight   = initialViewport.height;
+  DALI_TEST_EQUALS(initialWidth, testWidth, TEST_LOCATION);
+  DALI_TEST_EQUALS(initialHeight, testHeight, TEST_LOCATION);
+
+  auto defaultScene = application.GetScene();
+  DALI_TEST_CHECK(defaultScene);
+
+  // Resize the scene
+  Vector2     newSize(1000.0f, 2000.0f);
+  std::string viewportParams("0, 0, 1000, 2000"); // to match newSize
+  DALI_TEST_CHECK(defaultScene.GetSize() != newSize);
+  defaultScene.SurfaceResized(newSize.width, newSize.height);
+
+  DALI_TEST_EQUALS(defaultScene.GetSize(), newSize, TEST_LOCATION);
+
+  // Render after resizing surface
+  application.SendNotification();
+  application.Render(0);
+
+  // Check that the viewport is handled properly
+  DALI_TEST_CHECK(callStack.FindMethodAndGetParameters("Viewport", viewportParams));
+
+  // Second render-task should not be affected
+  BoundsInteger viewport = newTask.GetViewport();
+  int           width    = viewport.width;
+  int           height   = viewport.height;
+  DALI_TEST_EQUALS(width, testWidth, TEST_LOCATION);
+  DALI_TEST_EQUALS(height, testHeight, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceResizedAdditionalScene(void)
+{
+  tet_infoline("Ensure resizing of the surface is handled properly on additional scenes");
+
+  TestApplication application;
+  Vector2         originalSurfaceSize(500.0f, 1000.0f);
+
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+
+  auto scene = Dali::Integration::Scene::New(rtInfo, Size(originalSurfaceSize.width, originalSurfaceSize.height));
+
+  // Ensure default scene size does NOT match the surface size
+  auto       defaultScene = application.GetScene();
+  const auto defaultSize  = defaultScene.GetSize();
+  DALI_TEST_CHECK(defaultSize != originalSurfaceSize);
+  DALI_TEST_EQUALS(originalSurfaceSize, scene.GetSize(), TEST_LOCATION);
+
+  // Resize the surface and inform the scene accordingly
+  Vector2 newSize(1000.0f, 2000.0f);
+  DALI_TEST_CHECK(defaultScene.GetSize() != newSize);
+  scene.SurfaceResized(newSize.width, newSize.height);
+
+  // Ensure the default scene hasn't been resized
+  DALI_TEST_EQUALS(defaultScene.GetSize(), defaultSize, TEST_LOCATION);
+  DALI_TEST_EQUALS(scene.GetSize(), newSize, TEST_LOCATION);
+
+  delete surface;
+
+  END_TEST;
+}
+
+namespace
+{
+void EnsureDirtyRectIsEmpty(TestApplication& application, const char* location)
+{
+  BoundsInteger              clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  std::vector<BoundsInteger> damagedRects;
+
+  // Try render several frames as full surface.
+  for(int i = 0; i < 3; i++)
+  {
+    application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+    application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+    DALI_TEST_EQUALS(damagedRects.size(), 0, location);
+  }
+}
+constexpr int32_t CLIPPING_RECT_X(0);
+constexpr int32_t CLIPPING_RECT_Y(752);
+constexpr int32_t CLIPPING_RECT_WIDTH(48);
+constexpr int32_t CLIPPING_RECT_HEIGHT(48);
+} // namespace
+
+int UtcDaliSceneSurfaceRotatedWithAngle0(void)
+{
+  tet_infoline("Ensure rotation of the surface is handled properly with Angle 0");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  // consume the orientating changing flag by first rendering
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        0,
+                                        0);
+
+  // Check current orientations
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceRotatedWithAngle90(void)
+{
+  tet_infoline("Ensure rotation of the surface is handled properly with Angle 90");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        90,
+                                        0);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  // Total angle is 90, (90 + 0 = 90)
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.y      = CLIPPING_RECT_X;
+  clippingRect.width  = CLIPPING_RECT_HEIGHT;
+  clippingRect.height = CLIPPING_RECT_WIDTH;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 90, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneScreenRotatedWithAngle90(void)
+{
+  tet_infoline("Ensure rotation of the screen is handled properly with Angle 90");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        0,
+                                        90);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  // Total angle is 90, (0 + 90 = 90)
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.y      = CLIPPING_RECT_X;
+  clippingRect.width  = CLIPPING_RECT_HEIGHT;
+  clippingRect.height = CLIPPING_RECT_WIDTH;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 90, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceAndScreenRotatedWithAngle90(void)
+{
+  tet_infoline("Ensure rotation of the surface and the screen is handled properly with Angle 90");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        90,
+                                        90);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  // Total angle is 180.(90 + 90 = 180)
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.width  = CLIPPING_RECT_WIDTH;
+  clippingRect.height = CLIPPING_RECT_HEIGHT;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 90, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 90, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceRotatedWithAngle180(void)
+{
+  tet_infoline("Ensure rotation of the surface is handled properly with Angle 180");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        180,
+                                        0);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.width  = CLIPPING_RECT_WIDTH;
+  clippingRect.height = CLIPPING_RECT_HEIGHT;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 180, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneScreenRotatedWithAngle180(void)
+{
+  tet_infoline("Ensure rotation of the screen is handled properly with Angle 180");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        0,
+                                        180);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.width  = CLIPPING_RECT_WIDTH;
+  clippingRect.height = CLIPPING_RECT_HEIGHT;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 180, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceAndScreenRotatedWithAngle180(void)
+{
+  tet_infoline("Ensure rotation of the surface and the screen is handled properly with Angle 180");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  // consume the orientating changing flag by first rendering
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        180,
+                                        180);
+
+  // Check current orientations
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 180, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 180, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceRotatedWithAngle270(void)
+{
+  tet_infoline("Ensure rotation of the surface is handled properly with Angle 270");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        270,
+                                        0);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  // Total angle is 270. (270 + 0 = 270)
+  clippingRect.x      = CLIPPING_RECT_Y;
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.width  = CLIPPING_RECT_HEIGHT;
+  clippingRect.height = CLIPPING_RECT_WIDTH;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 270, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneScreenRotatedWithAngle270(void)
+{
+  tet_infoline("Ensure rotation of the screen is handled properly with Angle 270");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        0,
+                                        270);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  // Total angle is 270. (0 + 270 = 270)
+  clippingRect.x      = CLIPPING_RECT_Y;
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.width  = CLIPPING_RECT_HEIGHT;
+  clippingRect.height = CLIPPING_RECT_WIDTH;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 270, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceAndScreenRotatedWithAngle270(void)
+{
+  tet_infoline("Ensure rotation of the surface and the screen is handled properly with Angle 270");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        270,
+                                        270);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  // Total angle is 180.(270 + 270 - 360 = 180)
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.width  = CLIPPING_RECT_WIDTH;
+  clippingRect.height = CLIPPING_RECT_HEIGHT;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 270, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 270, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetSurfaceRotationCompletedAcknowledgementWithAngle90(void)
+{
+  tet_infoline("Ensure to acknowledge for completing surface 90 angle rotaiton");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        90,
+                                        0);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.GetScene().SetRotationCompletedAcknowledgement();
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.y      = CLIPPING_RECT_X;
+  clippingRect.width  = CLIPPING_RECT_HEIGHT;
+  clippingRect.height = CLIPPING_RECT_WIDTH;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 90, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  bool isSetRotationCompletedAcknowledgementSet = application.GetScene().IsRotationCompletedAcknowledgementSet();
+  DALI_TEST_EQUALS(isSetRotationCompletedAcknowledgementSet, true, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetScreenRotationCompletedAcknowledgementWithAngle90(void)
+{
+  tet_infoline("Ensure to acknowledge for completing screen 90 angle rotaiton");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        0,
+                                        90);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.GetScene().SetRotationCompletedAcknowledgement();
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.y      = CLIPPING_RECT_X;
+  clippingRect.width  = CLIPPING_RECT_HEIGHT;
+  clippingRect.height = CLIPPING_RECT_WIDTH;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 90, TEST_LOCATION);
+
+  bool isSetRotationCompletedAcknowledgementSet = application.GetScene().IsRotationCompletedAcknowledgementSet();
+  DALI_TEST_EQUALS(isSetRotationCompletedAcknowledgementSet, true, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetSurfaceAndScreenRotationCompletedAcknowledgementWithAngle90(void)
+{
+  tet_infoline("Ensure to acknowledge for completing surface and screen 90 angle rotaiton");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        90,
+                                        90);
+
+  // Check current surface orientation
+  int32_t orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  int32_t screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should not be changed yet.
+  DALI_TEST_EQUALS(orientation, 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 0, TEST_LOCATION);
+
+  application.GetScene().SetRotationCompletedAcknowledgement();
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  clippingRect = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 3 last frames updates
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // It is recalculation for glScissor.
+  // Because surface is rotated and glScissor is called with recalcurated value.
+  clippingRect.x      = TestApplication::DEFAULT_SURFACE_WIDTH - (CLIPPING_RECT_X + CLIPPING_RECT_WIDTH);
+  clippingRect.y      = TestApplication::DEFAULT_SURFACE_HEIGHT - (CLIPPING_RECT_Y + CLIPPING_RECT_HEIGHT);
+  clippingRect.width  = CLIPPING_RECT_WIDTH;
+  clippingRect.height = CLIPPING_RECT_HEIGHT;
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  // Check current orientations
+  orientation       = application.GetScene().GetCurrentSurfaceOrientation();
+  screenOrientation = application.GetScene().GetCurrentScreenOrientation();
+
+  // It should be changed.
+  DALI_TEST_EQUALS(orientation, 90, TEST_LOCATION);
+  DALI_TEST_EQUALS(screenOrientation, 90, TEST_LOCATION);
+
+  bool isSetRotationCompletedAcknowledgementSet = application.GetScene().IsRotationCompletedAcknowledgementSet();
+  DALI_TEST_EQUALS(isSetRotationCompletedAcknowledgementSet, true, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceRotatedPartialUpdate(void)
+{
+  tet_infoline("Ensure rotation of the surface and partial update are handled properly");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::CENTER);
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::CENTER);
+  actor.SetProperty(Actor::Property::SIZE, Vector3(32.0f, 32.0f, 0.0f));
+  DevelActor::SetResizePolicy(actor, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  application.GetScene().Add(actor);
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  clippingRect = BoundsInteger(208, 368, 64, 64); // in screen coordinates
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  damagedRects.clear();
+
+  // Ensure the damaged rect is empty
+  EnsureDirtyRectIsEmpty(application, TEST_LOCATION);
+
+  // Rotate surface
+  application.GetScene().SurfaceRotated(TestApplication::DEFAULT_SURFACE_HEIGHT,
+                                        TestApplication::DEFAULT_SURFACE_WIDTH,
+                                        90,
+                                        0);
+
+  damagedRects.clear();
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  clippingRect = BoundsInteger(208, 208, 224, 224); // in screen coordinates, merged value with the previous rect
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS<BoundsInteger>(clippingRect, damagedRects[0], TEST_LOCATION);
+
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  END_TEST;
+}
+
+int UtcDaliSceneKeyEventGeneratedSignalP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventGeneratedSignalData      data;
+  KeyEventGeneratedReceivedFunctor functor(data);
+  scene.KeyEventGeneratedSignal().Connect(&application, functor);
+
+  Dali::Integration::KeyEvent event("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::UP, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+
+  data.Reset();
+
+  Dali::Integration::KeyEvent event2("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::UP, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event2);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event2.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event2.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event2.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event2.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+
+  data.Reset();
+
+  Dali::Integration::KeyEvent event3("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event3);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event3.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event3.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event3.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event3.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+
+  data.Reset();
+
+  Dali::Integration::KeyEvent event4("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::UP, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event4);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event4.keyModifier == data.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event4.keyName == data.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event4.keyString == data.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event4.state == static_cast<Dali::Integration::KeyEvent::State>(data.receivedKeyEvent.GetState()));
+  END_TEST;
+}
+
+int UtcDaliSceneEnsureReplacedSurfaceKeepsClearColor(void)
+{
+  tet_infoline("Ensure we keep background color when the scene surface is replaced ");
+
+  TestApplication application;
+
+  // Create a new scene and set the background color of the main scene
+  auto defaultScene = application.GetScene();
+  defaultScene.SetBackgroundColor(Color::BLUE);
+
+  // Need to create a renderable as we don't start rendering until we have at least one
+  // We don't need to add this to any scene
+  auto actor = CreateRenderableActor();
+
+  auto& glAbstraction    = application.GetGlAbstraction();
+  auto  clearCountBefore = glAbstraction.GetClearCountCalled();
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), clearCountBefore + 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(glAbstraction.GetLastClearColor(), Color::BLUE, TEST_LOCATION);
+
+  defaultScene.SurfaceReplaced();
+
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), clearCountBefore + 2, TEST_LOCATION);
+  DALI_TEST_EQUALS(glAbstraction.GetLastClearColor(), Color::BLUE, TEST_LOCATION);
+
+  // Check when the main render task viewport is set the clear color is clipped using scissors
+  TraceCallStack& scissorTrace        = glAbstraction.GetScissorTrace();
+  TraceCallStack& enabledDisableTrace = glAbstraction.GetEnableDisableTrace();
+  scissorTrace.Enable(true);
+  enabledDisableTrace.Enable(true);
+
+  defaultScene.GetRenderTaskList().GetTask(0).SetViewport(Viewport(0, 0, 100, 100));
+
+  application.SendNotification();
+  application.Render();
+
+  // Check scissor test was enabled.
+  std::ostringstream scissor;
+  scissor << std::hex << GL_SCISSOR_TEST;
+  DALI_TEST_CHECK(enabledDisableTrace.FindMethodAndParams("Enable", scissor.str()));
+
+  // Check the scissor was set, and the coordinates are correct.
+  DALI_TEST_CHECK(scissorTrace.FindMethodAndParams("Scissor", "0, 700, 100, 100"));
+
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), clearCountBefore + 3, TEST_LOCATION);
+  DALI_TEST_EQUALS(glAbstraction.GetLastClearColor(), Color::BLUE, TEST_LOCATION);
+
+  scissorTrace.Enable(false);
+  scissorTrace.Reset();
+
+  enabledDisableTrace.Enable(false);
+  enabledDisableTrace.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliSceneEnsureRenderTargetRecreated(void)
+{
+  tet_infoline("Ensure render target is re-created when surface replaced ");
+
+  TestApplication application;
+
+  // Create a new scene and set the background color of the main scene
+  auto defaultScene = application.GetScene();
+  defaultScene.SetBackgroundColor(Color::BLUE);
+
+  auto actor = CreateRenderableActor();
+  defaultScene.Add(actor);
+
+  auto& graphicsController = application.GetGraphicsController();
+
+  application.SendNotification();
+  application.Render();
+
+  TraceCallStack&                    graphicsCallStack = graphicsController.mCallStack;
+  TraceCallStack::NamedParams        empty{};
+  const TraceCallStack::NamedParams* matching = graphicsCallStack.FindLastMatch("PresentRenderTarget", empty);
+  DALI_TEST_CHECK(matching != nullptr);
+
+  graphicsCallStack.Reset();
+
+  auto testRenderSurface = new TestRenderSurface(PositionSize(0, 0, 480, 800));
+
+  Graphics::RenderTargetCreateInfo createInfo{};
+  createInfo.SetSurface(testRenderSurface).SetExtent(Graphics::Extent2D{480u, 800u});
+  defaultScene.SetSurfaceRenderTarget(createInfo);
+
+  application.SendNotification();
+  application.Render();
+
+  TraceCallStack::NamedParams query1;
+  query1["surface"] << std::hex << testRenderSurface;
+  const TraceCallStack::NamedParams* matching2 = graphicsCallStack.FindLastMatch("CreateRenderTarget", query1);
+  DALI_TEST_CHECK(matching2 != nullptr);
+
+  const TraceCallStack::NamedParams* matching3 = graphicsCallStack.FindLastMatch("PresentRenderTarget", empty);
+  DALI_TEST_CHECK(matching3 != nullptr);
+  DALI_TEST_EQUALS((*matching3)["surface"].str(), query1["surface"].str(), TEST_LOCATION);
+  delete testRenderSurface;
+  END_TEST;
+}
+
+int UtcDaliSceneEmptySceneRendering(void)
+{
+  tet_infoline("Ensure not rendering before a Renderer is added");
+
+  TestApplication    application;
+  TestGlAbstraction& glAbstraction = application.GetGlAbstraction();
+
+  // Render without any renderer
+  application.SendNotification();
+  application.Render();
+
+  // Check the clear count and the render status
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetRenderNeedsPostRender(), false, TEST_LOCATION);
+
+  // Add a Renderer
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+
+  // Render before adding renderer
+  application.SendNotification();
+  application.Render();
+
+  // Check the clear count and the render status
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), 0, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetRenderNeedsPostRender(), false, TEST_LOCATION);
+
+  Actor actor = Actor::New();
+  actor.AddRenderer(renderer);
+
+  actor.SetProperty(Actor::Property::SIZE, Vector2(400, 400));
+  application.GetScene().Add(actor);
+
+  // Render
+  application.SendNotification();
+  application.Render();
+
+  // Check the clear count and the render status
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(application.GetRenderNeedsPostRender(), true, TEST_LOCATION);
+
+  // Remove the Renderer
+  application.GetScene().Remove(actor);
+  actor.Reset();
+  renderer.Reset();
+
+  // Render
+  application.SendNotification();
+  application.Render();
+
+  // Check the clear count and the render status
+  DALI_TEST_EQUALS(glAbstraction.GetClearCountCalled(), 2, TEST_LOCATION); // Should be cleared
+  DALI_TEST_EQUALS(application.GetRenderNeedsPostRender(), true, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneFrameRenderedPresentedCallback(void)
+{
+  tet_infoline("UtcDaliSceneFrameRenderedCallback");
+
+  TestApplication application;
+
+  // Add a Renderer
+  Geometry geometry = CreateQuadGeometry();
+  Shader   shader   = CreateShader();
+  Renderer renderer = Renderer::New(geometry, shader);
+
+  Actor actor = Actor::New();
+  actor.AddRenderer(renderer);
+  application.GetScene().Add(actor);
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  int frameId = 1;
+  scene.AddFrameRenderedCallback(std::unique_ptr<CallbackBase>(MakeCallback(&FrameCallback)), frameId);
+  scene.AddFramePresentedCallback(std::unique_ptr<CallbackBase>(MakeCallback(&FrameCallback)), frameId);
+
+  // Render
+  application.SendNotification();
+  application.Render();
+
+  Dali::Integration::Scene::FrameCallbackContainer callbackContainer;
+  scene.GetFrameRenderedCallback(callbackContainer);
+
+  DALI_TEST_EQUALS(callbackContainer.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(callbackContainer[0].second, frameId, TEST_LOCATION);
+
+  callbackContainer.clear();
+
+  scene.GetFramePresentedCallback(callbackContainer);
+
+  DALI_TEST_EQUALS(callbackContainer.size(), 1, TEST_LOCATION);
+  DALI_TEST_EQUALS(callbackContainer[0].second, frameId, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneWheelEventGeneratedSignalP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  WheelEventGeneratedSignalData      data;
+  WheelEventGeneratedReceivedFunctor functor(data);
+  scene.WheelEventGeneratedSignal().Connect(&application, functor);
+
+  Dali::Integration::WheelEvent event(Dali::Integration::WheelEvent::CUSTOM_WHEEL, 0, 0u, Vector2(0.0f, 0.0f), 1, 1000u);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(static_cast<WheelEvent::Type>(event.type) == data.receivedWheelEvent.GetType());
+  DALI_TEST_CHECK(event.direction == data.receivedWheelEvent.GetDirection());
+  DALI_TEST_CHECK(event.modifiers == data.receivedWheelEvent.GetModifiers());
+  DALI_TEST_CHECK(event.point == data.receivedWheelEvent.GetPoint());
+  DALI_TEST_CHECK(event.delta == data.receivedWheelEvent.GetDelta());
+  DALI_TEST_CHECK(event.timeStamp == data.receivedWheelEvent.GetTime());
+
+  data.Reset();
+
+  Dali::Integration::WheelEvent event2(Dali::Integration::WheelEvent::CUSTOM_WHEEL, 0, 0u, Vector2(0.0f, 0.0f), -1, 1000u);
+  application.ProcessEvent(event2);
+
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(static_cast<WheelEvent::Type>(event2.type) == data.receivedWheelEvent.GetType());
+  DALI_TEST_CHECK(event2.direction == data.receivedWheelEvent.GetDirection());
+  DALI_TEST_CHECK(event2.modifiers == data.receivedWheelEvent.GetModifiers());
+  DALI_TEST_CHECK(event2.point == data.receivedWheelEvent.GetPoint());
+  DALI_TEST_CHECK(event2.delta == data.receivedWheelEvent.GetDelta());
+  DALI_TEST_CHECK(event2.timeStamp == data.receivedWheelEvent.GetTime());
+  END_TEST;
+}
+
+int UtcDaliSceneSignalInterceptKeyEventP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventSignalData      data;
+  KeyEventReceivedFunctor functor(data);
+  scene.KeyEventSignal().Connect(&application, functor);
+
+  KeyEventGeneratedSignalData      interceptData;
+  KeyEventGeneratedReceivedFunctor interceptFunctor(interceptData);
+  scene.InterceptKeyEventSignal().Connect(&application, interceptFunctor);
+
+  Dali::Integration::KeyEvent event("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, interceptData.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event.keyModifier == interceptData.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event.keyName == interceptData.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event.keyString == interceptData.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event.state == static_cast<Dali::Integration::KeyEvent::State>(interceptData.receivedKeyEvent.GetState()));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  data.Reset();
+  interceptData.Reset();
+
+  Dali::Integration::KeyEvent event2("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::UP, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event2);
+
+  DALI_TEST_EQUALS(true, interceptData.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event2.keyModifier == interceptData.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event2.keyName == interceptData.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event2.keyString == interceptData.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event2.state == static_cast<Dali::Integration::KeyEvent::State>(interceptData.receivedKeyEvent.GetState()));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  data.Reset();
+  interceptData.Reset();
+
+  Dali::Integration::KeyEvent event3("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event3);
+
+  DALI_TEST_EQUALS(true, interceptData.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event3.keyModifier == interceptData.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event3.keyName == interceptData.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event3.keyString == interceptData.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event3.state == static_cast<Dali::Integration::KeyEvent::State>(interceptData.receivedKeyEvent.GetState()));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  data.Reset();
+  interceptData.Reset();
+
+  Dali::Integration::KeyEvent event4("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::UP, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event4);
+
+  DALI_TEST_EQUALS(true, interceptData.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event4.keyModifier == interceptData.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event4.keyName == interceptData.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event4.keyString == interceptData.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event4.state == static_cast<Dali::Integration::KeyEvent::State>(interceptData.receivedKeyEvent.GetState()));
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliSceneSignalInterceptKeyEventAlreadyProcessed(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventSignalData      data;
+  KeyEventReceivedFunctor functor(data);
+  scene.KeyEventSignal().Connect(&application, functor);
+
+  KeyEventGeneratedSignalData      interceptData;
+  KeyEventGeneratedReceivedFunctor interceptFunctor(interceptData);
+  scene.InterceptKeyEventSignal().Connect(&application, interceptFunctor);
+
+  // An event that has already been through the intercept stage must skip it and go
+  // straight on to the key event signal, otherwise accessibility re-injection loops forever.
+  Dali::Integration::KeyEvent event("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  event.interceptProcessed = true;
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(false, interceptData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+  // The flag must also be readable back off the handle the signal delivered.
+  DALI_TEST_EQUALS(true, DevelKeyEvent::IsInterceptProcessed(data.receivedKeyEvent), TEST_LOCATION);
+
+  data.Reset();
+  interceptData.Reset();
+
+  // The same event without the flag is intercepted as usual.
+  Dali::Integration::KeyEvent event2("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event2);
+
+  DALI_TEST_EQUALS(true, interceptData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSignalInterceptKeyEventN(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventGeneratedSignalData      data;
+  KeyEventGeneratedReceivedFunctor functor(data);
+  scene.InterceptKeyEventSignal().Connect(&application, functor);
+
+  // Check that a non-pressed key events data is not modified.
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSignalKeyEventDelayedP(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventSignalData      data;
+  KeyEventReceivedFunctor functor(data);
+  scene.KeyEventSignal().Connect(&application, functor);
+
+  KeyEventSignalData      delayedData;
+  KeyEventReceivedFunctor delayedFunctor(delayedData);
+  scene.KeyEventDelayedSignal().Connect(&application, delayedFunctor);
+
+  Dali::Integration::KeyEvent event("i", "", "i", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "i", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(false, delayedData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+
+  data.Reset();
+  delayedData.Reset();
+
+  Dali::Integration::KeyEvent event3("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  event3.receiveTime = 330;
+  application.ProcessEvent(event3);
+
+  DALI_TEST_EQUALS(true, delayedData.functorCalled, TEST_LOCATION);
+  DALI_TEST_CHECK(event3.keyModifier == delayedData.receivedKeyEvent.GetKeyModifier());
+  DALI_TEST_CHECK(event3.keyName == delayedData.receivedKeyEvent.GetKeyName());
+  DALI_TEST_CHECK(event3.keyString == delayedData.receivedKeyEvent.GetKeyString());
+  DALI_TEST_CHECK(event3.receiveTime == delayedData.receivedKeyEvent.GetReceiveTime());
+  DALI_TEST_CHECK(event3.state == static_cast<Dali::Integration::KeyEvent::State>(delayedData.receivedKeyEvent.GetState()));
+  DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+
+  data.Reset();
+  delayedData.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliSceneSignalKeyEventDelayedN(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  KeyEventSignalData      data;
+  KeyEventReceivedFunctor functor(data);
+  scene.KeyEventDelayedSignal().Connect(&application, functor);
+
+  // Check that a non-pressed key events data is not modified.
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGetOverlayLayer(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::GetOverlayLayer");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  // Check we get a valid instance.
+  RenderTaskList tasks = scene.GetRenderTaskList();
+
+  // There should be 1 task by default.
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 1u, TEST_LOCATION);
+  RenderTask defaultTask = tasks.GetTask(0u);
+  DALI_TEST_EQUALS(scene.GetRootLayer(), defaultTask.GetSourceActor(), TEST_LOCATION);
+
+  Layer layer = scene.GetOverlayLayer();
+  // There should be 2 task by default.
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 2u, TEST_LOCATION);
+  RenderTask overlayTask = tasks.GetTask(1u);
+  DALI_TEST_EQUALS(overlayTask, tasks.GetOverlayTask(), TEST_LOCATION);
+  DALI_TEST_CHECK(scene.GetRootLayer() != overlayTask.GetSourceActor());
+  DALI_TEST_CHECK(overlayTask != defaultTask);
+  DALI_TEST_EQUALS(overlayTask.GetClearEnabled(), false, TEST_LOCATION);
+  DALI_TEST_EQUALS(overlayTask.IsExclusive(), true, TEST_LOCATION);
+
+  // If new render task is created, the last task is overlayTask
+  RenderTask newTask = scene.GetRenderTaskList().CreateTask();
+  application.SendNotification();
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 3u, TEST_LOCATION);
+  DALI_TEST_EQUALS(newTask, tasks.GetTask(1u), TEST_LOCATION);
+  DALI_TEST_EQUALS(overlayTask, tasks.GetTask(2u), TEST_LOCATION);
+
+  // Render
+  application.SendNotification();
+  application.Render();
+
+  tasks.RemoveTask(overlayTask);
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 2u, TEST_LOCATION);
+  DALI_TEST_EQUALS(tasks.GetTask(0u), defaultTask, TEST_LOCATION);
+  DALI_TEST_EQUALS(tasks.GetTask(1u), newTask, TEST_LOCATION);
+
+  // Check overlay task removed well
+  DALI_TEST_EQUALS(nullptr, tasks.GetOverlayTask(), TEST_LOCATION);
+
+  application.SendNotification();
+  application.Render();
+
+  END_TEST;
+}
+
+int UtcDaliSceneSurfaceResizedWithOverlayLayer(void)
+{
+  tet_infoline("Ensure resizing of the surface is handled properly");
+
+  TestApplication application;
+
+  auto scene = application.GetScene();
+  DALI_TEST_CHECK(scene);
+
+  const RenderTaskList& tasks = scene.GetRenderTaskList();
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 1u, TEST_LOCATION);
+  RenderTask defaultTask = tasks.GetTask(0u);
+  DALI_TEST_EQUALS(scene.GetRootLayer(), defaultTask.GetSourceActor(), TEST_LOCATION);
+
+  Vector2  sceneSize = scene.GetSize();
+  Viewport sceneViewport(0, 0, static_cast<int>(sceneSize.x), static_cast<int>(sceneSize.y));
+  Viewport defaultViewport = defaultTask.GetViewport();
+  DALI_TEST_EQUALS(defaultViewport, sceneViewport, TEST_LOCATION);
+
+  Layer layer = scene.GetOverlayLayer();
+  // There should be 2 task by default.
+  DALI_TEST_EQUALS(tasks.GetTaskCount(), 2u, TEST_LOCATION);
+  RenderTask overlayTask     = tasks.GetTask(1u);
+  Viewport   overlayViewport = overlayTask.GetViewport();
+  DALI_TEST_EQUALS(defaultViewport, overlayViewport, TEST_LOCATION);
+
+  // Resize the scene
+  Vector2 newSize(1000.0f, 2000.0f);
+  DALI_TEST_CHECK(scene.GetSize() != newSize);
+  scene.SurfaceResized(newSize.width, newSize.height);
+  Viewport newViewport(0, 0, static_cast<int>(newSize.x), static_cast<int>(newSize.y));
+  DALI_TEST_EQUALS(newViewport, defaultTask.GetViewport(), TEST_LOCATION);
+  DALI_TEST_EQUALS(newViewport, overlayTask.GetViewport(), TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneKeepRendering(void)
+{
+  tet_infoline("Test keep rendering");
+
+  TestApplication application;
+
+  auto scene = application.GetScene();
+  DALI_TEST_CHECK(scene);
+
+  Actor actor = CreateRenderableActor();
+  scene.Add(actor);
+
+  // Run core until it wants to sleep
+  bool keepUpdating(true);
+  while(keepUpdating)
+  {
+    application.SendNotification();
+    keepUpdating = application.Render(1000u /*1 second*/);
+  }
+
+  // Force rendering for the next 5 seconds
+  scene.KeepRendering(5.0f);
+
+  application.SendNotification();
+
+  keepUpdating = application.Render(1000u /*1 second*/);
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u /*2 seconds*/);
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u /*3 seconds*/);
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u /*4 seconds*/);
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u /*5 seconds*/);
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u /*6 seconds*/); // After 5 sec
+  DALI_TEST_CHECK(!keepUpdating);
+
+  END_TEST;
+}
+
+int UtcDaliSceneKeepRenderingMultipleScene(void)
+{
+  tet_infoline("Test keep rendering - multiple scene");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+  TraceCallStack& drawTrace = application.GetGlAbstraction().GetDrawTrace();
+
+  auto defaultScene = application.GetScene();
+  DALI_TEST_CHECK(defaultScene);
+
+  Actor actor1 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor1, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  defaultScene.Add(actor1);
+
+  // Create a Scene
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f), 0, 0, ScenePolicyFlagBits::PARTIAL_UPDATE_ENABLED);
+  DALI_TEST_CHECK(scene);
+
+  application.AddScene(scene);
+
+  Actor actor2 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor2, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  scene.Add(actor2);
+
+  // Run core until it wants to sleep
+  bool keepUpdating(true);
+  while(keepUpdating)
+  {
+    application.SendNotification();
+    keepUpdating = application.RenderWithPartialUpdate(1000u /*1 second*/);
+  }
+
+  drawTrace.Enable(true);
+
+  // Force rendering of the default scene for the next 5 seconds (0sec ~ 5sec)
+  defaultScene.KeepRendering(5.0f);
+
+  application.SendNotification();
+  keepUpdating = application.RenderWithPartialUpdate(1000u /*1 second*/);
+
+  DALI_TEST_CHECK(keepUpdating);
+  DALI_TEST_EQUALS(drawTrace.CountMethod("DrawElements"), 1, TEST_LOCATION); // Only default scene should be drawn
+
+  drawTrace.Reset();
+
+  // Force rendering of the new scene for the next 5 seconds (1sec ~ 6sec)
+  scene.KeepRendering(5.0f);
+
+  application.SendNotification();
+  keepUpdating = application.RenderWithPartialUpdate(3000u /*4 second*/);
+
+  DALI_TEST_CHECK(keepUpdating);
+  DALI_TEST_EQUALS(drawTrace.CountMethod("DrawElements"), 2, TEST_LOCATION); // Both scenes should be drawn
+
+  drawTrace.Reset();
+
+  keepUpdating = application.RenderWithPartialUpdate(1000u /*5 second*/);
+
+  DALI_TEST_CHECK(keepUpdating);
+  DALI_TEST_EQUALS(drawTrace.CountMethod("DrawElements"), 2, TEST_LOCATION); // Still both scenes should be drawn
+
+  drawTrace.Reset();
+
+  keepUpdating = application.RenderWithPartialUpdate(1000u /*6 second*/);
+
+  DALI_TEST_CHECK(keepUpdating);
+  DALI_TEST_EQUALS(drawTrace.CountMethod("DrawElements"), 1, TEST_LOCATION); // Only the new scenes should be drawn
+
+  drawTrace.Reset();
+
+  keepUpdating = application.RenderWithPartialUpdate(1000u /*7 second*/);
+
+  DALI_TEST_CHECK(!keepUpdating);
+  DALI_TEST_EQUALS(drawTrace.CountMethod("DrawElements"), 0, TEST_LOCATION); // Nothing drawn
+
+  delete surface;
+  END_TEST;
+}
+
+int UtcDaliSceneEnableDisablePartialUpdate(void)
+{
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  tet_infoline("Check enabling / disabling partial update");
+
+  const TestGlAbstraction::ScissorParams& glScissorParams(application.GetGlAbstraction().GetScissorParams());
+
+  auto scene = application.GetScene();
+  DALI_TEST_CHECK(scene);
+  scene.SetPartialUpdateEnabled(true);
+
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  scene.Add(actor);
+
+  std::vector<BoundsInteger> damagedRects;
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  // Aligned by 16
+  const BoundsInteger ACTOR_CLIPPING_RECT = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 1 last frames updates
+  Size                sceneSize           = scene.GetSize();
+  const BoundsInteger SCENE_CLIPPING_RECT = BoundsInteger(0, 0, static_cast<int>(sceneSize.width), static_cast<int>(sceneSize.height));
+
+  BoundsInteger clippingRect = ACTOR_CLIPPING_RECT;
+  DirtyRectChecker(damagedRects, {clippingRect}, true, TEST_LOCATION);
+
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+  DALI_TEST_EQUALS(clippingRect.x, glScissorParams.x, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.y, glScissorParams.y, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.width, glScissorParams.width, TEST_LOCATION);
+  DALI_TEST_EQUALS(clippingRect.height, glScissorParams.height, TEST_LOCATION);
+
+  damagedRects.clear();
+
+  // Ensure the damaged rect is empty
+  EnsureDirtyRectIsEmpty(application, TEST_LOCATION);
+
+  // Disable partial update
+  scene.SetPartialUpdateEnabled(false);
+
+  DALI_TEST_EQUALS(scene.IsPartialUpdateEnabled(), false, TEST_LOCATION);
+
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  tet_infoline("Test that there is no damage rect, as partial rendering is now off");
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+
+  tet_infoline("Make a change - there should still be no damage rect");
+  actor[Actor::Property::OPACITY] = 0.5f;
+
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  DALI_TEST_EQUALS(damagedRects.size(), 0, TEST_LOCATION);
+  // Finish this render.
+  clippingRect = SCENE_CLIPPING_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  tet_infoline("Ensure that partial update is turned back on again");
+  scene.SetPartialUpdateEnabled(true);
+
+  DALI_TEST_EQUALS(scene.IsPartialUpdateEnabled(), true, TEST_LOCATION);
+
+  actor[Actor::Property::OPACITY] = 0.75f;
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  tet_infoline("Check the damage rect exists");
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+
+  // Finish this render
+  clippingRect = ACTOR_CLIPPING_RECT;
+  tet_infoline("Check the damage rect is limited to the actor");
+  DirtyRectChecker(damagedRects, {clippingRect}, true, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // Make a change
+  actor[Actor::Property::OPACITY] = 0.5f;
+  application.SendNotification();
+
+  damagedRects.clear();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+  clippingRect = ACTOR_CLIPPING_RECT;
+  tet_infoline("Check that the actor region only is drawn");
+  DALI_TEST_EQUALS(damagedRects.size(), 1, TEST_LOCATION);
+  DirtyRectChecker(damagedRects, {clippingRect}, true, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  END_TEST;
+}
+
+int UtcDaliSceneGeoTouchedEnabledDisabled(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+  DALI_TEST_EQUALS(scene.IsGeometryHittestEnabled(), false, TEST_LOCATION);
+  DALI_TEST_EQUALS(scene.GetTouchPropagationType(), Dali::Integration::Scene::TouchPropagationType::PARENT, TEST_LOCATION);
+
+  TouchEventSignalData data;
+  TouchFunctor         functor(data);
+  scene.TouchEventSignal().Connect(&application, functor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Confirm functor not called before there has been any touch event.
+  DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+
+  // No actors, single touch, down, motion then up.
+  {
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+
+    data.Reset();
+
+    // Confirm there is no signal when the touchpoint is only moved.
+    GenerateTouch(application, PointState::MOTION, Vector2(1200.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    // Confirm a following up event generates a signal.
+    GenerateTouch(application, PointState::UP, Vector2(1200.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    data.Reset();
+  }
+
+  // Add an actor to the scene.
+  Actor actor = Actor::New();
+  actor.SetProperty(Actor::Property::SIZE, Vector2(100.0f, 100.0f));
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::TOP_LEFT);
+  actor.TouchEventSignal().Connect(&DummyTouchCallback);
+  scene.Add(actor);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render();
+
+  // Actor on scene, single touch, down in actor, motion, then up outside actor.
+  {
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetHitActor(0) == actor);
+    data.Reset();
+
+    GenerateTouch(application, PointState::MOTION, Vector2(150.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    GenerateTouch(application, PointState::UP, Vector2(150.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(!data.receivedTouchEvent.GetHitActor(0));
+    data.Reset();
+  }
+
+  scene.SetGeometryHittestEnabled(true);
+  DALI_TEST_EQUALS(scene.IsGeometryHittestEnabled(), true, TEST_LOCATION);
+  DALI_TEST_EQUALS(scene.GetTouchPropagationType(), Dali::Integration::Scene::TouchPropagationType::GEOMETRY, TEST_LOCATION);
+  {
+    GenerateTouch(application, PointState::DOWN, Vector2(10.0f, 10.0f));
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetHitActor(0) == actor);
+    data.Reset();
+
+    GenerateTouch(application, PointState::MOTION, Vector2(150.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(false, data.functorCalled, TEST_LOCATION);
+    data.Reset();
+
+    GenerateTouch(application, PointState::UP, Vector2(150.0f, 10.0f)); // Some motion
+
+    DALI_TEST_EQUALS(true, data.functorCalled, TEST_LOCATION);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetPointCount() != 0u);
+    DALI_TEST_CHECK(data.receivedTouchEvent.GetHitActor(0) == actor);
+    data.Reset();
+  }
+
+  END_TEST;
+}
+
+int UtcDaliSceneGetNativeId(void)
+{
+  TestApplication application; // Initializes
+
+  Dali::Integration::Scene scene    = application.GetScene();
+  int32_t                  nativeId = scene.GetNativeId();
+  DALI_TEST_EQUALS(nativeId, 0, TEST_LOCATION);
+
+  // Test that setting native id
+  scene.SetNativeId(1);
+  nativeId = scene.GetNativeId();
+  DALI_TEST_EQUALS(nativeId, 1, TEST_LOCATION);
+  END_TEST;
+}
+
+int UtcDaliSceneRemoveSceneObjectAndRender01(void)
+{
+  tet_infoline("Test that removing a scene object and rendering does not crash");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  auto defaultScene = application.GetScene();
+  DALI_TEST_CHECK(defaultScene);
+
+  Actor actor1 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor1, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  defaultScene.Add(actor1);
+
+  // Create a Scene
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(scene);
+
+  application.AddScene(scene);
+
+  Actor actor2 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor2, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  scene.Add(actor2);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  scene.RemoveSceneObject(); // Scene's scene graph lifecycle is NOT managed by scene handle
+
+  // Partial Render and notify.
+  application.SendNotification();
+  application.RenderWithPartialUpdate(0, TEST_LOCATION);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  scene.Discard();
+  scene.Reset();
+
+  application.SendNotification();
+  application.Render(0);
+
+  delete surface;
+  END_TEST;
+}
+
+int UtcDaliSceneRemoveSceneObjectAndRender02(void)
+{
+  tet_infoline("Same UTC with UtcDaliSceneRemoveSceneObjectAndRender01, but let we make application doesn't use PartialUpdate");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    false);
+
+  auto defaultScene = application.GetScene();
+  DALI_TEST_CHECK(defaultScene);
+
+  Actor actor1 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor1, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  defaultScene.Add(actor1);
+
+  // Create a Scene
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  DALI_TEST_CHECK(scene);
+
+  application.AddScene(scene);
+
+  Actor actor2 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor2, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  scene.Add(actor2);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  scene.RemoveSceneObject(); // Scene's scene graph lifecycle is NOT managed by scene handle
+
+  // Partial Render and notify.
+  application.SendNotification();
+  application.RenderWithPartialUpdate(0, TEST_LOCATION);
+
+  // Render and notify.
+  application.SendNotification();
+  application.Render(0);
+
+  scene.Discard();
+  scene.Reset();
+
+  application.SendNotification();
+  application.Render(0);
+
+  delete surface;
+  END_TEST;
+}
+
+int UtcDaliSceneDestructWorkerThreadN(void)
+{
+  TestApplication application;
+  tet_infoline("UtcDaliSceneDestructWorkerThreadN Test, for line coverage");
+
+  try
+  {
+    class TestThread : public Thread
+    {
+    public:
+      virtual void Run()
+      {
+        tet_printf("Run TestThread\n");
+        // RemoveSceneObject, Discard and Destruct at worker thread.
+        mScene.RemoveSceneObject();
+        mScene.Discard();
+
+        mScene.Reset();
+        delete mSurface;
+      }
+
+      Dali::Integration::Scene mScene;
+      TestRenderSurface*       mSurface;
+    };
+    TestThread thread;
+
+    thread.mSurface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+    Graphics::RenderTargetCreateInfo rtInfo{};
+    rtInfo.SetExtent({480u, 800u});
+    rtInfo.SetSurface(thread.mSurface);
+
+    Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+
+    // Unparent of DefaultCamera might throw exception. and exception at destructor will make abort.
+    // To avoid it, we should remove all children of root layer.
+    while(scene.GetRootLayer().GetChildCount() > 0)
+    {
+      auto child = scene.GetRootLayer().GetChildAt(0);
+      scene.GetRootLayer().Remove(child);
+    }
+
+    // To make ensure the last reference is in thread, call Discard first.
+    scene.Discard();
+
+    thread.mScene = std::move(scene);
+    scene.Reset();
+
+    thread.Start();
+
+    thread.Join();
+  }
+  catch(...)
+  {
+  }
+
+  // Always success
+  DALI_TEST_CHECK(true);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetForceRenderingP(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::SetForceRendering");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = CreateRenderableActor();
+  scene.Add(actor);
+
+  // Run core until it wants to sleep
+  bool keepUpdating(true);
+  while(keepUpdating)
+  {
+    application.SendNotification();
+    keepUpdating = application.Render();
+  }
+  keepUpdating = application.Render();
+
+  // Force rendering for the next 5 frames
+  scene.SetForceRendering(5u);
+
+  application.SendNotification();
+
+  // Test that core wants to keep rendering for 5 frames, with uploadOnly flags
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating); // After 5 frames rendering, we don't need to keep rendering next frame.
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(!application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating);
+
+  // Force rendering for the next 3 frames
+  scene.SetForceRendering(3u);
+  application.SendNotification();
+
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+
+  // Force rendering for the next 3 frames again
+  scene.SetForceRendering(3u);
+  application.SendNotification();
+
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+
+  // No effect if we try to request more smaller frames request.
+  scene.SetForceRendering(1u);
+  application.SendNotification();
+
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating); // After 3 frames rendering, we don't need to keep rendering next frame.
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(!application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetForceRenderingN(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::SetForceRendering with zero frames");
+
+  Dali::Integration::Scene scene = application.GetScene();
+
+  Actor actor = CreateRenderableActor();
+  scene.Add(actor);
+
+  // Run core until it wants to sleep
+  bool keepUpdating(true);
+  while(keepUpdating)
+  {
+    application.SendNotification();
+    keepUpdating = application.Render();
+  }
+  keepUpdating = application.Render();
+
+  // Force rendering for 0 frames - should not affect rendering
+  scene.SetForceRendering(0u);
+
+  application.SendNotification();
+
+  // Test that core does not want to keep rendering, with uploadOnly flags
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(!application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating);
+
+  END_TEST;
+}
+
+int UtcDaliSceneSetForceRenderingMultipleScene(void)
+{
+  TestApplication application;
+  tet_infoline("Testing Dali::Integration::Scene::SetForceRendering with multiple scenes");
+
+  auto defaultScene = application.GetScene();
+
+  Actor actor1 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor1, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor1.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  defaultScene.Add(actor1);
+
+  // Create another Scene
+  TestRenderSurface*               surface = new TestRenderSurface(Dali::PositionSize(0, 0, 480, 800));
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo.SetExtent({480u, 800u});
+  rtInfo.SetSurface(surface);
+
+  Dali::Integration::Scene scene = Dali::Integration::Scene::New(rtInfo, Size(480.0f, 800.0f));
+  application.AddScene(scene);
+
+  Actor actor2 = CreateRenderableActor();
+  DevelActor::SetResizePolicy(actor2, ResizePolicy::FIXED, Dimension::ALL_DIMENSIONS);
+  actor2.SetProperty(Actor::Property::SIZE, Vector2(10.0f, 10.0f));
+  scene.Add(actor2);
+
+  // Run core until it wants to sleep
+  bool keepUpdating(true);
+  while(keepUpdating)
+  {
+    application.SendNotification();
+    keepUpdating = application.Render();
+  }
+  keepUpdating = application.Render();
+
+  // Force rendering for the default scene and second scene.
+  defaultScene.SetForceRendering(2u);
+  scene.SetForceRendering(3u);
+
+  application.SendNotification();
+
+  // Test that core wants to keep rendering for 3 frames, with uploadOnly flags
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating);
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(keepUpdating); // Second scene still need to render frames
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating); // After 3 frames
+  keepUpdating = application.Render(1000u, TEST_LOCATION, true);
+  DALI_TEST_CHECK(!application.GetRenderNeedsPostRender());
+  DALI_TEST_CHECK(!keepUpdating);
+
+  delete surface;
+  END_TEST;
+}
+
+int UtcDaliSceneRequestFullUpdatePartialRendering(void)
+{
+  tet_infoline("Test that RequestFullUpdate() properly full-update");
+
+  TestApplication application(
+    TestApplication::DEFAULT_SURFACE_WIDTH,
+    TestApplication::DEFAULT_SURFACE_HEIGHT,
+    TestApplication::DEFAULT_HORIZONTAL_DPI,
+    TestApplication::DEFAULT_VERTICAL_DPI,
+    true,
+    true);
+
+  auto scene = application.GetScene();
+  DALI_TEST_CHECK(scene);
+
+  // Create an actor to generate dirty rects
+  Actor actor = CreateRenderableActor();
+  actor.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor.SetProperty(Actor::Property::POSITION, Vector3(16.0f, 16.0f, 0.0f));
+  actor.SetProperty(Actor::Property::SIZE, Vector3(16.0f, 16.0f, 0.0f));
+  scene.Add(actor);
+
+  std::vector<BoundsInteger> damagedRects;
+  BoundsInteger              clippingRect;
+  BoundsInteger              expectedRect1, expectedRect2;
+
+  // Initial render to populate dirty rects
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  // Should have dirty rects from adding the actor
+  DALI_TEST_EQUALS(damagedRects.size(), 1u, TEST_LOCATION);
+
+  clippingRect  = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates;
+  expectedRect1 = BoundsInteger(CLIPPING_RECT_X, CLIPPING_RECT_Y, CLIPPING_RECT_WIDTH, CLIPPING_RECT_HEIGHT); // in screen coordinates, includes 1 last frames updates
+
+  DirtyRectChecker(damagedRects, {expectedRect1}, true, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // Clear damaged rects for next frame
+  damagedRects.clear();
+
+  // Ensure the damaged rect is empty
+  EnsureDirtyRectIsEmpty(application, TEST_LOCATION);
+
+  clippingRect = TestApplication::DEFAULT_SURFACE_RECT;
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  // Update only several frames!
+  application.SendNotification();
+  application.Render(0, TEST_LOCATION, true);
+  application.SendNotification();
+  application.Render(0, TEST_LOCATION, true);
+  application.SendNotification();
+  application.Render(0, TEST_LOCATION, true);
+
+  // Create new actor and remove old actor to generate dirty rects
+  Actor actor2 = CreateRenderableActor();
+  actor2.SetProperty(Actor::Property::PIVOT, Pivot::TOP_LEFT);
+  actor2.SetProperty(Actor::Property::SIZE, Vector3(32.0f, 16.0f, 0.0f));
+  scene.Add(actor2);
+
+  actor.Unparent();
+
+  // Update only several frames again!
+  application.SendNotification();
+  application.Render(0, TEST_LOCATION, true);
+  application.SendNotification();
+  application.Render(0, TEST_LOCATION, true);
+  application.SendNotification();
+  application.Render(0, TEST_LOCATION, true);
+
+  tet_printf("Call scene.RequestFullUpdate()\n");
+  scene.RequestFullUpdate();
+
+  damagedRects.clear();
+  application.SendNotification();
+  application.PreRenderWithPartialUpdate(TestApplication::RENDER_FRAME_INTERVAL, nullptr, damagedRects);
+
+  // Should be full-update this frame
+  DALI_TEST_EQUALS(damagedRects.size(), 1u, TEST_LOCATION);
+  clippingRect  = TestApplication::DEFAULT_SURFACE_RECT;
+  expectedRect1 = TestApplication::DEFAULT_SURFACE_RECT;
+  DirtyRectChecker(damagedRects, {expectedRect1}, true, TEST_LOCATION);
+  application.RenderWithPartialUpdate(damagedRects, clippingRect);
+
+  END_TEST;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Multiple callbacks connected to one consuming signal, with geometry hittest
+// enabled.
+//
+// Scene combines the return values of the callbacks connected to its consuming
+// key/wheel signals with OR, so a single consuming callback consumes the event
+// for all of them.
+//
+// In each case the first callback consumes and the second one, connected last,
+// does not. An uncombined signal would let the second return value override the
+// first, leaving the event unconsumed so that it falls through to the scene's
+// plain (non-consuming) event signal. That signal is therefore the probe for
+// whether the event was consumed.
+///////////////////////////////////////////////////////////////////////////////
+
+int UtcDaliSceneKeyEventGeneratedSignalMultipleCallbacksGeometryOn(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+  scene.SetGeometryHittestEnabled(true);
+
+  KeyEventSignalData      unconsumedData;
+  KeyEventReceivedFunctor unconsumedFunctor(unconsumedData);
+  scene.KeyEventSignal().Connect(&application, unconsumedFunctor);
+
+  KeyEventGeneratedSignalData     consumingData;
+  KeyEventGeneratedConsumeFunctor consumingFunctor(consumingData, true);
+  scene.KeyEventGeneratedSignal().Connect(&application, consumingFunctor);
+
+  KeyEventGeneratedSignalData     passiveData;
+  KeyEventGeneratedConsumeFunctor passiveFunctor(passiveData, false);
+  scene.KeyEventGeneratedSignal().Connect(&application, passiveFunctor);
+
+  Dali::Integration::KeyEvent event("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event);
+
+  // Every connected callback runs; combining the results does not short-circuit.
+  DALI_TEST_EQUALS(true, consumingData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, passiveData.functorCalled, TEST_LOCATION);
+
+  // The consuming callback wins, so the event does not reach the key event signal.
+  DALI_TEST_EQUALS(false, unconsumedData.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneInterceptKeyEventSignalMultipleCallbacksGeometryOn(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+  scene.SetGeometryHittestEnabled(true);
+
+  KeyEventSignalData      unconsumedData;
+  KeyEventReceivedFunctor unconsumedFunctor(unconsumedData);
+  scene.KeyEventSignal().Connect(&application, unconsumedFunctor);
+
+  KeyEventGeneratedSignalData     consumingData;
+  KeyEventGeneratedConsumeFunctor consumingFunctor(consumingData, true);
+  scene.InterceptKeyEventSignal().Connect(&application, consumingFunctor);
+
+  KeyEventGeneratedSignalData     passiveData;
+  KeyEventGeneratedConsumeFunctor passiveFunctor(passiveData, false);
+  scene.InterceptKeyEventSignal().Connect(&application, passiveFunctor);
+
+  Dali::Integration::KeyEvent event("a", "", "a", 0, 0, 0, Dali::Integration::KeyEvent::DOWN, "a", DEFAULT_DEVICE_NAME, Device::Class::NONE, Device::Subclass::NONE);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, consumingData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, passiveData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, unconsumedData.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneWheelEventGeneratedSignalMultipleCallbacksGeometryOn(void)
+{
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+  scene.SetGeometryHittestEnabled(true);
+
+  WheelEventSignalData      unconsumedData;
+  WheelEventReceivedFunctor unconsumedFunctor(unconsumedData);
+  scene.WheelEventSignal().Connect(&application, unconsumedFunctor);
+
+  WheelEventGeneratedSignalData     consumingData;
+  WheelEventGeneratedConsumeFunctor consumingFunctor(consumingData, true);
+  scene.WheelEventGeneratedSignal().Connect(&application, consumingFunctor);
+
+  WheelEventGeneratedSignalData     passiveData;
+  WheelEventGeneratedConsumeFunctor passiveFunctor(passiveData, false);
+  scene.WheelEventGeneratedSignal().Connect(&application, passiveFunctor);
+
+  Dali::Integration::WheelEvent event(Dali::Integration::WheelEvent::CUSTOM_WHEEL, 0, 0u, Vector2(0.0f, 0.0f), 1, 1000u);
+  application.ProcessEvent(event);
+
+  DALI_TEST_EQUALS(true, consumingData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(true, passiveData.functorCalled, TEST_LOCATION);
+  DALI_TEST_EQUALS(false, unconsumedData.functorCalled, TEST_LOCATION);
+
+  END_TEST;
+}
+
+int UtcDaliSceneIsCurrentlyVisible(void)
+{
+  tet_infoline("Ensure that IsCurrentlyVisible() returns the visibility after the update is processed");
+
+  TestApplication          application;
+  Dali::Integration::Scene scene = application.GetScene();
+
+  application.SendNotification();
+  application.Render(0);
+
+  DALI_TEST_EQUALS(scene.IsVisible(), true, TEST_LOCATION);
+  DALI_TEST_EQUALS(scene.IsCurrentlyVisible(), true, TEST_LOCATION);
+
+  scene.Hide();
+
+  // It should not be changed until the update is processed.
+  DALI_TEST_EQUALS(scene.IsVisible(), false, TEST_LOCATION);
+  DALI_TEST_EQUALS(scene.IsCurrentlyVisible(), true, TEST_LOCATION);
+
+  application.SendNotification();
+  application.Render(0);
+
+  DALI_TEST_EQUALS(scene.IsCurrentlyVisible(), false, TEST_LOCATION);
+
+  scene.Show();
+
+  DALI_TEST_EQUALS(scene.IsVisible(), true, TEST_LOCATION);
+  DALI_TEST_EQUALS(scene.IsCurrentlyVisible(), false, TEST_LOCATION);
+
+  application.SendNotification();
+  application.Render(0);
+
+  DALI_TEST_EQUALS(scene.IsCurrentlyVisible(), true, TEST_LOCATION);
+
+  END_TEST;
+}

@@ -1,0 +1,127 @@
+#ifndef DALI_INTERNAL_EVENT_THREAD_SERVICES_H
+#define DALI_INTERNAL_EVENT_THREAD_SERVICES_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/dali-namespace.h>
+#include <cstddef>
+#include <cstdint>
+
+namespace DALI_NAMESPACE
+{
+class BaseObject;
+
+namespace Integration
+{
+class RenderController;
+}
+
+namespace Internal
+{
+namespace SceneGraph
+{
+class UpdateManager;
+}
+
+/**
+ * Abstract interface of services for event-thread objects.
+ * Used for registering objects, queueing messages during the event-thread for the next update.
+ * Allows the event-thread to read double-buffered property values.
+ */
+class EventThreadServices
+{
+public:
+  /**
+   * Virtual destructor
+   */
+  virtual ~EventThreadServices() = default;
+
+  /**
+   * Get the EventThreadServices
+   * @return reference to the EventThreadServices
+   */
+  static EventThreadServices& Get();
+
+  /**
+   * @brief Registers the object as created with the Object registry.
+   *
+   * @param[in] object to register
+   */
+  virtual void RegisterObject(BaseObject* object) = 0;
+
+  /**
+   * @brief Unregisters the object from Object registry.
+   *
+   * @param[in] object to unregister
+   */
+  virtual void UnregisterObject(BaseObject* object) = 0;
+
+  /**
+   * @brief Get a reference to the UpdateManager
+   *
+   * @return the update manager
+   */
+  virtual SceneGraph::UpdateManager& GetUpdateManager() = 0;
+
+  /**
+   * @brief Get a reference to the RenderController
+   *
+   * @return the render controller
+   */
+  virtual Integration::RenderController& GetRenderController() = 0;
+
+  /**
+   * Reserve space for another message in the queue; this must then be initialized by the caller.
+   * The message will be read from the update-thread after the next FlushMessages is called.
+   * @post Calling this method may invalidate any previously returned slots.
+   * @param[in] size The message size with respect to the size of type "char".
+   * @param[in] updateScene A flag, when true denotes that the message will cause the scene-graph node tree to require an update.
+   * @return A pointer to the first char allocated for the message.
+   */
+  virtual uint32_t* ReserveMessageSlot(uint32_t size, bool updateScene = true) = 0;
+
+  /**
+   * @return true if core is still running and we can send messages
+   * @note It returns false if it is called from a thread other than the main thread.
+   */
+  static bool IsCoreRunning();
+
+  /**
+   * @brief Check if the event thread service is shutting down.
+   *
+   * @return true if the event thread service is shutting down.
+   * @note It returns false if the core hasn't been initialised yet.
+   */
+  static bool IsShuttingDown();
+
+  /**
+   * @brief Queries whether the current thread is the Core event thread.
+   *
+   * Useful for asserting that code is running on the event thread after the Core has been initialized.
+   *
+   * @return True if called from the event thread, false otherwise.
+   */
+  static bool IsEventThread();
+};
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_EVENT_THREAD_SERVICES_H

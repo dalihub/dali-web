@@ -1,0 +1,421 @@
+#ifndef DALI_CUSTOM_ACTOR_IMPL_H
+#define DALI_CUSTOM_ACTOR_IMPL_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <cstdint> // uint32_t
+
+// INTERNAL INCLUDES
+#include <dali/public-api/actors/actor-enumerations.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/animation/animation.h>
+#include <dali/public-api/common/dali-vector.h>
+#include <dali/public-api/math/compile-time-math.h>
+#include <dali/public-api/object/property.h>
+#include <dali/public-api/object/ref-object.h>
+#include <dali/public-api/render-tasks/render-task.h>
+
+namespace DALI_NAMESPACE
+{
+/**
+ * @addtogroup dali_core_actors
+ * @{
+ */
+
+namespace Internal DALI_INTERNAL
+{
+class CustomActor;
+}
+
+class Animation;
+class CustomActor;
+class CustomActorImpl;
+class RelayoutContainer;
+class KeyEvent;
+class TouchEvent;
+class HoverEvent;
+class WheelEvent;
+struct Vector2;
+struct Vector3;
+
+/**
+ * @brief Pointer to Dali::CustomActorImpl object.
+ * @SINCE_1_0.0
+ */
+using CustomActorImplPtr = IntrusivePtr<CustomActorImpl>;
+
+/**
+ * @brief CustomActorImpl is an abstract base class for custom control implementations.
+ *
+ * This provides a series of pure virtual methods, which are called when actor-specific events occur.
+ * And CustomActorImpl is typically owned by a single CustomActor instance; see also CustomActor::CustomActor( CustomActorImpl &implementation ).
+ * @SINCE_1_0.0
+ */
+class DALI_CORE_API CustomActorImpl : public Dali::RefObject
+{
+public:
+  class Extension; ///< Forward declare future extension interface
+
+protected:
+  /**
+   * @brief Virtual destructor
+   * @SINCE_1_0.0
+   */
+  ~CustomActorImpl() override;
+
+public:
+  /**
+   * @brief Used by derived CustomActorImpl instances, to access the public Actor interface.
+   *
+   * @SINCE_1_0.0
+   * @return A pointer to self, or an uninitialized pointer if the CustomActorImpl is not owned.
+   */
+  CustomActor Self() const;
+
+  /**
+   * @brief Called after the actor has been connected to the Scene.
+   *
+   * When an actor is connected, it will be directly or indirectly parented to the root Actor.
+   * @SINCE_1_9.24
+   * @param[in] depth The depth in the hierarchy for the actor
+   *
+   * @note The root Actor is provided automatically by the Scene, and is always considered to be connected.
+   * When the parent of a set of actors is connected to the scene, then all of the children
+   * will received this callback.
+   * For the following actor tree, the callback order will be A, B, D, E, C, and finally F.
+   *
+   * @code
+   *
+   *       A (parent)
+   *      / \
+   *     B   C
+   *    / \   \
+   *   D   E   F
+   *
+   * @endcode
+   */
+  virtual void OnSceneConnection(int32_t depth) = 0;
+
+  /**
+   * @brief Called after the actor has been disconnected from the Scene.
+   *
+   * If an actor is disconnected, it either has no parent or is parented to a disconnected actor.
+   *
+   * @SINCE_1_9.24
+   * @note When the parent of a set of actors is disconnected to the scene, then all of the children
+   * will received this callback, starting with the leaf actors.
+   * For the following actor tree, the callback order will be D, E, B, F, C, and finally A.
+   *
+   * @code
+   *
+   *       A (parent)
+   *      / \
+   *     B   C
+   *    / \   \
+   *   D   E   F
+   *
+   * @endcode
+   */
+  virtual void OnSceneDisconnection() = 0;
+
+  /**
+   * @brief Called after a child has been added to the owning actor.
+   *
+   * @SINCE_1_0.0
+   * @param[in] child The child which has been added
+   */
+  virtual void OnChildAdd(Actor& child) = 0;
+
+  /**
+   * @brief Called after the owning actor has attempted to remove a child (regardless of whether it succeeded or not).
+   *
+   * @SINCE_1_0.0
+   * @param[in] child The child being removed
+   */
+  virtual void OnChildRemove(Actor& child) = 0;
+
+  /**
+   * @brief Called when the owning actor property is set.
+   *
+   * @SINCE_1_0.0
+   * @param[in] index The Property index that was set
+   * @param[in] propertyValue The value to set
+   */
+  virtual void OnPropertySet(Property::Index index, const Property::Value& propertyValue);
+
+  /**
+   * @brief Called when the owning actor's size is set e.g. using Actor::SetSize().
+   *
+   * @SINCE_1_0.0
+   * @param[in] targetSize The target size.
+   */
+  virtual void OnSizeSet(const Vector3& targetSize) = 0;
+
+  /**
+   * @brief Called when the owning actor's size is animated e.g. using Animation::AnimateTo( Property( actor, Actor::Property::SIZE ), ... ).
+   *
+   * @SINCE_1_0.0
+   * @param[in] animation The object which is animating the owning actor
+   * @param[in] targetSize The target size.
+   */
+  virtual void OnSizeAnimation(Animation& animation, const Vector3& targetSize) = 0;
+
+  /**
+   * @brief Called when animating the owning actor's animatable property.
+   * @SINCE_2_4.27
+   * @param[in] animation The object which is animating the owning actor
+   * @param[in] index The animatable property index
+   * @param[in] state Current animation state
+   */
+  virtual void OnAnimateAnimatableProperty(Animation& animation, Property::Index index, Dali::Animation::State state)
+  {
+  }
+
+  /**
+   * @brief Called when apply constraint property or removed.
+   * @SINCE_2_4.41
+   * @param[in] constraint The constraint constrainting the property.
+   * @param[in] index The animatable property index
+   * @param[in] applied Whether it is applied or not.
+   */
+  virtual void OnConstraintAnimatableProperty(Constraint& constraint, Property::Index index, bool applied)
+  {
+  }
+
+  /**
+   * @brief Retrieves the off-screen RenderTasks associated with the Actor.
+   * This method returns the internal RenderTasks held by the Actor. This tasks are
+   * used for off-screen rendering, and the system will assign order index to each
+   * tasks based on the render order.
+   *
+   * Actor with a non-NONE OffScreenRenderableType should override this method to
+   * provide their render tasks.
+   *
+   * @SINCE_2_3.43
+   * @param[out] tasks A list of RenderTasks to be populated with the Actor's forward
+   * or backward off-screen RenderTask.
+   * @param[in] isForward Indicates whether to retrieve forward (true) or backward (false)
+   * RenderTasks.
+   */
+  virtual void GetOffScreenRenderTasks(Dali::Vector<Dali::RenderTask>& tasks, bool isForward) = 0;
+
+  /**
+   * @brief Register OffScreenRenderableType of this Actor.
+   * This method is called by child class to set type itself.
+   *
+   * @SINCE_2_4.17
+   * @param[in] offScreenRenderableType OffScreenRenderableType for this Actor.
+   * It could be one of NONE, FORWARD, BACKWARD, and BOTH.
+   * @note Each FORWARD / BACKWARD type could be added maxium 15 times.
+   * @post Call UnregisterOffScreenRenderableType() to unregister the type.
+   */
+  void RegisterOffScreenRenderableType(OffScreenRenderable::Type offScreenRenderableType);
+
+  /**
+   * @brief Unregister OffScreenRenderableType of this Actor.
+   * This method is called by child class to set type itself.
+   *
+   * @SINCE_2_4.17
+   * @param[in] offScreenRenderableType OffScreenRenderableType for this Actor.
+   * It could be one of NONE, FORWARD, BACKWARD, and BOTH.
+   * @pre Call RegisterOffScreenRenderableType() before unregister the type.
+   */
+  void UnregisterOffScreenRenderableType(OffScreenRenderable::Type offScreenRenderableType);
+
+  /**
+   * @brief Retrieves OffScreenRenderableType of this Actor.
+   *
+   * @SINCE_2_3.43
+   * @return OffScreenRenderableType for this Actor.
+   */
+  OffScreenRenderable::Type GetOffScreenRenderableType();
+
+  /**
+   * @brief Requests RenderTask reordering when the offscreen properties of this Actor are changed.
+   * @SINCE_2_3.43
+   */
+  void RequestRenderTaskReorder();
+
+  /**
+   * @brief Set this CustomActor is transparent or not without any affection on the child Actors.
+   */
+  void SetTransparent(bool transparent);
+
+  /**
+   * @brief Get this CustomActor is transparent or not.
+   */
+  bool IsTransparent() const;
+
+  /**
+   * @brief Retrieves the extension for this control.
+   *
+   * @SINCE_1_0.0
+   * @return The extension if available, NULL otherwise
+   */
+  virtual Extension* GetExtension()
+  {
+    return nullptr;
+  }
+
+  /**
+   * @brief Queries whether the implementation has built-in touch handling even when Actor::TouchEventSignal() has no callbacks.
+   *
+   * Returning true makes the owning actor participate in touch hit testing and allows
+   * OnTouchEvent() to be called without requiring a connected Actor::TouchEventSignal() callback.
+   *
+   * The default implementation returns false.
+   *
+   * @return True if the implementation has built-in touch handling, false otherwise
+   */
+  virtual bool HasIntrinsicTouchHandling() const;
+
+  /**
+   * @brief Called when the owning actor receives a touch event.
+   *
+   * This hook is called before Actor::TouchEventSignal() is emitted. If Actor::TouchEventSignal()
+   * has callbacks, the signal is emitted regardless of the value returned by this method.
+   * The event is consumed if either this method or Actor::TouchEventSignal() returns true.
+   *
+   * The default implementation returns false.
+   *
+   * @param[in] event The touch event
+   * @return True if the event is consumed, false otherwise
+   */
+  virtual bool OnTouchEvent(const TouchEvent& event);
+
+  /**
+   * @brief Queries whether the implementation has built-in hover handling even when Actor::HoverEventSignal() has no callbacks.
+   *
+   * Returning true makes the owning actor participate in hover hit testing and allows
+   * OnHoverEvent() to be called without requiring a connected Actor::HoverEventSignal() callback.
+   *
+   * The default implementation returns false.
+   *
+   * @return True if the implementation has built-in hover handling, false otherwise
+   */
+  virtual bool HasIntrinsicHoverHandling() const;
+
+  /**
+   * @brief Called when the owning actor receives a hover event.
+   *
+   * This hook is called before Actor::HoverEventSignal() is emitted. If Actor::HoverEventSignal()
+   * has callbacks, the signal is emitted regardless of the value returned by this method.
+   * The event is consumed if either this method or Actor::HoverEventSignal() returns true.
+   *
+   * The default implementation returns false.
+   *
+   * @param[in] event The hover event
+   * @return True if the event is consumed, false otherwise
+   */
+  virtual bool OnHoverEvent(const HoverEvent& event);
+
+  /**
+   * @brief Queries whether the implementation has built-in wheel handling even when Actor::WheelEventSignal() has no callbacks.
+   *
+   * Returning true makes the owning actor participate in wheel hit testing and allows
+   * OnWheelEvent() to be called without requiring a connected Actor::WheelEventSignal() callback.
+   *
+   * The default implementation returns false.
+   *
+   * @return True if the implementation has built-in wheel handling, false otherwise
+   */
+  virtual bool HasIntrinsicWheelHandling() const;
+
+  /**
+   * @brief Called when the owning actor receives a wheel event.
+   *
+   * This hook is called before Actor::WheelEventSignal() is emitted. If Actor::WheelEventSignal()
+   * has callbacks, the signal is emitted regardless of the value returned by this method.
+   * The event is consumed if either this method or Actor::WheelEventSignal() returns true.
+   *
+   * The default implementation returns false.
+   *
+   * @param[in] event The wheel event
+   * @return True if the event is consumed, false otherwise
+   */
+  virtual bool OnWheelEvent(const WheelEvent& event);
+
+  /**
+   * @brief Called after Actor::TouchEventSignal() has been emitted for a touch event.
+   *
+   * This hook is called regardless of whether OnTouchEvent() or Actor::TouchEventSignal()
+   * consumed the event. It does not affect the event's consumed state.
+   *
+   * @param[in] event The touch event
+   */
+  virtual void OnFinalizeTouchEventDispatch(const TouchEvent& event);
+
+  /**
+   * @brief Called after Actor::HoverEventSignal() has been emitted for a hover event.
+   *
+   * This hook is called regardless of whether OnHoverEvent() or Actor::HoverEventSignal()
+   * consumed the event. It does not affect the event's consumed state.
+   *
+   * @param[in] event The hover event
+   */
+  virtual void OnFinalizeHoverEventDispatch(const HoverEvent& event);
+
+  /**
+   * @brief Called after Actor::WheelEventSignal() has been emitted for a wheel event.
+   *
+   * This hook is called regardless of whether OnWheelEvent() or Actor::WheelEventSignal()
+   * consumed the event. It does not affect the event's consumed state.
+   *
+   * @param[in] event The wheel event
+   */
+  virtual void OnFinalizeWheelEventDispatch(const WheelEvent& event);
+
+protected: // For derived classes
+  /**
+   * @brief Creates a CustomActorImpl.
+   * @SINCE_2_4.36
+   */
+  CustomActorImpl();
+
+public: // Not intended for application developers
+  /**
+   * @brief Initializes a CustomActor.
+   * @SINCE_1_0.0
+   * @param[in] owner The owning object
+   * @pre The CustomActorImpl is not already owned.
+   * @note Called when ownership of the CustomActorImpl is passed to a CustomActor.
+   */
+  void Initialize(Internal::CustomActor& owner);
+
+  /**
+   * @brief Gets the owner.
+   *
+   * This method is needed when creating additional handle objects to existing objects.
+   * Owner is the Dali::Internal::CustomActor that owns the implementation of the custom actor
+   * inside core. Creation of a handle to Dali public API Actor requires this pointer.
+   * @SINCE_1_0.0
+   * @return A pointer to the Actor implementation that owns this custom actor implementation
+   */
+  Internal::CustomActor* GetOwner() const;
+
+private:
+  Internal::CustomActor* mOwner; ///< Internal owner of this custom actor implementation
+};
+
+/**
+ * @}
+ */
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_CUSTOM_ACTOR_IMPL_H

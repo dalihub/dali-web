@@ -1,0 +1,98 @@
+#ifndef DALI_RANDOM_H
+#define DALI_RANDOM_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/public-api/math/vector4.h>
+
+// EXTERNAL INCLUDES
+#include <cstdlib> ///< for srand() and rand()
+#include <ctime>   ///< for time(nullptr)
+
+namespace DALI_NAMESPACE
+{
+/**
+ * @addtogroup dali_core_math
+ * @{
+ */
+
+/**
+ * @brief Provides methods to generate and use random values.
+ * @SINCE_1_0.0
+ */
+namespace Random
+{
+/**
+ * @brief Returns a random number between f0 and f1.
+ *
+ * Note, uses a limited number of values.
+ * @SINCE_1_0.0
+ * @param[in] f0 The lower bound
+ * @param[in] f1 The upper bound
+ * @return A random value between the lower and upper bound
+ */
+inline float Range(float f0, float f1)
+{
+  float minf = f0 < f1 ? f0 : f1;
+  float maxf = f0 > f1 ? f0 : f1;
+
+  // Ensure we initialize only once. As it's inlined, this static variable will exist in the code-block using it, thus,
+  // will be created and then initialized again when another code-block uses this.
+  static bool initialized(false);
+  if(!initialized)
+  {
+    uint32_t seed = static_cast<uint32_t>(time(nullptr));
+    srand(seed);
+    initialized = true;
+  }
+
+  int32_t randValue = rand();
+  return static_cast<float>(randValue & 0xfff) * (1.0f / 4095.0f) * (maxf - minf) + minf;
+}
+
+/**
+ * @brief Function to return a normalized axis in a random direction.
+ *
+ * @SINCE_1_0.0
+ * @return The axis
+ */
+inline Vector4 Axis()
+{
+  Vector4 axis;
+  // This function needs to return a vector with direction, that is to say a non-zero vector
+  // There is a possibility that a random vector will be a zero vector, so a loop is needed to ensure that a non-zero vector is returned
+  do
+  {
+    axis.x = Range(-1.0f, 1.0f);
+    axis.y = Range(0.0f, 1.0f);
+    axis.z = Range(0.0f, 1.0f);
+    axis.w = 0.0f;
+  } while(axis == Vector4::ZERO);
+  axis.Normalize3();
+  return axis;
+}
+
+} // namespace Random
+
+/**
+ * @}
+ */
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_RANDOM_H

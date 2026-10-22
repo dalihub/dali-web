@@ -1,0 +1,279 @@
+#ifndef DALI_INTERNAL_SCENE_GRAPH_RENDER_LIST_H
+#define DALI_INTERNAL_SCENE_GRAPH_RENDER_LIST_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/internal/update/nodes/node.h>
+#include <cstdint>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/common/owner-container.h>
+#include <dali/public-api/math/rect.h>
+
+#include <dali/graphics-api/graphics-controller.h>
+#include <dali/internal/common/owner-key-container.h>
+#include <dali/internal/render/common/render-item.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Render
+{
+class Renderer;
+}
+
+namespace SceneGraph
+{
+class Layer;
+
+using RenderItemContainer = OwnerKeyContainer<RenderItem>;
+
+struct RenderList;
+using RenderListContainer = OwnerContainer<RenderList*>;
+
+/**
+ * The RenderList structure provides the renderer manager with a list of renderers.
+ */
+struct RenderList
+{
+public:
+  /**
+   * Constructor
+   */
+  RenderList()
+  : mNextFree(0),
+    mSourceLayer(nullptr),
+    mHasColorRenderItems(false)
+  {
+  }
+
+  /**
+   * Destructor
+   */
+  ~RenderList()
+  {
+  }
+
+  /*
+   * Copy constructor and assignment operator not defined
+   */
+  RenderList(const RenderList& rhs)                  = delete;
+  const RenderList& operator=(const RenderList& rhs) = delete;
+
+  /**
+   * Reset the render list for next frame
+   */
+  void Reset()
+  {
+    // We don't want to delete and re-create the render items every frame
+    mNextFree = 0;
+  }
+
+  /**
+   * Reserve space in the render list
+   * @param size to reserve
+   */
+  void Reserve(RenderItemContainer::SizeType size)
+  {
+    mNextFree = 0;
+    mItems.Reserve(size);
+  }
+
+  /**
+   * @return the capacity of the render list
+   */
+  RenderItemContainer::SizeType Capacity()
+  {
+    return mItems.Capacity();
+  }
+
+  /**
+   * Get next free render item
+   * @return reference to the next available RenderItem
+   */
+  RenderItem& GetNextFreeItem()
+  {
+    // check if we have enough items, we can only be one behind at worst
+    if(mItems.Count() <= mNextFree)
+    {
+      mItems.PushBack(RenderItem::NewKey()); // Push a new empty render item
+    }
+    // get the item mNextFree points to and increase by one
+    RenderItem* item = mItems[mNextFree++].Get();
+    return *item;
+  }
+
+  /**
+   * Get item at a given position in the list
+   */
+  RenderItem& GetItem(uint32_t index) const
+  {
+    DALI_ASSERT_DEBUG(index < GetCachedItemCount());
+    RenderItem* item = mItems[index].Get();
+    return *item;
+  }
+
+  RenderItemKey GetItemKey(uint32_t index) const
+  {
+    DALI_ASSERT_DEBUG(index < GetCachedItemCount());
+    return mItems[index];
+  }
+
+  /**
+   * Get renderer from an item in the list
+   */
+  Render::RendererKey GetRenderer(uint32_t index) const
+  {
+    DALI_ASSERT_DEBUG(index < GetCachedItemCount());
+    return mItems[index]->mRenderer;
+  }
+
+  /**
+   * Get the number of real items
+   * Because of caching, the actual size may be bit more
+   * @return The number of items
+   */
+  uint32_t Count() const
+  {
+    return mNextFree;
+  }
+
+  /**
+   * @return the number of items cached by the list
+   */
+  uint32_t GetCachedItemCount() const
+  {
+    return static_cast<uint32_t>(mItems.Count());
+  }
+
+  /**
+   * Tells the render list to reuse the items from the cache
+   */
+  void ReuseCachedItems()
+  {
+    mNextFree = static_cast<uint32_t>(mItems.Count());
+  }
+
+  /**
+   * Predicate to inform if the list is empty
+   */
+  bool IsEmpty() const
+  {
+    return (mNextFree == 0);
+  }
+
+  /**
+   * @return the container (for sorting)
+   */
+  RenderItemContainer& GetContainer()
+  {
+    return mItems;
+  }
+
+  /**
+   * @return the container (for get render items)
+   */
+  const RenderItemContainer& GetContainer() const
+  {
+    return mItems;
+  }
+
+  /**
+   * Do some housekeeping to keep memory consumption low
+   */
+  void ReleaseUnusedItems()
+  {
+    // release any non-used RenderItems
+    if(mItems.Count() > mNextFree)
+    {
+      mItems.Resize(mNextFree);
+    }
+  }
+
+  /**
+   * Trim the list by stopperNode
+   * @param stopperNode The node to stop rendering. Rendering will not include the node.
+   * @return Whether trimming actually occured.
+   */
+  bool RenderUntil(Node* stopperNode)
+  {
+    RenderItemContainer::Iterator iter = mItems.Begin();
+    for(uint32_t index = 0u; iter != mItems.End(); ++iter, ++index)
+    {
+      RenderItem* item = iter->Get();
+      if(item->mNode == stopperNode)
+      {
+        mNextFree = index;
+        ReleaseUnusedItems();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @return the source layer these renderitems originate from
+   */
+  Layer* GetSourceLayer() const
+  {
+    return mSourceLayer;
+  }
+
+  /**
+   * @param layer The layer these RenderItems originate from
+   */
+  void SetSourceLayer(Layer* layer)
+  {
+    mSourceLayer = layer;
+  }
+
+  /**
+   * Set if the RenderList contains color RenderItems
+   * @param[in] hasColorRenderItems True if it contains color RenderItems, false otherwise
+   */
+  void SetHasColorRenderItems(bool hasColorRenderItems)
+  {
+    mHasColorRenderItems = hasColorRenderItems;
+  }
+
+  /**
+   * Check if the RenderList contains color RenderItems
+   * @return true if the RenderList contains color RenderItems, false otherwise
+   */
+  bool HasColorRenderItems() const
+  {
+    return mHasColorRenderItems;
+  }
+
+private:
+  RenderItemContainer mItems;    ///< Container of render items
+  uint32_t            mNextFree; ///< index for the next free item to use
+
+  Layer* mSourceLayer;             ///< The originating layer where the renderers are from
+  bool   mHasColorRenderItems : 1; ///< True if list contains color render items
+};
+
+} // namespace SceneGraph
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_SCENE_GRAPH_RENDER_LIST_H

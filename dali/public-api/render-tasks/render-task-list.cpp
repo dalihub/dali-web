@@ -1,0 +1,76 @@
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/render-tasks/render-task-list.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/render-tasks/render-task-list-impl.h>
+
+namespace DALI_NAMESPACE
+{
+RenderTaskList::RenderTaskList() = default;
+
+RenderTaskList RenderTaskList::DownCast(BaseHandle handle)
+{
+  return RenderTaskList(dynamic_cast<Dali::Internal::RenderTaskList*>(handle.GetObjectPtr()));
+}
+
+RenderTaskList::~RenderTaskList() = default;
+
+RenderTaskList::RenderTaskList(const RenderTaskList& handle) = default;
+
+RenderTaskList& RenderTaskList::operator=(const RenderTaskList& rhs) = default;
+
+RenderTaskList::RenderTaskList(RenderTaskList&& rhs) noexcept = default;
+
+RenderTaskList& RenderTaskList::operator=(RenderTaskList&& rhs) noexcept = default;
+
+RenderTask RenderTaskList::CreateTask()
+{
+  return RenderTask(GetImplementation(*this).CreateTask().Get());
+}
+
+void RenderTaskList::RemoveTask(RenderTask task)
+{
+  if(task) // don't crash if called with empty task handle
+  {
+    GetImplementation(*this).RemoveTask(GetImplementation(task));
+  }
+}
+
+uint32_t RenderTaskList::GetTaskCount() const
+{
+  return GetImplementation(*this).GetTaskCount();
+}
+
+RenderTask RenderTaskList::GetTask(uint32_t index) const
+{
+  return RenderTask(GetImplementation(*this).GetTask(index).Get());
+}
+
+RenderTask RenderTaskList::GetOverlayTask() const
+{
+  return RenderTask(GetImplementation(*this).GetOverlayTask().Get());
+}
+
+RenderTaskList::RenderTaskList(Internal::RenderTaskList* internal)
+: BaseHandle(internal)
+{
+}
+
+} //namespace DALI_NAMESPACE

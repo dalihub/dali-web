@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/object/property-types.h>
+
+namespace DALI_NAMESPACE
+{
+namespace
+{
+const char* const PROPERTY_TYPE_NAMES[] = {
+  "NONE",
+  "BOOLEAN",
+  "FLOAT",
+  "INTEGER",
+  "VECTOR2",
+  "VECTOR3",
+  "VECTOR4",
+  "MATRIX3",
+  "MATRIX",
+  "RECTANGLE",
+  "ROTATION",
+  "STRING",
+  "ARRAY",
+  "MAP",
+  "INSETS",
+  "EXTENTS", // DevelProperty::EXTENTS
+};
+const uint32_t PROPERTY_TYPE_NAMES_COUNT = static_cast<uint32_t>(sizeof(PROPERTY_TYPE_NAMES) / sizeof(const char*));
+} // namespace
+
+namespace PropertyTypes
+{
+DALI_CORE_API const char* GetName(Property::Type type)
+{
+  if(type < PROPERTY_TYPE_NAMES_COUNT)
+  {
+    return PROPERTY_TYPE_NAMES[type];
+  }
+
+  return PROPERTY_TYPE_NAMES[Property::NONE];
+}
+
+}; // namespace PropertyTypes
+
+} //namespace DALI_NAMESPACE

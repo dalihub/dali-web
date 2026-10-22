@@ -1,0 +1,210 @@
+#ifndef DALI_INTERNAL_TAP_GESTURE_EVENT_PROCESSOR_H
+#define DALI_INTERNAL_TAP_GESTURE_EVENT_PROCESSOR_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/events/actor-observer.h>
+#include <dali/internal/event/events/gesture-device-profile-table.h>
+#include <dali/internal/event/events/gesture-processor.h>
+#include <dali/internal/event/events/gesture-threshold-values.h>
+#include <dali/internal/event/events/tap-gesture/tap-gesture-detector-impl.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class Scene;
+class Actor;
+
+struct GestureEvent;
+struct TapGestureEvent;
+
+struct TapGestureRequest;
+
+/**
+ * Tap Gesture Event Processing:
+ *
+ * When we receive a tap gesture event, we do the following:
+ * - Find the actor that requires a tap where the tap occurred.
+ * - Emit the gesture if the tap gesture event satisfies the detector conditions.
+ */
+class TapGestureProcessor : public GestureProcessor, public RecognizerObserver<TapGestureEvent>
+{
+public:
+  /**
+   * Create a tap gesture processor.
+   */
+  TapGestureProcessor();
+
+  /**
+   * Non-virtual destructor; TapGestureProcessor is not a base class
+   */
+  ~TapGestureProcessor() override;
+
+public: // To be called by GestureEventProcessor
+  /**
+   * This method is called whenever a tap gesture event occurs.
+   * @param[in] scene The scene the tap gesture event occurs in.
+   * @param[in] tapEvent The event that has occurred.
+   */
+  void Process(Scene& scene, const TapGestureEvent& event) override;
+
+  /**
+   * Get the current gestured actor
+   * @return The current gestured actor, or nullptr if no actor is currently gestured
+   */
+  Actor* GetCurrentGesturedActor() override;
+
+  /**
+   * Adds a gesture detector to this gesture processor.
+   * If this is the first gesture detector being added, then this method registers the required
+   * gesture with the adaptor.
+   * @param[in]  gestureDetector  The gesture detector being added.
+   */
+  void AddGestureDetector(TapGestureDetector* gestureDetector, Scene& scene);
+
+  /**
+   * Removes the specified gesture detector from this gesture processor.  If, after removing this
+   * gesture detector, there are no more gesture detectors registered, then this method unregisters
+   * the gesture from the adaptor.
+   * @param[in]  gestureDetector  The gesture detector being removed.
+   */
+  void RemoveGestureDetector(TapGestureDetector* gestureDetector);
+
+  /**
+   * This method updates the gesture detection parameters.
+   * @param[in]  gestureDetector  The gesture detector that has been updated.
+   */
+  void GestureDetectorUpdated(TapGestureDetector* gestureDetector);
+
+  /**
+   * @brief This method sets the maximum interval allowed between the taps of a multi tap gesture (millisecond)
+   *
+   * @param[in] interval The interval in milliseconds
+   */
+  void SetMaximumMultiTapInterval(uint32_t interval);
+
+  /**
+   * @brief This method gets the maximum interval allowed between the taps of a multi tap gesture (millisecond)
+   *
+   * @return The interval in milliseconds
+   */
+  uint32_t GetMaximumMultiTapInterval() const;
+
+  /**
+   * @brief This method sets the maximum time the touch point can be held down while still being recognized as a tap gesture (millisecond)
+   *
+   * This time is from touch down to touch up to recognize the tap gesture.
+   *
+   * @param[in] time The time value in milliseconds
+   */
+  void SetMaximumHoldingTime(uint32_t time);
+
+  /**
+   * @brief This method gets the maximum time the touch point can be held down while still being recognized as a tap gesture (millisecond)
+   *
+   * @return The time value in milliseconds
+   */
+  uint32_t GetMaximumHoldingTime() const;
+
+  /**
+   * @brief This method sets the maximum distance the touch point can move while still being recognized as a tap gesture
+   *
+   * This distance is from touch down to touch up to recognize the tap gesture.
+   *
+   * @param[in] distance The distance in pixels
+   */
+  void SetMaximumMotionDistance(float distance);
+
+  /**
+   * @brief This method gets the maximum distance the touch point can move while still being recognized as a tap gesture
+   *
+   * @return The distance in pixels
+   */
+  float GetMaximumMotionDistance() const;
+
+  /**
+   * @brief Replaces the application-wide per-device thresholds and pushes them to the recognizer.
+   * @param[in] thresholds The per-device threshold table
+   */
+  void SetDeviceThresholds(const GestureDeviceProfileTable<TapThresholdValues>& thresholds);
+
+  /**
+   * @brief Retrieves the application-wide per-device thresholds.
+   * @return The per-device threshold table
+   */
+  const GestureDeviceProfileTable<TapThresholdValues>& GetDeviceThresholds() const;
+
+private:
+  // Undefined
+  TapGestureProcessor(const TapGestureProcessor&);
+  TapGestureProcessor& operator=(const TapGestureProcessor& rhs);
+
+private:
+  /**
+   * Builds the request the shared recognizer should use: the union of the attached detectors'
+   * tap/touch requirements plus the current recognition thresholds.
+   * @param[out] request The request to fill.
+   */
+  void FillRequest(TapGestureRequest& request) const;
+
+  /**
+   * Rebuilds the request from the attached detectors and the current thresholds and pushes it to
+   * the recognizer. Requires at least one attached detector.
+   */
+  void UpdateDetection();
+
+  // GestureProcessor overrides
+
+  /**
+   * @copydoc GestureProcessor::OnGesturedActorStageDisconnection()
+   */
+  void OnGesturedActorStageDisconnection() override
+  { /* Nothing to do */
+  }
+
+  /**
+   * @copydoc GestureProcessor::CheckGestureDetector()
+   */
+  bool CheckGestureDetector(GestureDetector* detector, Actor* actor) override;
+
+  /**
+   * @copydoc GestureProcessor::EmitGestureSignal()
+   */
+  void EmitGestureSignal(Actor* actor, const GestureDetectorContainer& gestureDetectors, Vector2 actorCoordinates) override;
+
+private:
+  TapGestureDetectorContainer mTapGestureDetectors;
+
+  ActorObserver          mCurrentTapActor;   ///< Observer for the current gesture actor
+  const TapGestureEvent* mCurrentTapEvent;   ///< Pointer to current TapEvent, used when calling ProcessAndEmit()
+  bool                   mPossibleProcessed; ///< Indication of whether we've processed a touch down for this gestuee
+
+  uint32_t mMaximumMultiTapInterval; ///< The maximum interval allowed between the taps of a multi tap gesture (millisecond)
+  uint32_t mMaximumHoldingTime;      ///< The maximum time the touch point can be held down while still being recognized as a tap gesture (millisecond)
+  float    mMaximumMotionDistance;   ///< The maximum distance the touch point can move while still being recognized as a tap gesture
+
+  GestureDeviceProfileTable<TapThresholdValues> mDeviceThresholds; ///< Application-wide per-device thresholds.
+};
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_TAP_GESTURE_EVENT_PROCESSOR_H

@@ -1,0 +1,120 @@
+#ifndef DALI_INTERNAL_RENDER_DEBUG_H
+#define DALI_INTERNAL_RENDER_DEBUG_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/public-api/common/dali-namespace.h>
+
+// define this to print information about the items rendered each frame
+#undef DALI_PRINT_RENDER_INFO
+
+#ifdef DALI_PRINT_RENDER_INFO
+
+#define DALI_PRINT_RENDER_START() Render::PrintFrameStart();
+#define DALI_PRINT_RENDER_END() Render::PrintFrameEnd();
+#define DALI_PRINT_RENDER_INSTRUCTION(x) Render::PrintRenderInstruction(x);
+#define DALI_PRINT_RENDER_LIST(x) Render::PrintRenderList(x);
+#define DALI_PRINT_RENDER_ITEM(x) Render::PrintRenderItem(x);
+
+#else // DALI_PRINT_RENDER_INFO
+
+#define DALI_PRINT_RENDER_START()
+#define DALI_PRINT_RENDER_END()
+#define DALI_PRINT_RENDER_INSTRUCTION(x)
+#define DALI_PRINT_RENDER_LIST(x)
+#define DALI_PRINT_RENDER_ITEM(x)
+
+#endif // DALI_PRINT_RENDER_INFO
+
+#undef DALI_PRINT_RENDERERS
+
+// Turn this on to see a snapshot of # renderers every 2 seconds
+//#define DALI_PRINT_RENDERERS 1
+
+#ifdef DALI_PRINT_RENDERERS
+#define DALI_PRINT_RENDERER_COUNT(x, y) Render::PrintRendererCount(x, y)
+#else // DALI_PRINT_RENDERERS
+#define DALI_PRINT_RENDERER_COUNT(x, y)
+#endif // DALI_PRINT_RENDERERS
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class PropertyInputImpl;
+
+namespace SceneGraph
+{
+class Node;
+class RenderInstruction;
+struct RenderList;
+struct RenderItem;
+} // namespace SceneGraph
+
+namespace Render
+{
+/**
+ * Print a debug message at the start of the render-thread.
+ */
+void PrintFrameStart();
+
+/**
+ * Print a debug message at the end of the render-thread.
+ */
+void PrintFrameEnd();
+
+/**
+ * Print some information about a render-instruction.
+ * @param[in] instruction The render-instruction.
+ */
+void PrintRenderInstruction(const SceneGraph::RenderInstruction& instruction);
+
+/**
+ * Print some information about a render-list.
+ * @param[in] instruction The render-list.
+ */
+void PrintRenderList(const SceneGraph::RenderList& list);
+
+/**
+ * Print some information about a render-item.
+ * @param[in] instruction The render-item.
+ */
+void PrintRenderItem(const SceneGraph::RenderItem& item);
+
+/**
+ * Print the number of image renderers
+ * @param[in] frameCount The frame counter
+ * @param[in] rendererCount The number of image renderers
+ */
+void PrintRendererCount(unsigned int frameCount, unsigned int rendererCount);
+
+/**
+ * Recursively dumps a Node tree.
+ * @param[in] node The starting node to dump from
+ * @param[in] indent Optional. Leave unset for default indent (used internally while recursing)
+ */
+void DumpNode(const SceneGraph::Node* node, unsigned int indent = 0);
+
+} // namespace Render
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_RENDER_DEBUG_H

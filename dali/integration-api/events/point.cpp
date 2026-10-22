@@ -1,0 +1,192 @@
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/integration-api/events/point.h>
+#include <dali/public-api/events/mouse-button.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Integration
+{
+Point::Point()
+: mTouchPoint(0, PointState::STARTED, 0.0f, 0.0f),
+  mEllipseRadius(),
+  mAngle(0.0f),
+  mDeviceClass(Device::Class::NONE),
+  mDeviceSubclass(Device::Subclass::NONE),
+  mPressure(1.0f),
+  mRadius(0.0f),
+  mMouseButton(MouseButton::INVALID),
+  mDeviceName()
+{
+}
+
+Point::Point(const TouchPoint& touchPoint)
+: mTouchPoint(touchPoint),
+  mEllipseRadius(),
+  mAngle(0.0f),
+  mDeviceClass(Device::Class::NONE),
+  mDeviceSubclass(Device::Subclass::NONE),
+  mPressure(1.0f),
+  mRadius(0.0f),
+  mMouseButton(MouseButton::INVALID),
+  mDeviceName()
+{
+}
+
+Point::~Point() = default;
+
+void Point::SetDeviceId(int32_t deviceId)
+{
+  mTouchPoint.deviceId = deviceId;
+}
+
+void Point::SetState(PointState::Type state)
+{
+  mTouchPoint.state = static_cast<PointState::Type>(state);
+}
+
+void Point::SetScreenPosition(const Vector2& screenPosition)
+{
+  mTouchPoint.screen = screenPosition;
+}
+
+void Point::SetRadius(float radius)
+{
+  mRadius = mEllipseRadius.x = mEllipseRadius.y = radius;
+}
+
+void Point::SetRadius(float radius, Vector2 ellipseRadius)
+{
+  mRadius        = radius;
+  mEllipseRadius = ellipseRadius;
+}
+
+void Point::SetPressure(float pressure)
+{
+  mPressure = pressure;
+}
+
+void Point::SetAngle(Degree angle)
+{
+  mAngle = angle;
+}
+
+int Point::GetDeviceId() const
+{
+  return mTouchPoint.deviceId;
+}
+
+PointState::Type Point::GetState() const
+{
+  return static_cast<PointState::Type>(mTouchPoint.state);
+}
+
+const Vector2& Point::GetScreenPosition() const
+{
+  return mTouchPoint.screen;
+}
+
+float Point::GetRadius() const
+{
+  return mRadius;
+}
+
+const Vector2& Point::GetEllipseRadius() const
+{
+  return mEllipseRadius;
+}
+
+float Point::GetPressure() const
+{
+  return mPressure;
+}
+
+Degree Point::GetAngle() const
+{
+  return mAngle;
+}
+
+void Point::SetHitActor(Actor hitActor)
+{
+  mTouchPoint.hitActor = hitActor;
+}
+
+void Point::SetLocalPosition(const Vector2& localPosition)
+{
+  mTouchPoint.local = localPosition;
+}
+
+Actor Point::GetHitActor() const
+{
+  return mTouchPoint.hitActor;
+}
+
+const Vector2& Point::GetLocalPosition() const
+{
+  return mTouchPoint.local;
+}
+
+const TouchPoint& Point::GetTouchPoint() const
+{
+  return mTouchPoint;
+}
+
+void Point::SetDeviceClass(Device::Class::Type deviceClass)
+{
+  mDeviceClass = deviceClass;
+}
+
+void Point::SetDeviceSubclass(Device::Subclass::Type deviceSubclass)
+{
+  mDeviceSubclass = deviceSubclass;
+}
+
+Device::Class::Type Point::GetDeviceClass() const
+{
+  return mDeviceClass;
+}
+
+Device::Subclass::Type Point::GetDeviceSubclass() const
+{
+  return mDeviceSubclass;
+}
+
+MouseButton::Type Point::GetMouseButton() const
+{
+  return mMouseButton;
+}
+
+void Point::SetMouseButton(MouseButton::Type button)
+{
+  mMouseButton = button;
+}
+
+const Dali::String& Point::GetDeviceName() const
+{
+  return mDeviceName;
+}
+
+void Point::SetDeviceName(const Dali::String& deviceName)
+{
+  mDeviceName = deviceName;
+}
+
+} // namespace Integration
+
+} //namespace DALI_NAMESPACE

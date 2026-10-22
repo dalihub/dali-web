@@ -1,0 +1,199 @@
+#ifndef DALI_INTERNAL_ANIMATOR_CONNECTOR_BASE_H
+#define DALI_INTERNAL_ANIMATOR_CONNECTOR_BASE_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/internal/event/common/object-impl.h>
+#include <dali/internal/update/common/property-resetter.h>
+#include <dali/internal/update/manager/update-manager.h>
+#include <dali/public-api/animation/alpha-function.h>
+#include <dali/public-api/animation/time-period.h>
+#include <dali/public-api/common/dali-common.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class Animation;
+
+/**
+ * An abstract base class to create animator connectors and property re-setters for them when needed.
+ *
+ * The scene-graph objects are created by a Object e.g. Actor is a proxy for SceneGraph::Node.
+ * AnimatorConnectorBase observes the proxy object, in order to detect when a scene-graph object is created
+ * to avoid having unnecessary animations on the scene-graph and allow apps to create animations in initialisation
+ */
+class AnimatorConnectorBase : public Object::Observer
+{
+public:
+  /**
+   * Constructor.
+   */
+  AnimatorConnectorBase(Object&           object,
+                        Property::Index   propertyIndex,
+                        AlphaFunction     alpha,
+                        const TimePeriod& period)
+  : mObject(&object),
+    mAlphaFunction(alpha),
+    mTimePeriod(period),
+    mPropertyIndex(propertyIndex)
+  {
+    object.AddObserver(*this);
+  }
+
+  /**
+   * Virtual destructor.
+   */
+  ~AnimatorConnectorBase() override
+  {
+    if(mObject)
+    {
+      mObject->RemoveObserver(*this);
+    }
+  }
+
+  /**
+   * Helper function to create a Scenegraph::Animator and PropertyResetter and add it to its correspondent
+   * SceneGraph::Animation.
+   *
+   * @note This function will only be called the first time the object is added to the scene or at creation time if
+   * the object was already in the scene
+   */
+  void CreateAnimator()
+  {
+    DALI_ASSERT_DEBUG(mAnimator == nullptr);
+    DALI_ASSERT_DEBUG(mParent != nullptr);
+
+    //Get the PropertyOwner the animator is going to animate
+    const SceneGraph::PropertyOwner& propertyOwner = mObject->GetSceneObject();
+
+    // Get SceneGraph::BaseProperty
+    const SceneGraph::PropertyBase* baseProperty = mObject->GetSceneObjectAnimatableProperty(mPropertyIndex);
+    DALI_ASSERT_ALWAYS(baseProperty && "Property is not animatable");
+
+    // Check if property is a component of another property
+    const int32_t componentIndex = mObject->GetPropertyComponentIndex(mPropertyIndex);
+
+    // call the type specific method to create the concrete animator
+    bool resetterRequired = DoCreateAnimator(propertyOwner, *baseProperty, componentIndex);
+
+    DALI_ASSERT_DEBUG(mAnimator != nullptr);
+
+    // Add the new SceneGraph::Animator to its correspondent SceneGraph::Animation via message
+    const SceneGraph::Animation* animation = mParent->GetSceneObject();
+    DALI_ASSERT_DEBUG(nullptr != animation);
+    AddAnimatorMessage(mParent->GetAnimationEventThreadServices(), *animation, *mAnimator);
+
+    // Add the new SceneGraph::PropertyResetter to the update manager via message
+    if(resetterRequired)
+    {
+      OwnerPointer<SceneGraph::PropertyResetterBase> resetter = SceneGraph::AnimatorResetter::New(propertyOwner, *baseProperty, *mAnimator);
+      AddResetterMessage(mParent->GetAnimationEventThreadServices().GetUpdateManager(), resetter);
+    }
+  }
+
+  /**
+   * Type specific extension of animator creation
+   */
+  virtual bool DoCreateAnimator(const SceneGraph::PropertyOwner& propertyOwner, const SceneGraph::PropertyBase& baseProperty, const int32_t componentIndex) = 0;
+
+  /**
+   * Set the parent of the AnimatorConnector.
+   * @pre The connector does not already have a parent.
+   * @param [in] parent The parent object.
+   */
+  void SetParent(Animation& parent)
+  {
+    DALI_ASSERT_ALWAYS(mParent == nullptr && "AnimationConnector already has a parent");
+    mParent = &parent;
+
+    if(mObject)
+    {
+      CreateAnimator();
+    }
+  }
+
+  /**
+   * Retrieve the parent of the AnimatorConnector.
+   * @return The parent object, or nullptr.
+   */
+  Animation* GetParent() const
+  {
+    return mParent;
+  }
+
+  Object* GetObject() const
+  {
+    return mObject;
+  }
+
+  Property::Index GetPropertyIndex() const
+  {
+    return mPropertyIndex;
+  }
+
+  const AlphaFunction& GetAlphaFunction() const
+  {
+    return mAlphaFunction;
+  }
+
+private:
+  /**
+   * From Object::Observer
+   */
+  void SceneObjectAdded(Object& object) final
+  {
+    // If the animator has not been created yet, create it now.
+    if(!mAnimator && mObject)
+    {
+      CreateAnimator();
+    }
+  }
+
+  /**
+   * From Object::Observer
+   */
+  void SceneObjectRemoved(Object& object) final
+  {
+  }
+
+  /**
+   * From Object::Observer
+   */
+  void ObjectDestroyed(Object& object) override
+  {
+    mObject = nullptr;
+  }
+
+protected:
+  Animation*                mParent{nullptr}; ///< The parent owns the connector.
+  Object*                   mObject;          ///< Not owned by the animator connector. Valid until ObjectDestroyed() is called.
+  SceneGraph::AnimatorBase* mAnimator{nullptr};
+
+  AlphaFunction mAlphaFunction;
+  TimePeriod    mTimePeriod;
+
+  Property::Index mPropertyIndex;
+};
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_ANIMATOR_CONNECTOR_BASE_H

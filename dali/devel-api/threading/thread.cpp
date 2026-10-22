@@ -1,0 +1,71 @@
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/devel-api/threading/thread.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <cstddef>
+#include <thread>
+
+namespace DALI_NAMESPACE
+{
+struct Thread::ThreadImpl
+{
+  ThreadImpl(Thread& aThis)
+  : thread(&Thread::InternalThreadEntryFunc, std::ref(aThis))
+  {
+    // std::thread starts execution immediately
+  }
+  ~ThreadImpl()
+  {
+    thread.join();
+  }
+  std::thread thread;
+};
+
+Thread::Thread()
+: mImpl(nullptr)
+{
+}
+
+Thread::~Thread()
+{
+  Join();
+}
+
+void Thread::Start()
+{
+  if(!mImpl)
+  {
+    mImpl = new Thread::ThreadImpl(*this);
+  }
+}
+
+void Thread::Join()
+{
+  delete mImpl;
+  mImpl = nullptr;
+}
+
+void Thread::InternalThreadEntryFunc(Thread& aThis)
+{
+  aThis.Run();
+}
+
+} //namespace DALI_NAMESPACE

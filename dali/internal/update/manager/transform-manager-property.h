@@ -1,0 +1,779 @@
+#ifndef DALI_INTERNAL_UPDATE_TRANSFORM_MANAGER_PROPERTY_H
+#define DALI_INTERNAL_UPDATE_TRANSFORM_MANAGER_PROPERTY_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <dali/internal/update/common/animatable-property.h>
+#include <dali/internal/update/manager/transform-manager.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace SceneGraph
+{
+template<typename T>
+struct TransformManagerPropertyHandler : public AnimatablePropertyBase
+{
+  /**
+   * Constructor
+   */
+  TransformManagerPropertyHandler() = default;
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::PropertyBase::GetType()
+   */
+  Dali::Property::Type GetType() const override = 0;
+
+  /**
+   * @copydoc Dali::SceneGraph::AnimatableProperty::Get()
+   */
+  virtual T& Get() = 0;
+
+  /**
+   * @copydoc Dali::SceneGraph::AnimatableProperty::Get()
+   */
+  virtual const T& Get() const = 0;
+
+  /**
+   * @copydoc Dali::PropertyInput::GetVector3()
+   */
+  const Vector3& GetVector3() const override
+  {
+    return Vector3::ZERO;
+  }
+
+  /**
+   * Retrieve a component of property
+   * @param[in] component The component of the property
+   */
+  virtual const float& GetFloatComponent(uint32_t component) const
+  {
+    DALI_ASSERT_DEBUG(0 && "Invalid call");
+
+    static const float value = 0.0f;
+    return value;
+  }
+
+  /**
+   * Set the property value. This will only persist for the current frame; the property
+   * will be reset with the base value, at the beginning of the next frame.
+   * @param[in] value The new property value.
+   */
+  virtual void Set(const T& value) = 0;
+
+  /**
+   * Change a component of property
+   * @param[in] value The new value of the component
+   * @param[in] component The component of the property
+   */
+  virtual void SetFloatComponent(float value, uint32_t component)
+  {
+  }
+
+  /**
+   * @copydoc Dali::AnimatableProperty::Bake()
+   */
+  virtual void Bake(const T& value) = 0;
+
+  /**
+   * Bake a component of a property
+   * @param[in] value The new value of the component
+   * @param[in] component The component of the property
+   */
+  virtual void BakeFloatComponent(float value, uint32_t component)
+  {
+  }
+
+  /**
+   * @copydoc Dali::AnimatableProperty::BakeX()
+   */
+  virtual void BakeX(float value)
+  {
+  }
+
+  /**
+   * @copydoc Dali::AnimatableProperty::BakeY()
+   */
+  virtual void BakeY(float value)
+  {
+  }
+
+  /**
+   * @copydoc Dali::AnimatableProperty::BakeZ()
+   */
+  virtual void BakeZ(float value)
+  {
+  }
+
+  /**
+   * @copydoc Dali::AnimatableProperty::BakeRelative()
+   */
+  virtual void BakeRelative(const T& value) = 0;
+
+  /**
+   * @copydoc Dali::AnimatableProperty::BakeRelativeMultiply()
+   */
+  virtual void BakeRelativeMultiply(const T& value) {};
+
+  /**
+   * @copydoc Dali::AnimatableProperty::ResetToBaseValue()
+   */
+  void ResetToBaseValue() override
+  {
+  }
+
+  /**
+   * @copydoc Dali::AnimatableProperty::IsClean()
+   */
+  bool IsClean() const override
+  {
+    return false;
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::IsTransformManagerProperty()
+   */
+  bool IsTransformManagerProperty() const override
+  {
+    return true;
+  }
+};
+
+template<TransformManagerProperty PropertyT, size_t TxMgrDataOffset>
+struct TransformManagerPropertyVector3 final : public TransformManagerPropertyHandler<Vector3>
+{
+  enum
+  {
+    TRANSFORM_MANAGER_DATA_OFFSET = TxMgrDataOffset
+  };
+  TransformManagerData* GetTxManagerData()
+  {
+    return reinterpret_cast<TransformManagerData*>(
+      reinterpret_cast<uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+  const TransformManagerData* GetTxManagerData() const
+  {
+    return reinterpret_cast<const TransformManagerData*>(
+      reinterpret_cast<const uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+
+  TransformManagerPropertyVector3() = default;
+
+  Dali::Property::Type GetType() const override
+  {
+    return Dali::PropertyTypes::Get<Vector3>();
+  }
+
+  Vector3& Get() override
+  {
+    return GetTxManagerData()->Manager()->GetVector3PropertyValue(GetTxManagerData()->Id(), PropertyT);
+  }
+
+  const Vector3& Get() const override
+  {
+    return GetTxManagerData()->Manager()->GetVector3PropertyValue(GetTxManagerData()->Id(), PropertyT);
+  }
+
+  const Vector3& GetVector3() const override
+  {
+    return Get();
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueAddress()
+   */
+  const void* GetValueAddress() const override
+  {
+    return &GetVector3();
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueSize()
+   */
+  size_t GetValueSize() const override
+  {
+    return sizeof(Vector3);
+  }
+
+  const float& GetFloatComponent(uint32_t component) const override
+  {
+    return GetTxManagerData()->Manager()->GetVector3PropertyComponentValue(GetTxManagerData()->Id(), PropertyT, component);
+  }
+
+  void Set(const Vector3& value) override
+  {
+    GetTxManagerData()->Manager()->SetVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+
+  void Bake(const Vector3& value) override
+  {
+    GetTxManagerData()->Manager()->BakeVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+
+  void BakeX(float value) override
+  {
+    GetTxManagerData()->Manager()->BakeXVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+
+  void BakeY(float value) override
+  {
+    GetTxManagerData()->Manager()->BakeYVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+
+  void BakeZ(float value) override
+  {
+    GetTxManagerData()->Manager()->BakeZVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+
+  void SetFloatComponent(float value, uint32_t component) override
+  {
+    GetTxManagerData()->Manager()->SetVector3PropertyComponentValue(GetTxManagerData()->Id(), PropertyT, value, component);
+  }
+
+  void BakeFloatComponent(float value, uint32_t component) override
+  {
+    GetTxManagerData()->Manager()->BakeVector3PropertyComponentValue(GetTxManagerData()->Id(), PropertyT, value, component);
+  }
+
+  void BakeRelative(const Vector3& value) override
+  {
+    GetTxManagerData()->Manager()->BakeRelativeVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+
+  void BakeRelativeMultiply(const Vector3& value) override
+  {
+    GetTxManagerData()->Manager()->BakeMultiplyVector3PropertyValue(GetTxManagerData()->Id(), PropertyT, value);
+  }
+};
+
+template<size_t TxMgrDataOffset>
+class TransformManagerPropertyQuaternion final : public TransformManagerPropertyHandler<Quaternion>
+{
+public:
+  enum
+  {
+    TRANSFORM_MANAGER_DATA_OFFSET = TxMgrDataOffset
+  };
+  TransformManagerData* GetTxManagerData()
+  {
+    return reinterpret_cast<TransformManagerData*>(
+      reinterpret_cast<uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+  const TransformManagerData* GetTxManagerData() const
+  {
+    return reinterpret_cast<const TransformManagerData*>(
+      reinterpret_cast<const uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+
+  TransformManagerPropertyQuaternion() = default;
+
+  Dali::Property::Type GetType() const override
+  {
+    return Dali::PropertyTypes::Get<Quaternion>();
+  }
+
+  Quaternion& Get() override
+  {
+    return GetTxManagerData()->Manager()->GetQuaternionPropertyValue(GetTxManagerData()->Id());
+  }
+
+  const Quaternion& Get() const override
+  {
+    return GetTxManagerData()->Manager()->GetQuaternionPropertyValue(GetTxManagerData()->Id());
+  }
+
+  void Set(const Quaternion& value) override
+  {
+    return GetTxManagerData()->Manager()->SetQuaternionPropertyValue(GetTxManagerData()->Id(), value);
+  }
+
+  void Bake(const Quaternion& value) override
+  {
+    return GetTxManagerData()->Manager()->BakeQuaternionPropertyValue(GetTxManagerData()->Id(), value);
+  }
+
+  void BakeRelative(const Quaternion& value) override
+  {
+    return GetTxManagerData()->Manager()->BakeRelativeQuaternionPropertyValue(GetTxManagerData()->Id(), value);
+  }
+
+  const Quaternion& GetQuaternion() const override
+  {
+    return Get();
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueAddress()
+   */
+  const void* GetValueAddress() const override
+  {
+    return &Get();
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueSize()
+   */
+  size_t GetValueSize() const override
+  {
+    return sizeof(Vector4);
+  }
+};
+
+template<typename T>
+struct TransformManagerPropertyInputHandler : public PropertyInputImpl
+{
+  /**
+   * Constructor
+   */
+  TransformManagerPropertyInputHandler() = default;
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::PropertyBase::GetType()
+   */
+  Dali::Property::Type GetType() const override
+  {
+    return Dali::PropertyTypes::Get<T>();
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueSize()
+   */
+  size_t GetValueSize() const override
+  {
+    return sizeof(T);
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::InputInitialized()
+   */
+  bool InputInitialized() const override
+  {
+    return true;
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::IsTransformManagerProperty()
+   */
+  bool IsTransformManagerProperty() const override
+  {
+    return true;
+  }
+};
+
+/**
+ * A Vector3 property used as input.
+ */
+template<size_t TxMgrDataOffset>
+class TransformManagerVector3Input final : public TransformManagerPropertyInputHandler<Vector3>
+{
+public:
+  enum
+  {
+    TRANSFORM_MANAGER_DATA_OFFSET = TxMgrDataOffset
+  };
+  TransformManagerData* GetTxManagerData()
+  {
+    return reinterpret_cast<TransformManagerData*>(
+      reinterpret_cast<uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+  const TransformManagerData* GetTxManagerData() const
+  {
+    return reinterpret_cast<const TransformManagerData*>(
+      reinterpret_cast<const uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+
+  /**
+   * Create an TransformManagerVector3Input
+   */
+  TransformManagerVector3Input(TransformManagerProperty property, const Vector3& initialValue)
+  : mProperty(property),
+    mValue(initialValue)
+  {
+  }
+
+  /**
+   * Virtual destructor.
+   */
+  ~TransformManagerVector3Input() override = default;
+
+  /**
+   * Helper function to get the transform components out of the world matrix.
+   * It stores the value in the mValue member variable
+   */
+  void ComputeTransformComponent() const
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+    if(DALI_LIKELY(TransformManager::IsValidTransformId(id)))
+    {
+      const Matrix& worldMatrix = transformManagerData->Manager()->GetWorldMatrix(id);
+      if(mProperty == TRANSFORM_PROPERTY_WORLD_POSITION)
+      {
+        mValue = worldMatrix.GetTranslation3();
+      }
+      else if(mProperty == TRANSFORM_PROPERTY_WORLD_SCALE)
+      {
+        mValue = worldMatrix.GetScale();
+      }
+    }
+  }
+
+  /**
+   * @copydoc Dali::PropertyInput::GetVector3()
+   */
+  const Vector3& GetVector3() const override
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueAddress()
+   */
+  const void* GetValueAddress() const override
+  {
+    return &GetVector3();
+  }
+
+  /**
+   * @copydoc Dali::PropertyInput::GetConstraintInputVector3()
+   */
+  const Vector3& GetConstraintInputVector3() const override
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  Vector3& Get()
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  const Vector3& Get() const
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+private:
+  TransformManagerVector3Input(const TransformManagerVector3Input& property)       = delete;
+  TransformManagerVector3Input& operator=(const TransformManagerVector3Input& rhs) = delete;
+
+public:
+  TransformManagerProperty mProperty;
+  mutable Vector3          mValue;
+};
+
+/**
+ * A Quaternion property used as input.
+ */
+template<size_t TxMgrDataOffset>
+class TransformManagerQuaternionInput final : public TransformManagerPropertyInputHandler<Quaternion>
+{
+public:
+  enum
+  {
+    TRANSFORM_MANAGER_DATA_OFFSET = TxMgrDataOffset
+  };
+  TransformManagerData* GetTxManagerData()
+  {
+    return reinterpret_cast<TransformManagerData*>(
+      reinterpret_cast<uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+  const TransformManagerData* GetTxManagerData() const
+  {
+    return reinterpret_cast<const TransformManagerData*>(
+      reinterpret_cast<const uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+
+  /**
+   * Constructor
+   */
+  TransformManagerQuaternionInput() = default;
+
+  /**
+   * Helper function to get the orientation out of the world matrix.
+   * It stores the result in the mValue member variable
+   */
+  void ComputeTransformComponent() const
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+    if(DALI_LIKELY(TransformManager::IsValidTransformId(id)))
+    {
+      const Matrix& worldMatrix = transformManagerData->Manager()->GetWorldMatrix(id);
+      Vector3       position, scale;
+      worldMatrix.GetTransformComponents(position, mValue, scale);
+    }
+  }
+
+  /**
+   * @copydoc Dali::PropertyInput::GetQuaternion()
+   */
+  const Quaternion& GetQuaternion() const override
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueAddress()
+   */
+  const void* GetValueAddress() const override
+  {
+    return &GetQuaternion();
+  }
+
+  /**
+   * @copydoc Dali::PropertyInput::GetConstraintInputQuaternion()
+   */
+  const Quaternion& GetConstraintInputQuaternion() const override
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  Quaternion& Get()
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  const Quaternion& Get() const
+  {
+    ComputeTransformComponent();
+    return mValue;
+  }
+
+private:
+  TransformManagerQuaternionInput(const TransformManagerQuaternionInput& property)       = delete;
+  TransformManagerQuaternionInput& operator=(const TransformManagerQuaternionInput& rhs) = delete;
+
+public:
+  mutable Quaternion mValue;
+};
+
+/**
+ * A Matrix property used as input.
+ */
+template<size_t TxMgrDataOffset>
+class TransformManagerMatrixInput final : public TransformManagerPropertyInputHandler<Matrix>
+{
+public:
+  enum
+  {
+    TRANSFORM_MANAGER_DATA_OFFSET = TxMgrDataOffset
+  };
+  TransformManagerData* GetTxManagerData()
+  {
+    return reinterpret_cast<TransformManagerData*>(
+      reinterpret_cast<uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+  const TransformManagerData* GetTxManagerData() const
+  {
+    return reinterpret_cast<const TransformManagerData*>(
+      reinterpret_cast<const uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+
+  /**
+   * Constructor
+   */
+  TransformManagerMatrixInput() = default;
+
+  /**
+   * @copydoc Dali::PropertyInput::GetMatrix()
+   */
+  const Matrix& GetMatrix() const override
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+    if(DALI_LIKELY(TransformManager::IsValidTransformId(id)))
+    {
+      return transformManagerData->Manager()->GetWorldMatrix(id);
+    }
+    return Matrix::IDENTITY;
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueAddress()
+   */
+  const void* GetValueAddress() const override
+  {
+    static const Matrix identityMatrix(Matrix::IDENTITY);
+    auto                transformManagerData = GetTxManagerData();
+    auto                id                   = transformManagerData->Id();
+    if(DALI_LIKELY(TransformManager::IsValidTransformId(id)))
+    {
+      return &(transformManagerData->Manager()->GetWorldMatrix(id));
+    }
+    return &identityMatrix;
+  }
+
+  /**
+   * @copydoc Dali::PropertyInput::GetConstraintInputMatrix()
+   */
+  const Matrix& GetConstraintInputMatrix() const override
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+    if(DALI_LIKELY(TransformManager::IsValidTransformId(id)))
+    {
+      return transformManagerData->Manager()->GetWorldMatrix(id);
+    }
+    return Matrix::IDENTITY;
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  Matrix& Get()
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+    DALI_ASSERT_ALWAYS(TransformManager::IsValidTransformId(id));
+    return transformManagerData->Manager()->GetWorldMatrix(id);
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  const Matrix& Get() const
+  {
+    return GetMatrix();
+  }
+
+private:
+  TransformManagerMatrixInput(const TransformManagerMatrixInput& property)       = delete;
+  TransformManagerMatrixInput& operator=(const TransformManagerMatrixInput& rhs) = delete;
+};
+
+/**
+ * A Boolean property used as input.
+ */
+template<bool IsWorldT, size_t TxMgrDataOffset>
+class TransformManagerBooleanIgnoredInput final : public TransformManagerPropertyInputHandler<bool>
+{
+public:
+  enum
+  {
+    TRANSFORM_MANAGER_DATA_OFFSET = TxMgrDataOffset
+  };
+  TransformManagerData* GetTxManagerData()
+  {
+    return reinterpret_cast<TransformManagerData*>(
+      reinterpret_cast<uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+  const TransformManagerData* GetTxManagerData() const
+  {
+    return reinterpret_cast<const TransformManagerData*>(
+      reinterpret_cast<const uint8_t*>(this) - TRANSFORM_MANAGER_DATA_OFFSET);
+  }
+
+  /**
+   * Constructor
+   */
+  TransformManagerBooleanIgnoredInput() = default;
+
+  /**
+   * @copydoc Dali::PropertyInput::GetBoolean()
+   */
+  const bool& GetBoolean() const override
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+
+    // Keep it as static variables, to convert bool -> const bool&
+    thread_local static bool retValue;
+    if constexpr(IsWorldT)
+    {
+      retValue = transformManagerData->Manager()->IsWorldIgnored(id);
+    }
+    else
+    {
+      retValue = transformManagerData->Manager()->IsIgnored(id);
+    }
+    return retValue;
+  }
+
+  /**
+   * @copydoc Dali::Internal::PropertyInputImpl::GetValueAddress()
+   */
+  const void* GetValueAddress() const override
+  {
+    DALI_ASSERT_ALWAYS(0 && "TransformManagerBooleanIgnoredInput should not be animation");
+    return nullptr;
+  }
+
+  /**
+   * @copydoc Dali::PropertyInput::GetConstraintInputMatrix()
+   */
+  const bool& GetConstraintInputBoolean() const override
+  {
+    return GetBoolean();
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  bool& Get()
+  {
+    auto transformManagerData = GetTxManagerData();
+    auto id                   = transformManagerData->Id();
+    DALI_ASSERT_ALWAYS(TransformManager::IsValidTransformId(id));
+    if constexpr(IsWorldT)
+    {
+      return transformManagerData->Manager()->IsWorldIgnored(id);
+    }
+    else
+    {
+      return transformManagerData->Manager()->IsIgnored(id);
+    }
+  }
+
+  /**
+   * @copydoc Dali::Internal::SceneGraph::TransformManagerPropertyHandler::Get()
+   */
+  const bool& Get() const
+  {
+    return GetBoolean();
+  }
+
+private:
+  TransformManagerBooleanIgnoredInput(const TransformManagerBooleanIgnoredInput& property)       = delete;
+  TransformManagerBooleanIgnoredInput& operator=(const TransformManagerBooleanIgnoredInput& rhs) = delete;
+};
+
+} // namespace SceneGraph
+} // namespace Internal
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_UPDATE_TRANSFORM_MANAGER_PROPERTY_H

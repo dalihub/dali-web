@@ -1,0 +1,103 @@
+#ifndef DALI_DRAWABLE_ACTOR_H
+#define DALI_DRAWABLE_ACTOR_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/signals/render-callback.h>
+#include <dali/public-api/actors/actor.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+class DrawableActor;
+}
+
+/**
+ * @class DrawableActor
+ *
+ * DrawableActor is a special type of Actor that allows attaching
+ * DrawableCallback in order to pass custom native graphics API
+ * calls (like GLES).
+ *
+ * @SINCE_2_1.15
+ */
+class DALI_CORE_API DrawableActor : public Actor
+{
+public:
+  /**
+   * @brief Creates new DrawableActor instance
+   *
+   * @SINCE_2_1.15
+   * @param[in] callback The DrawableCallback to draw through
+   * @return Handle to the new DrawableActor
+   *
+   * @note The render side keeps a reference, so the callback outlives this actor.
+   */
+  static DrawableActor New(RenderCallbackPtr callback);
+
+  /**
+   * @brief Constructor
+   *
+   * @SINCE_2_1.15
+   */
+  DrawableActor() = default;
+
+  /**
+   * @brief Copy constructor.
+   *
+   * @SINCE_2_2.17
+   * @param[in] copy The actor to copy
+   */
+  DrawableActor(const DrawableActor& copy) = default;
+
+  /**
+   * @brief Assignment operator.
+   *
+   * @SINCE_2_2.17
+   * @param[in] rhs The actor to copy
+   * @return A reference to this
+   */
+  DrawableActor& operator=(const DrawableActor& rhs) = default;
+
+  /**
+   * @brief Move constructor.
+   *
+   * @SINCE_2_2.17
+   * @param[in] rhs The actor to move
+   */
+  DrawableActor(DrawableActor&& rhs) noexcept = default;
+
+  /**
+   * @brief Move assignment operator.
+   *
+   * @SINCE_2_2.17
+   * @param[in] rhs The actor to move
+   * @return A reference to this
+   */
+  DrawableActor& operator=(DrawableActor&& rhs) noexcept = default;
+
+private:
+  /// @cond internal
+  explicit DALI_INTERNAL DrawableActor(Internal::DrawableActor* internal);
+  /// @endcond
+};
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_DRAWABLE_ACTOR_H

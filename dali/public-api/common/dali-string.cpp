@@ -1,0 +1,248 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// CLASS INCLUDE
+#include <dali/public-api/common/dali-string-view.h>
+#include <dali/public-api/common/dali-string.h>
+
+// EXTERNAL INCLUDES
+#include <new>
+#include <string>
+#include <string_view>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/common/hash.h>
+
+static_assert(sizeof(std::string) <= DALI_STRING_STORAGE_SIZE,
+              "std::string exceeds Dali::String inline storage. "
+              "Update DALI_STRING_STORAGE_SIZE in platform-defines.h for this toolchain.");
+static_assert(alignof(std::string) <= 8,
+              "std::string alignment exceeds Dali::String inline storage alignment (8).");
+
+namespace
+{
+
+inline std::string& GetString(void* storage)
+{
+  return *static_cast<std::string*>(storage);
+}
+
+inline const std::string& GetString(const void* storage)
+{
+  return *static_cast<const std::string*>(storage);
+}
+
+} // unnamed namespace
+
+namespace DALI_NAMESPACE
+{
+
+String::String()
+{
+  // Use placement new to create string.
+  new(mStorage) std::string();
+}
+
+String::String(const char* str)
+{
+  if(str)
+  {
+    new(mStorage) std::string(str);
+  }
+  else
+  {
+    new(mStorage) std::string();
+  }
+}
+
+String::String(const StringView& view)
+{
+  const char* data = view.Data();
+  if(data && view.Size() > 0)
+  {
+    new(mStorage) std::string(data, view.Size());
+  }
+  else
+  {
+    new(mStorage) std::string();
+  }
+}
+
+String::~String()
+{
+  GetString(mStorage).~basic_string();
+}
+
+String::String(const String& other)
+{
+  new(mStorage) std::string(GetString(other.mStorage));
+}
+
+String& String::operator=(const String& other)
+{
+  GetString(mStorage) = GetString(other.mStorage);
+  return *this;
+}
+
+String::String(String&& other) noexcept
+{
+  new(mStorage) std::string(std::move(GetString(other.mStorage)));
+
+  GetString(other.mStorage).~basic_string();
+  new(other.mStorage) std::string(); // Leave in valid state for destructor
+}
+
+String& String::operator=(String&& other) noexcept
+{
+  GetString(mStorage) = std::move(GetString(other.mStorage));
+
+  GetString(other.mStorage).~basic_string();
+  new(other.mStorage) std::string(); // Leave in valid state for destructor
+  return *this;
+}
+
+String& String::operator=(const StringView& view)
+{
+  const char* data = view.Data();
+  if(data)
+  {
+    GetString(mStorage).assign(data, view.Size());
+  }
+  else
+  {
+    GetString(mStorage).clear();
+  }
+  return *this;
+}
+
+String& String::operator=(const char* other)
+{
+  if(other && other[0] != '\0')
+  {
+    GetString(mStorage).assign(other);
+  }
+  else
+  {
+    GetString(mStorage).clear();
+  }
+  return *this;
+}
+
+// Basic Operations
+uint32_t String::Size() const
+{
+  return static_cast<uint32_t>(GetString(mStorage).size());
+}
+
+bool String::Empty() const
+{
+  return GetString(mStorage).empty();
+}
+
+void String::Clear()
+{
+  GetString(mStorage).clear();
+}
+
+const char* String::CStr() const
+{
+  return GetString(mStorage).c_str();
+}
+
+char& String::operator[](uint32_t position)
+{
+  return GetString(mStorage)[position];
+}
+
+const char& String::operator[](uint32_t position) const
+{
+  return GetString(mStorage)[position];
+}
+
+String& String::operator+=(char character)
+{
+  GetString(mStorage) += character;
+  return *this;
+}
+
+String& String::operator+=(const String& rhs)
+{
+  GetString(mStorage) += GetString(rhs.mStorage);
+  return *this;
+}
+
+// Comparison operators
+bool String::operator==(const String& rhs) const
+{
+  return GetString(mStorage) == GetString(rhs.mStorage);
+}
+
+bool String::operator==(const char* rhs) const
+{
+  return (rhs && GetString(mStorage) == rhs) || (!rhs && Empty());
+}
+
+bool String::operator==(const StringView& rhs) const
+{
+  // re-use Dali::StringView comparision.
+  return rhs == *this;
+}
+
+bool String::operator!=(const String& rhs) const
+{
+  return GetString(mStorage) != GetString(rhs.mStorage);
+}
+
+bool String::operator<(const String& rhs) const
+{
+  return GetString(mStorage) < GetString(rhs.mStorage);
+}
+
+bool String::operator>(const String& rhs) const
+{
+  return GetString(mStorage) > GetString(rhs.mStorage);
+}
+
+bool String::operator<=(const String& rhs) const
+{
+  return GetString(mStorage) <= GetString(rhs.mStorage);
+}
+
+bool String::operator>=(const String& rhs) const
+{
+  return GetString(mStorage) >= GetString(rhs.mStorage);
+}
+
+String operator+(const String& lhs, const String& rhs)
+{
+  String result(lhs);
+  result += rhs;
+  return result;
+}
+
+// StringHash implementation
+std::size_t StringHash::operator()(const String& key) const
+{
+  return CalculateHash(std::string_view(key.CStr(), key.Size()));
+}
+
+// StringEqual implementation
+bool StringEqual::operator()(const String& a, const String& b) const
+{
+  return a == b;
+}
+
+} //namespace DALI_NAMESPACE

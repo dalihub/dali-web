@@ -1,0 +1,222 @@
+#ifndef DALI_RENDERER_DEVEL_H
+#define DALI_RENDERER_DEVEL_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/signals/render-callback.h>
+#include <dali/public-api/rendering/renderer.h>
+
+namespace DALI_NAMESPACE
+{
+class RenderCallback;
+
+namespace DevelRenderer
+{
+/**
+ * @brief Creates a new Renderer that draws through a RenderCallback.
+ *
+ * The callback is injected into the graphics pipeline in place of the renderer's own
+ * drawing, so the renderer needs neither a geometry nor a shader.
+ *
+ * @param[in] renderCallback The RenderCallback to draw through
+ * @return A handle to the Renderer
+ *
+ * @note The render side keeps a reference, so the callback outlives this renderer.
+ */
+DALI_CORE_API Renderer New(RenderCallbackPtr renderCallback);
+
+/**
+ * @brief Sets the RenderCallback to be used for native rendering.
+ *
+ * A callback that was already set is detached from its render targets first, without being
+ * told about it - replacing a callback is not the same as finishing with one, so it is left
+ * to the client to release what the outgoing callback created. Use TerminateRenderCallback()
+ * beforehand to have it release them itself.
+ *
+ * A reference is taken as it is by New(), and the callback that was replaced is released
+ * once the render side is done with it.
+ *
+ * @param[in] renderer A valid Renderer object
+ * @param[in] renderCallback The RenderCallback to draw through
+ */
+DALI_CORE_API void SetRenderCallback(Dali::Renderer renderer, RenderCallbackPtr renderCallback);
+
+/**
+ * @brief Finishes with the RenderCallback the renderer draws through.
+ *
+ * The callback is invoked one last time with RenderCallbackInput::isTerminated set, so it
+ * can release what it created, and is then removed from the renderer. That leaves the
+ * renderer non-renderable unless it has a geometry and a shader of its own.
+ *
+ * @param[in] renderer A valid Renderer object
+ *
+ * @note The terminate invocation is asynchronous - it has to run in the context the
+ *       resources were created in, which a later frame provides. Whatever the callback
+ *       points at has to stay alive until then, or the callback has to be detached from
+ *       it with RenderCallback::Invalidate().
+ * @note It is delivered once for each render target the callback has been drawn into, and
+ *       only for the first request - asking again invokes nothing.
+ * @note It is delivered even when there is nothing left to release it in: the callback was
+ *       never drawn, or its render target has been destroyed. Check
+ *       RenderCallbackInput::isNativeApiUsable before making any native API call.
+ */
+DALI_CORE_API void TerminateRenderCallback(Dali::Renderer renderer);
+
+/**
+ * The index of render queue used by the DrawCommand
+ */
+using RenderQueueIndex = uint32_t;
+
+constexpr RenderQueueIndex RENDER_QUEUE_OPAQUE      = 0; ///< Queue for opaque elements
+constexpr RenderQueueIndex RENDER_QUEUE_TRANSPARENT = 1; ///<Queue for transparent elements
+constexpr RenderQueueIndex RENDER_QUEUE_MAX         = 2;
+
+/**
+ * Enum describing way of rendering the primitives (indexed draw, array draw)
+ */
+enum class DrawType
+{
+  INDEXED,
+  ARRAY,
+};
+
+/**
+ * Draw command can be attached to the Dali::Renderer and override the default
+ * rendering functionality. Renderer may have several DrawCommands attached to it
+ * and the will be executed sequentially in the order of the 'queue' index.
+ */
+struct DrawCommand
+{
+  DrawType         drawType;     ///< Type of drawing (indexed, array)
+  uint32_t         firstIndex;   ///< First index into the geometry array
+  uint32_t         elementCount; ///< Number of elements to draw
+  RenderQueueIndex queue;        ///< Queue index
+};
+
+/**
+ * @brief Adds a draw command to the renderer
+ * Once the draw command is added, the default Renderer's behaviour is overriden.
+ * @param[in] renderer a valid Renderer object
+ * @param[in] drawCommand Valid DrawCommand to add to the Renderer
+ */
+DALI_CORE_API void AddDrawCommand(Dali::Renderer renderer, const DrawCommand& drawCommand);
+
+namespace Property
+{
+enum Type
+{
+  DEPTH_INDEX                 = Dali::Renderer::Property::DEPTH_INDEX,
+  FACE_CULLING_MODE           = Dali::Renderer::Property::FACE_CULLING_MODE,
+  BLEND_MODE                  = Dali::Renderer::Property::BLEND_MODE,
+  BLEND_EQUATION_RGB          = Dali::Renderer::Property::BLEND_EQUATION_RGB,
+  BLEND_EQUATION_ALPHA        = Dali::Renderer::Property::BLEND_EQUATION_ALPHA,
+  BLEND_FACTOR_SRC_RGB        = Dali::Renderer::Property::BLEND_FACTOR_SRC_RGB,
+  BLEND_FACTOR_DEST_RGB       = Dali::Renderer::Property::BLEND_FACTOR_DEST_RGB,
+  BLEND_FACTOR_SRC_ALPHA      = Dali::Renderer::Property::BLEND_FACTOR_SRC_ALPHA,
+  BLEND_FACTOR_DEST_ALPHA     = Dali::Renderer::Property::BLEND_FACTOR_DEST_ALPHA,
+  BLEND_COLOR                 = Dali::Renderer::Property::BLEND_COLOR,
+  BLEND_PRE_MULTIPLIED_ALPHA  = Dali::Renderer::Property::BLEND_PRE_MULTIPLIED_ALPHA,
+  INDEX_RANGE_FIRST           = Dali::Renderer::Property::INDEX_RANGE_FIRST,
+  INDEX_RANGE_COUNT           = Dali::Renderer::Property::INDEX_RANGE_COUNT,
+  DEPTH_WRITE_MODE            = Dali::Renderer::Property::DEPTH_WRITE_MODE,
+  DEPTH_FUNCTION              = Dali::Renderer::Property::DEPTH_FUNCTION,
+  DEPTH_TEST_MODE             = Dali::Renderer::Property::DEPTH_TEST_MODE,
+  RENDER_MODE                 = Dali::Renderer::Property::RENDER_MODE,
+  STENCIL_FUNCTION            = Dali::Renderer::Property::STENCIL_FUNCTION,
+  STENCIL_FUNCTION_MASK       = Dali::Renderer::Property::STENCIL_FUNCTION_MASK,
+  STENCIL_FUNCTION_REFERENCE  = Dali::Renderer::Property::STENCIL_FUNCTION_REFERENCE,
+  STENCIL_MASK                = Dali::Renderer::Property::STENCIL_MASK,
+  STENCIL_OPERATION_ON_FAIL   = Dali::Renderer::Property::STENCIL_OPERATION_ON_FAIL,
+  STENCIL_OPERATION_ON_Z_FAIL = Dali::Renderer::Property::STENCIL_OPERATION_ON_Z_FAIL,
+  STENCIL_OPERATION_ON_Z_PASS = Dali::Renderer::Property::STENCIL_OPERATION_ON_Z_PASS,
+  MIX_COLOR                   = Dali::Renderer::Property::MIX_COLOR,
+  MIX_COLOR_RED               = Dali::Renderer::Property::MIX_COLOR_RED,
+  MIX_COLOR_GREEN             = Dali::Renderer::Property::MIX_COLOR_GREEN,
+  MIX_COLOR_BLUE              = Dali::Renderer::Property::MIX_COLOR_BLUE,
+  OPACITY                     = Dali::Renderer::Property::OPACITY,
+
+  /**
+   * @brief The rendering behavior of the renderer.
+   * @details Name "renderingBehavior", type Property::INTEGER.
+   */
+  RENDERING_BEHAVIOR = OPACITY + 1,
+
+  /**
+   * @brief name "blendEquation", type INTEGER
+   * @note The default value is BlendEquation::ADD
+   */
+  BLEND_EQUATION = OPACITY + 2,
+
+  /**
+   * @brief Which vertex to render first from a vertex buffer without indices
+   * @details name "vertexRangeFirst", type INTEGER
+   */
+  VERTEX_RANGE_FIRST = INDEX_RANGE_FIRST,
+
+  /**
+   * @brief How many vertices to render to render from a vertex buffer without indices
+   * @details name "vertexRangeCount", type INTEGER
+   */
+  VERTEX_RANGE_COUNT = INDEX_RANGE_COUNT,
+
+  /**
+   * @brief How many instances to render from a vertex buffer with non-zero divisor.
+   * @note Overrides computed instance count on vertex buffer.
+   * @details name "instanceCount", type INTEGER
+   */
+  INSTANCE_COUNT = OPACITY + 3,
+
+  /**
+   * @brief Increase the range of update area by pixel value.
+   * @note Extends the area - the position and the size - used for the attached actor's damaged area calculation.
+   * This value be appended after calculate all update area, like visual offset.
+   * Start and end are the left and right edges; they are not swapped for a right-to-left layout direction.
+   * @see Dali::Actor::Property::UPDATE_AREA_HINT
+   * @details name "updateAreaMargin", type INSETS
+   * @SINCE_2_4.11
+   */
+  UPDATE_AREA_MARGIN = OPACITY + 4,
+};
+} // namespace Property
+
+namespace Rendering
+{
+/**
+ * @brief Enumeration for the rendering behavior
+ */
+enum Type
+{
+  IF_REQUIRED, ///< Default. Will only render if required to do so.
+  CONTINUOUSLY ///< Will render continuously.
+};
+
+} // namespace Rendering
+
+/**
+ * @brief Query whether current blend equation is advanced option.
+ * @param[in] renderer to be checked whether it has been applied advanced blend equation or not
+ * @return True if current blend equation is advanced.
+ */
+DALI_CORE_API bool IsAdvancedBlendEquationApplied(const Renderer& renderer);
+
+} // namespace DevelRenderer
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_RENDERER_DEVEL_H

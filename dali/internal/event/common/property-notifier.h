@@ -1,0 +1,71 @@
+#ifndef DALI_INTERNAL_PROPERTY_NOTIFIER_H
+#define DALI_INTERNAL_PROPERTY_NOTIFIER_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/internal/common/message.h>
+#include <dali/internal/event/common/notifier-interface.h> ///< for NotifierInterface::NotifyId
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace SceneGraph
+{
+class PropertyNotification;
+
+} //namespace SceneGraph
+
+/**
+ * Interface used by the update-thread to trigger property changed notification signals.
+ */
+class PropertyNotifier
+{
+public:
+  /**
+   * Virtual destructor.
+   */
+  virtual ~PropertyNotifier() = default;
+
+  /**
+   * Provide notification signals for a changed property.
+   * This method should be called in the event-thread; the update-thread must use PropertyChangedMessage.
+   * @param[in] notifyId A notifyId to the SceneGraph::PropertyNotification that has been mnodified.
+   * @param[in] validity Passes in whether the notification was triggered by a true or false condition result
+   */
+  virtual void NotifyProperty(NotifierInterface::NotifyId notifyId, bool validity) = 0;
+};
+
+/**
+ * Notification message for when a property has been modified
+ * @param[in] notifier This will provide the notification signal.
+ */
+inline MessageBase* PropertyChangedMessage(PropertyNotifier& notifier, NotifierInterface::NotifyId notifyId, bool validity)
+{
+  return new MessageValue2<PropertyNotifier, NotifierInterface::NotifyId, bool>(&notifier,
+                                                                                &PropertyNotifier::NotifyProperty,
+                                                                                notifyId,
+                                                                                validity);
+}
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_PROPERTY_NOTIFIER_H

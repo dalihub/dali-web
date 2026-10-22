@@ -1,0 +1,84 @@
+#ifndef DALI_INTERNAL_EVENT_GESTURE_EVENT_H
+#define DALI_INTERNAL_EVENT_GESTURE_EVENT_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/integration-api/events/event.h>
+#include <dali/integration-api/events/point.h>
+#include <dali/internal/event/events/gesture-input-source.h>
+#include <dali/public-api/events/gesture-enumerations.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+/**
+ * This is the abstract base structure for any gestures that the adaptor detects and wishes to send
+ * to the Core.
+ */
+struct GestureEvent
+{
+  // Destruction
+
+  /**
+   * Virtual destructor.
+   */
+  virtual ~GestureEvent();
+
+  // Data
+
+  /**
+   * Gesture Type.
+   */
+  GestureType::Value gestureType;
+
+  /**
+   * The state of the gesture.
+   */
+  GestureState state;
+
+  /**
+   * The time the gesture took place.
+   */
+  uint32_t time;
+
+  /**
+   * The touch point that triggered the gesture.
+   */
+  Integration::Point triggerPoint;
+
+  /**
+   * The input device that started the gesture sequence, captured at its first DOWN.
+   */
+  GestureInputSource source;
+
+protected: // Constructors only to be used by derived structures.
+  /**
+   * This constructor is only used by derived classes.
+   * @param[in] gesture       The type of gesture event.
+   * @param[in] gestureState  The state of the gesture event.
+   */
+  GestureEvent(GestureType::Value gesture, GestureState gestureState);
+};
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_EVENT_GESTURE_EVENT_H
