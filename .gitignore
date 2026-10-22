@@ -1,0 +1,7 @@
+# Root-level generated data only; preserve upstream tracked build sources.
+/tools/
+/build/
+/logs/
+/profiles/
+/browser-profiles/
+/dist/

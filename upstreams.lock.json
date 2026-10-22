@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "upstreams": [
+    {
+      "name": "dali-core",
+      "url": "https://github.com/dalihub/dali-core.git",
+      "prefix": "libs/dali-core",
+      "ref": "refs/tags/dali_2.5.43",
+      "commit": "80998009aee9a30ab4c7909c68281ed1983aa4ef",
+      "tree": "b78f41485d820f4105a9e2cf07deda6c7bad0326",
+      "squash": true,
+      "remote": "upstream-dali-core",
+      "p0Commit": "800960a7e226e1c6afd19b6a492b32ea7c11ed50",
+      "p0TreeEqual": true
+    },
+    {
+      "name": "dali-adaptor",
+      "url": "https://github.com/dalihub/dali-adaptor.git",
+      "prefix": "libs/dali-adaptor",
+      "ref": "refs/tags/dali_2.5.43",
+      "commit": "d76afcfff7a09d788bb0cd3204aace153fce8cfe",
+      "tree": "5a39f39c8e2533f01f10f19dccc23ff648898dac",
+      "squash": true,
+      "remote": "upstream-dali-adaptor",
+      "p0Commit": "8448c8c07bdec428eee9742eec3db2129a703772",
+      "p0TreeEqual": true
+    },
+    {
+      "name": "dali-ui",
+      "url": "https://github.com/dalihub/dali-ui.git",
+      "prefix": "libs/dali-ui",
+      "ref": "refs/tags/v2.5.43.11572",
+      "commit": "13e6bf80ca8cef250a787bb2643899e4d9648cda",
+      "tree": "9cc937f5cf4b7a7639fd9a07df39bda532603f77",
+      "squash": true,
+      "remote": "upstream-dali-ui",
+      "p0Commit": null,
+      "p0TreeEqual": null
+    }
+  ]
+}
