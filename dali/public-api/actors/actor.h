@@ -45,8 +45,6 @@ namespace Internal DALI_INTERNAL
 class Actor;
 }
 
-class Actor;
-class Renderer;
 struct Degree;
 class Quaternion;
 class Layer;
@@ -269,6 +267,7 @@ struct Vector4;
  * | childRemoved               | @ref ChildRemovedSignal()                   |
  * | visibilityChanged          | @ref VisibilityChangedSignal()              |
  * | effectiveVisibilityChanged | @ref EffectiveVisibilityChangedSignal()     |
+ * | onSceneVisibilityChanged   | @ref OnSceneVisibilityChangedSignal()       |
  * | layoutDirectionChanged     | @ref LayoutDirectionChangedSignal()         |
  * | interceptTouchEvent        | @ref InterceptTouchEventSignal()            |
  * | interceptWheelEvent        | @ref InterceptWheelEventSignal()            |
@@ -550,25 +549,11 @@ public:
       COLOR_MULTIPLIER,
 
       /**
-       * @brief The color of an actor.
-       * @deprecated Use COLOR_MULTIPLIER instead.
-       * @SINCE_1_0.0
-       */
-      COLOR = COLOR_MULTIPLIER,
-
-      /**
        * @brief The red component of an actor's color multiplier.
        * @details Name "colorMultiplierRed", type Property::FLOAT, animatable / constraint-input
        * @SINCE_2_5.38
        */
       COLOR_MULTIPLIER_RED,
-
-      /**
-       * @brief The red component of an actor's color.
-       * @deprecated Use COLOR_MULTIPLIER_RED instead.
-       * @SINCE_1_0.0
-       */
-      COLOR_RED = COLOR_MULTIPLIER_RED,
 
       /**
        * @brief The green component of an actor's color multiplier.
@@ -578,25 +563,11 @@ public:
       COLOR_MULTIPLIER_GREEN,
 
       /**
-       * @brief The green component of an actor's color.
-       * @deprecated Use COLOR_MULTIPLIER_GREEN instead.
-       * @SINCE_1_0.0
-       */
-      COLOR_GREEN = COLOR_MULTIPLIER_GREEN,
-
-      /**
        * @brief The blue component of an actor's color multiplier.
        * @details Name "colorMultiplierBlue", type Property::FLOAT, animatable / constraint-input
        * @SINCE_2_5.38
        */
       COLOR_MULTIPLIER_BLUE,
-
-      /**
-       * @brief The blue component of an actor's color.
-       * @deprecated Use COLOR_MULTIPLIER_BLUE instead.
-       * @SINCE_1_0.0
-       */
-      COLOR_BLUE = COLOR_MULTIPLIER_BLUE,
 
       /**
        * @brief The alpha component of an actor's color multiplier.
@@ -605,13 +576,6 @@ public:
        * @SINCE_2_5.38
        */
       COLOR_MULTIPLIER_ALPHA,
-
-      /**
-       * @brief The alpha component of an actor's color.
-       * @deprecated Use COLOR_MULTIPLIER_ALPHA or OPACITY instead.
-       * @SINCE_1_0.0
-       */
-      COLOR_ALPHA = COLOR_MULTIPLIER_ALPHA,
 
       /**
        * @brief The opacity of the actor.
@@ -627,13 +591,6 @@ public:
        * @SINCE_2_5.38
        */
       WORLD_COLOR_MULTIPLIER,
-
-      /**
-       * @brief The world color of an actor.
-       * @deprecated Use WORLD_COLOR_MULTIPLIER instead.
-       * @SINCE_1_0.0
-       */
-      WORLD_COLOR = WORLD_COLOR_MULTIPLIER,
 
       /**
        * @brief The color mode of an actor.
@@ -917,6 +874,7 @@ public:
   using ChildRemovedSignalType               = Signal<void(Actor, Actor)>;                      ///< Called when the actor has a child removed. @SINCE_2_5.29
   using VisibilityChangedSignalType          = Signal<void(Actor, bool, VisibilityChangeType)>; ///< Signal emitted when an actor's or a parent's visible property changes. @SINCE_2_5.29
   using EffectiveVisibilityChangedSignalType = Signal<void(Actor, bool)>;                       ///< Signal type of EffectiveVisibilityChangedSignalType. @SINCE_2_3.22
+  using OnSceneVisibilityChangedSignalType   = Signal<void(Actor, bool)>;                       ///< Called when the actor's on-scene visibility changes. @SINCE_2_5.44
   using LayoutDirectionChangedSignalType     = Signal<void(Actor, LayoutDirection::Type)>;      ///< Layout direction changes signal type. @SINCE_1_2.60
 
   // Creation
@@ -1749,9 +1707,30 @@ public:
    * @pre The actor has been initialized.
    * @see IsVisible()
    * @see EffectiveVisibilityChangedSignal()
+   * @see IsOnSceneVisible()
    * @SINCE_2_5.32
    */
   bool IsEffectivelyVisible() const;
+
+  /**
+   * @brief Returns the on-scene visibility of the actor.
+   *
+   * The on-scene visibility is true only when this actor and all of its parents (up to the root layer)
+   * have their Property::VISIBLE set to true, and the actor is connected to a visible scene.
+   * It does not consider opacity, on-screen position or culling, so a true result does not by itself
+   * guarantee that the actor is actually drawn.
+   *
+   * This is the value tracked by OnSceneVisibilityChangedSignal(). It is calculated from scratch
+   * using only event-side properties, so it does not rely on the update thread.
+   *
+   * @return True if the actor is connected to a visible scene and neither it nor any ancestor is hidden
+   * @pre The actor has been initialized.
+   * @see IsEffectivelyVisible()
+   * @see IsConnectedToScene()
+   * @see OnSceneVisibilityChangedSignal()
+   * @SINCE_2_5.44
+   */
+  bool IsOnSceneVisible() const;
 
   /**
    * @brief Sets the component-wise color multiplier for the actor's rendered content.
@@ -1772,15 +1751,6 @@ public:
   void SetColorMultiplier(const Vector4& multiplier);
 
   /**
-   * @brief Sets the color of the actor.
-   * @deprecated Use SetColorMultiplier() instead.
-   * @param[in] color The color, with each component (red, green, blue, alpha) in the range [0, 1]
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  void SetColor(const Vector4& color);
-
-  /**
    * @brief Gets the target component-wise color multiplier of the actor.
    * @return The target color multiplier
    * @pre The actor has been initialized.
@@ -1788,15 +1758,6 @@ public:
    * @SINCE_2_5.38
    */
   Vector4 GetColorMultiplier() const;
-
-  /**
-   * @brief Gets the color of the actor.
-   * @deprecated Use GetColorMultiplier() instead.
-   * @return The color of the actor
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  Vector4 GetColor() const;
 
   /**
    * @brief Gets the current component-wise color multiplier from the previous update.
@@ -1809,15 +1770,6 @@ public:
   Vector4 GetCurrentColorMultiplier() const;
 
   /**
-   * @brief Gets the current color of the actor from the previous update.
-   * @deprecated Use GetCurrentColorMultiplier() instead.
-   * @return The current color of the actor
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  Vector4 GetCurrentColor() const;
-
-  /**
    * @brief Sets the red component of the actor's color multiplier.
    * @param[in] red The red multiplier, in the range [0, 1]
    * @pre The actor has been initialized.
@@ -1825,15 +1777,6 @@ public:
    * @SINCE_2_5.38
    */
   void SetColorMultiplierRed(float red);
-
-  /**
-   * @brief Sets the red component of the actor's color.
-   * @deprecated Use SetColorMultiplierRed() instead.
-   * @param[in] red The red component value, in the range [0, 1]
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  void SetColorRed(float red);
 
   /**
    * @brief Gets the target red component of the actor's color multiplier.
@@ -1845,15 +1788,6 @@ public:
   float GetColorMultiplierRed() const;
 
   /**
-   * @brief Gets the red component of the actor's color.
-   * @deprecated Use GetColorMultiplierRed() instead.
-   * @return The red component value
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  float GetColorRed() const;
-
-  /**
    * @brief Sets the green component of the actor's color multiplier.
    * @param[in] green The green multiplier, in the range [0, 1]
    * @pre The actor has been initialized.
@@ -1861,15 +1795,6 @@ public:
    * @SINCE_2_5.38
    */
   void SetColorMultiplierGreen(float green);
-
-  /**
-   * @brief Sets the green component of the actor's color.
-   * @deprecated Use SetColorMultiplierGreen() instead.
-   * @param[in] green The green component value, in the range [0, 1]
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  void SetColorGreen(float green);
 
   /**
    * @brief Gets the target green component of the actor's color multiplier.
@@ -1881,15 +1806,6 @@ public:
   float GetColorMultiplierGreen() const;
 
   /**
-   * @brief Gets the green component of the actor's color.
-   * @deprecated Use GetColorMultiplierGreen() instead.
-   * @return The green component value
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  float GetColorGreen() const;
-
-  /**
    * @brief Sets the blue component of the actor's color multiplier.
    * @param[in] blue The blue multiplier, in the range [0, 1]
    * @pre The actor has been initialized.
@@ -1899,15 +1815,6 @@ public:
   void SetColorMultiplierBlue(float blue);
 
   /**
-   * @brief Sets the blue component of the actor's color.
-   * @deprecated Use SetColorMultiplierBlue() instead.
-   * @param[in] blue The blue component value, in the range [0, 1]
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  void SetColorBlue(float blue);
-
-  /**
    * @brief Gets the target blue component of the actor's color multiplier.
    * @return The blue multiplier
    * @pre The actor has been initialized.
@@ -1915,15 +1822,6 @@ public:
    * @SINCE_2_5.38
    */
   float GetColorMultiplierBlue() const;
-
-  /**
-   * @brief Gets the blue component of the actor's color.
-   * @deprecated Use GetColorMultiplierBlue() instead.
-   * @return The blue component value
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  float GetColorBlue() const;
 
   /**
    * @brief Sets the alpha component of the actor's color multiplier.
@@ -1937,15 +1835,6 @@ public:
   void SetColorMultiplierAlpha(float alpha);
 
   /**
-   * @brief Sets the alpha component of the actor's color.
-   * @deprecated Use SetColorMultiplierAlpha() or SetOpacity() instead.
-   * @param[in] alpha The alpha component value, in the range [0, 1]
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  void SetColorAlpha(float alpha);
-
-  /**
    * @brief Gets the target alpha component of the actor's color multiplier.
    * @return The alpha multiplier
    * @note Equivalent to GetOpacity().
@@ -1957,15 +1846,6 @@ public:
   float GetColorMultiplierAlpha() const;
 
   /**
-   * @brief Gets the alpha component of the actor's color.
-   * @deprecated Use GetColorMultiplierAlpha() or GetOpacity() instead.
-   * @return The alpha component value
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  float GetColorAlpha() const;
-
-  /**
    * @brief Gets the inherited world color multiplier of the actor.
    * @return The actor's world color multiplier after applying inheritance according to Property::COLOR_MODE
    * @pre The actor has been initialized.
@@ -1975,15 +1855,6 @@ public:
    * @SINCE_2_5.38
    */
   Vector4 GetWorldColorMultiplier() const;
-
-  /**
-   * @brief Gets the world color of the actor.
-   * @deprecated Use GetWorldColorMultiplier() instead.
-   * @return The actor's world color
-   * @pre The actor has been initialized.
-   * @SINCE_2_5.30
-   */
-  Vector4 GetWorldColor() const;
 
   /**
    * @brief Gets the world matrix of the actor.
@@ -3096,6 +2967,31 @@ public: // Signals
    * @see Actor::IsEffectivelyVisible()
    */
   EffectiveVisibilityChangedSignalType& EffectiveVisibilityChangedSignal();
+
+  /**
+   * @brief This signal is emitted when the on-scene visibility of this actor changes.
+   *
+   * The on-scene visibility is true only when this actor and all of its parents (up to the root layer)
+   * have their Property::VISIBLE set to true, and the actor is connected to a visible scene.
+   * Like IsOnSceneVisible(), it does not consider opacity, on-screen position or culling.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName( Actor actor, bool visible );
+   * @endcode
+   * actor: The actor whose on-scene visibility has changed.
+   * visible: Whether this actor's on-scene visibility has become true or false. This happens when
+   *          the VISIBLE property of this actor or one of its ancestors changes, when the actor is
+   *          connected to or disconnected from the scene, or when the scene is shown or hidden,
+   *          provided that the combined on-scene visibility changes.
+   *
+   * @return The signal to connect to
+   * @pre The actor has been initialized.
+   * @see IsOnSceneVisible()
+   * @see EffectiveVisibilityChangedSignal()
+   * @SINCE_2_5.44
+   */
+  OnSceneVisibilityChangedSignalType& OnSceneVisibilityChangedSignal();
 
   /**
    * @brief This signal is emitted when the layout direction property of this or a parent actor is changed.
