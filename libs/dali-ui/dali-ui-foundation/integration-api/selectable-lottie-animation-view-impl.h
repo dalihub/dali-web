@@ -20,11 +20,11 @@
 // INTERNAL INCLUDES
 #include <dali-ui-foundation/integration-api/selectable-image-interface-impl.h>
 #include <dali-ui-foundation/public-api/types/selectable-lottie-color-binding.h>
-#include <dali-ui-foundation/public-api/types/selectable-lottie-image.h>
 #include <dali-ui-foundation/public-api/views/image/lottie-animation-view.h>
 
 // EXTERNAL INCLUDES
 #include <dali/public-api/common/dali-string.h>
+#include <dali/public-api/math/int-pair.h>
 #include <dali/public-api/math/vector4.h>
 #include <cstdint>
 #include <vector>
@@ -51,34 +51,32 @@ namespace Integration
 class SelectableLottieAnimationViewImpl : public SelectableImageInterfaceImpl
 {
 public:
-  using FrameRange = Ui::SelectableLottieImage::FrameRange;
-
   /**
    * @brief Creates a new SelectableLottieAnimationViewImpl.
    *
    * @param[in] url           The URL of the Lottie JSON file
-   * @param[in] selectRange   The segment played (or snapped to) when becoming selected
-   * @param[in] deselectRange The segment played (or snapped to) when becoming deselected
+   * @param[in] selectionPlaybackRange The segment played (or snapped to) when becoming selected
+   * @param[in] deselectionPlaybackRange The segment played (or snapped to) when becoming deselected
    * @param[in] keyPath       The inner-fill recolour key path; empty keeps the generic default
    * @return A raw pointer to the newly allocated implementation (reference count 0)
    */
   static SelectableLottieAnimationViewImpl* New(const Dali::String& url,
-                                                const FrameRange&   selectRange,
-                                                const FrameRange&   deselectRange,
+                                                const Int32Pair&    selectionPlaybackRange,
+                                                const Int32Pair&    deselectionPlaybackRange,
                                                 const Dali::String& keyPath = Dali::String());
 
   /**
    * @brief Creates a new implementation with explicit color bindings.
    *
    * @param[in] url The URL of the Lottie JSON file
-   * @param[in] selectRange The segment used when becoming selected
-   * @param[in] deselectRange The segment used when becoming deselected
+   * @param[in] selectionPlaybackRange The segment used when becoming selected
+   * @param[in] deselectionPlaybackRange The segment used when becoming deselected
    * @param[in] colorBindings The exact dynamic color bindings to register
    * @return A raw pointer to the newly allocated implementation
    */
   static SelectableLottieAnimationViewImpl* New(const Dali::String&                  url,
-                                                const FrameRange&                    selectRange,
-                                                const FrameRange&                    deselectRange,
+                                                const Int32Pair&                     selectionPlaybackRange,
+                                                const Int32Pair&                     deselectionPlaybackRange,
                                                 const SelectableLottieColorBindings& colorBindings);
 
 public: // From Integration::SelectableImageInterfaceImpl
@@ -125,10 +123,10 @@ private:
   /**
    * @brief Sets the frame segments played on select and on deselect.
    *
-   * @param[in] selectRange   The segment played (or snapped to) when becoming selected
-   * @param[in] deselectRange The segment played (or snapped to) when becoming deselected
+   * @param[in] selectionPlaybackRange The segment played (or snapped to) when becoming selected
+   * @param[in] deselectionPlaybackRange The segment played (or snapped to) when becoming deselected
    */
-  void SetFrameRanges(const FrameRange& selectRange, const FrameRange& deselectRange);
+  void SetPlaybackRanges(const Int32Pair& selectionPlaybackRange, const Int32Pair& deselectionPlaybackRange);
 
   void SetColorBindings(const SelectableLottieColorBindings& colorBindings);
 
@@ -171,10 +169,10 @@ private:                           // Data
   Vector4 mDeselectedColor; ///< pre-resolved deselected state color
   Vector4 mSelectedColor;   ///< pre-resolved selected state color
 
-  int32_t mSelectStart;   ///< select-segment start frame
-  int32_t mSelectEnd;     ///< select-segment end frame
-  int32_t mDeselectStart; ///< deselect-segment start frame
-  int32_t mDeselectEnd;   ///< deselect-segment end frame
+  int32_t mSelectionStartFrame;   ///< select-segment start frame
+  int32_t mSelectionEndFrame;     ///< select-segment end frame
+  int32_t mDeselectionStartFrame; ///< deselect-segment start frame
+  int32_t mDeselectionEndFrame;   ///< deselect-segment end frame
 
   bool mLastSelected{false}; ///< last requested logical state; drives state-based color bindings
 };

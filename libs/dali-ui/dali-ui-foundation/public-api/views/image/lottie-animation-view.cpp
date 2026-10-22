@@ -106,17 +106,32 @@ void LottieAnimationView::JumpToFrame(int frame)
 
 void LottieAnimationView::SetMinMaxFrame(int minFrame, int maxFrame)
 {
-  Ui::GetImpl(*this).SetMinMaxFrame(minFrame, maxFrame);
+  SetPlaybackRange(minFrame, maxFrame);
+}
+
+void LottieAnimationView::SetPlaybackRange(int startFrame, int endFrame)
+{
+  Ui::GetImpl(*this).SetPlaybackRange(startFrame, endFrame);
 }
 
 void LottieAnimationView::GetMinMaxFrame(int& minFrame, int& maxFrame) const
 {
-  Ui::GetImpl(*this).GetMinMaxFrame(minFrame, maxFrame);
+  GetPlaybackRange(minFrame, maxFrame);
+}
+
+void LottieAnimationView::GetPlaybackRange(int& startFrame, int& endFrame) const
+{
+  Ui::GetImpl(*this).GetPlaybackRange(startFrame, endFrame);
 }
 
 void LottieAnimationView::SetMinMaxFrameByMarker(const Dali::String& minMarker, const Dali::String& maxMarker)
 {
-  Ui::GetImpl(*this).SetMinMaxFrameByMarker(minMarker, maxMarker);
+  SetPlaybackRangeByMarker(minMarker, maxMarker);
+}
+
+void LottieAnimationView::SetPlaybackRangeByMarker(const Dali::String& startMarker, const Dali::String& endMarker)
+{
+  Ui::GetImpl(*this).SetPlaybackRangeByMarker(startMarker, endMarker);
 }
 
 void LottieAnimationView::SetStopBehavior(AnimatedImage::StopBehavior behavior)
@@ -337,23 +352,6 @@ LottieAnimationView::LottieAnimationView(Dali::Internal::CustomActor* internal)
 : View(internal)
 {
   VerifyCustomActorPointer<Integration::LottieAnimationViewImpl>(internal);
-}
-
-// TODO: remove these together with the old names they keep alive.
-
-int LottieAnimationView::GetCurrentFrame() const
-{
-  return GetCurrentFrameNumber();
-}
-
-int LottieAnimationView::GetTotalFrame() const
-{
-  return GetTotalFrameCount();
-}
-
-void LottieAnimationView::SetNotifyAfterRasterization(bool notify)
-{
-  SetNotifyAfterRasterizationEnabled(notify);
 }
 
 } // namespace Ui
