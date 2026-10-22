@@ -1,0 +1,829 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/integration-api/adaptor-framework/scene-holder-impl.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/events/hover-event-integ.h>
+#include <dali/integration-api/events/key-event-integ.h>
+#include <dali/integration-api/events/touch-event-integ.h>
+#include <dali/integration-api/events/touch-integ.h>
+#include <dali/integration-api/events/wheel-event-integ.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/actors/layer.h>
+#include <dali/public-api/common/dali-common.h>
+#include <dali/public-api/events/wheel-event.h>
+#include <dali/public-api/render-tasks/render-task-list.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/adaptor/common/adaptor-impl.h>
+#include <dali/internal/adaptor/common/lifecycle-observer.h>
+#include <dali/internal/input/common/key-impl.h>
+#include <dali/internal/input/common/physical-keyboard-impl.h>
+#include <dali/internal/system/common/time-service.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace
+{
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gSceneHolderLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_SCENE_HOLDER");
+#endif
+
+const uint32_t MAX_PRESSED_POINT_COUNT = 2;
+} // unnamed namespace
+
+uint32_t SceneHolder::mSceneHolderCounter = 0;
+
+class SceneHolder::SceneHolderLifeCycleObserver : public LifeCycleObserver
+{
+public:
+  SceneHolderLifeCycleObserver(Adaptor*& adaptor, bool& adaptorStarted)
+  : mAdaptor(adaptor),
+    mAdaptorStarted(adaptorStarted)
+  {
+  }
+
+private: // Adaptor::LifeCycleObserver interface
+  void OnStart() override
+  {
+    mAdaptorStarted = true;
+  }
+  void OnPause() override
+  {
+  }
+  void OnResume() override
+  {
+  }
+  void OnStop() override
+  {
+    // Mark adaptor as stopped;
+    mAdaptorStarted = false;
+  }
+  void OnDestroy() override
+  {
+    mAdaptor = nullptr;
+  }
+
+private:
+  Adaptor*& mAdaptor;
+  bool&     mAdaptorStarted;
+};
+
+SceneHolder::SceneHolder()
+: mLifeCycleObserver(new SceneHolderLifeCycleObserver(mAdaptor, mAdaptorStarted)),
+  mLastTouchEvent(),
+  mLastHoverEvent(),
+  mFocusChangedGeneratedSignal(),
+  mSceneHolderKeyEventSignal(),
+  mSceneHolderKeyEventDelayedSignal(),
+  mSceneHolderTouchEventSignal(),
+  mSceneHolderWheelEventSignal(),
+  mSceneHolderKeyEventGeneratedSignal(),
+  mSceneHolderInterceptKeyEventSignal(),
+  mSceneHolderWheelEventGeneratedSignal(),
+  mSceneSignalBridgeSlot(this),
+  mId(mSceneHolderCounter++),
+  mSurface(nullptr),
+  mAdaptor(nullptr),
+  mPreviousTouchEvent(),
+  mPreviousHoverEvent(),
+  mPreviousType(Integration::TouchEventCombiner::DISPATCH_NONE),
+  mDpi(),
+  mMultiSamplingLevel(-1),
+  mDepthBufferEnabled(-1),
+  mStencilBufferEnabled(-1),
+  mAdaptorStarted(false),
+  mVisible(true),
+  mHandledMultiTouch(false)
+{
+}
+
+SceneHolder::~SceneHolder()
+{
+  if(mScene)
+  {
+    // The scene graph object should be removed first.
+    mScene.RemoveSceneObject();
+  }
+
+  if(mAdaptor)
+  {
+    mAdaptor->RemoveObserver(*mLifeCycleObserver.get());
+    mAdaptor->RemoveWindow(this);
+
+    if(mAdaptorStarted)
+    {
+      // The event queue is flushed and we wait for the completion of the surface removal
+      // Note : we don't need to delete surface when adaptor is stopped now.
+      mAdaptor->DeleteSurface(*mSurface.get());
+    }
+
+    mAdaptor = nullptr;
+  }
+
+  if(mScene)
+  {
+    // We should remove the surface from the Core last
+    mScene.Discard();
+  }
+}
+
+void SceneHolder::Add(Dali::Actor actor)
+{
+  if(mScene)
+  {
+    mScene.Add(actor);
+  }
+}
+
+void SceneHolder::Remove(Dali::Actor actor)
+{
+  if(mScene)
+  {
+    mScene.Remove(actor);
+  }
+}
+
+Dali::Layer SceneHolder::GetRootLayer() const
+{
+  return mScene ? mScene.GetRootLayer() : Dali::Layer();
+}
+
+Dali::Layer SceneHolder::GetOverlayLayer()
+{
+  return mScene ? mScene.GetOverlayLayer() : Dali::Layer();
+}
+
+uint32_t SceneHolder::GetId() const
+{
+  return mId;
+}
+
+std::string SceneHolder::GetName() const
+{
+  return mName;
+}
+
+bool SceneHolder::IsVisible() const
+{
+  return mVisible;
+}
+
+Dali::Integration::Scene SceneHolder::GetScene()
+{
+  return mScene;
+}
+
+Uint16Pair SceneHolder::GetDpi() const
+{
+  return mDpi;
+}
+
+void SceneHolder::SetSurface(Dali::Integration::RenderSurfaceInterface* surface)
+{
+  mSurface.reset(surface);
+
+  mScene.SurfaceReplaced();
+
+  PositionSize surfacePositionSize = surface->GetPositionSize();
+
+  SurfaceResized(static_cast<float>(surfacePositionSize.width), static_cast<float>(surfacePositionSize.height));
+
+  InitializeDpi();
+
+  mSurface->SetAdaptor(*mAdaptor);
+  mSurface->SetScene(mScene);
+
+  // Recreate the render target
+  CreateRenderTarget();
+
+  OnSurfaceSet(surface);
+}
+
+void SceneHolder::SurfaceResized(float width, float height)
+{
+  mScene.SurfaceResized(width, height);
+
+  mSurface->SetFullSwapNextFrame();
+
+  // Recreate the render target
+  CreateRenderTarget();
+}
+
+Dali::Integration::RenderSurfaceInterface* SceneHolder::GetSurface() const
+{
+  return mSurface.get();
+}
+
+void SceneHolder::SetBackgroundColor(const Vector4& color)
+{
+  if(mScene)
+  {
+    mScene.SetBackgroundColor(color);
+
+    mSurface->SetFullSwapNextFrame();
+  }
+}
+
+Vector4 SceneHolder::GetBackgroundColor() const
+{
+  return mScene ? mScene.GetBackgroundColor() : Color::BLACK;
+}
+
+void SceneHolder::SetAdaptor(Dali::Adaptor& adaptor)
+{
+  // Avoid doing this more than once
+  if(mAdaptorStarted)
+  {
+    return;
+  }
+
+  DALI_ASSERT_DEBUG(mSurface && "Surface needs to be set before calling this method\n");
+
+  // We can assume that current adaptor is already started now.
+  mAdaptorStarted = true;
+
+  // Create the scene
+  PositionSize surfacePositionSize = mSurface->GetPositionSize();
+  int          windowOrientation   = mSurface->GetSurfaceOrientation();
+  int          screenOrientation   = mSurface->GetScreenOrientation();
+
+  Internal::Adaptor::Adaptor& adaptorImpl = Internal::Adaptor::Adaptor::GetImplementation(adaptor);
+  mAdaptor                                = &adaptorImpl;
+
+  // Every scene holder starts from the system wide settings, which the buffer
+  // policies given at construction may override for this scene alone.
+  const EnvironmentOptions& environmentOptions    = adaptorImpl.GetEnvironmentOptions();
+  const bool                partialUpdateRequired = environmentOptions.PartialUpdateRequired();
+
+  // A negative override means "follow the system".
+  auto resolve = [](int8_t override, bool systemDefault)
+  { return (override < 0) ? systemDefault : (override != 0); };
+
+  const bool depthBufferRequired   = resolve(mDepthBufferEnabled, environmentOptions.DepthBufferRequired());
+  const bool stencilBufferRequired = resolve(mStencilBufferEnabled, environmentOptions.StencilBufferRequired());
+
+  // The environment default is also negative (-1, EGL_DONT_CARE), and a single
+  // sample is not anti-aliasing, so anything below two counts as off.
+  const int requestedMultiSamplingLevel = (mMultiSamplingLevel < 0) ? environmentOptions.GetMultiSamplingLevel() : mMultiSamplingLevel;
+  const int multiSamplingLevel          = (requestedMultiSamplingLevel > 1) ? requestedMultiSamplingLevel : 0;
+
+  Dali::ScenePolicyFlagBits scenePolicyFlags = Dali::ScenePolicyFlagBits::NONE;
+  if(depthBufferRequired)
+  {
+    scenePolicyFlags |= Dali::ScenePolicyFlagBits::DEPTH_BUFFER_ENABLED;
+  }
+  if(stencilBufferRequired)
+  {
+    scenePolicyFlags |= Dali::ScenePolicyFlagBits::STENCIL_BUFFER_ENABLED;
+  }
+  if(partialUpdateRequired)
+  {
+    scenePolicyFlags |= Dali::ScenePolicyFlagBits::PARTIAL_UPDATE_ENABLED;
+  }
+
+  // The surface config has to agree with the scene before the graphics surface is created,
+  // otherwise the first EGL config is built without the requested buffers.
+  mSurface->SetDepthBufferRequired(depthBufferRequired);
+  mSurface->SetStencilBufferRequired(stencilBufferRequired);
+  mSurface->SetPartialUpdateRequired(partialUpdateRequired);
+  mSurface->SetMSAALevel(multiSamplingLevel);
+
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo
+    .SetSurface(mSurface.get())
+    .SetExtent({static_cast<uint32_t>(surfacePositionSize.width), static_cast<uint32_t>(surfacePositionSize.height)})
+    .SetPreTransform(0 | Graphics::RenderTargetTransformFlagBits::TRANSFORM_IDENTITY_BIT);
+
+  mScene = Dali::Integration::Scene::New(rtInfo, Size(static_cast<float>(surfacePositionSize.width), static_cast<float>(surfacePositionSize.height)), windowOrientation, screenOrientation, scenePolicyFlags);
+
+  // Connect Core Scene signals to SceneHolder bridge callbacks
+  mScene.KeyEventSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneKeyEvent);
+  mScene.KeyEventDelayedSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneKeyEventDelayed);
+  mScene.TouchEventSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneTouchEvent);
+  mScene.WheelEventSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneWheelEvent);
+  mScene.KeyEventGeneratedSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneKeyEventGenerated);
+  mScene.InterceptKeyEventSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneInterceptKeyEvent);
+  mScene.WheelEventGeneratedSignal().Connect(mSceneSignalBridgeSlot, &SceneHolder::OnSceneWheelEventGenerated);
+
+  // Create an observer for the adaptor lifecycle
+  mAdaptor->AddObserver(*mLifeCycleObserver);
+
+  InitializeDpi();
+
+  mSurface->SetAdaptor(*mAdaptor);
+  mSurface->SetScene(mScene);
+
+  OnAdaptorSet(adaptor);
+
+  // Scene is newly created. Let we increase resize counter
+  mAdaptor->IncreaseSurfaceResizeCounter();
+}
+
+void SceneHolder::CreateRenderTarget()
+{
+  auto                             newSize = mScene.GetSize();
+  Graphics::RenderTargetCreateInfo rtInfo{};
+  rtInfo
+    .SetSurface(mSurface.get())
+    .SetExtent({static_cast<uint32_t>(newSize.width), static_cast<uint32_t>(newSize.height)})
+    .SetPreTransform(0 | Graphics::RenderTargetTransformFlagBits::TRANSFORM_IDENTITY_BIT);
+
+  mScene.SetSurfaceRenderTarget(rtInfo);
+}
+
+void SceneHolder::RequestFullUpdate()
+{
+  mScene.RequestFullUpdate();
+}
+
+void SceneHolder::SetForceRendering(uint32_t frameCount)
+{
+  mScene.SetForceRendering(frameCount);
+}
+
+void SceneHolder::Pause()
+{
+  Reset();
+
+  OnPause();
+}
+
+void SceneHolder::Resume()
+{
+  RequestFullUpdate();
+
+  // Request buffer commit forcibly for resume case.
+  SetForceRendering(1u);
+
+  Reset();
+
+  OnResume();
+}
+
+void SceneHolder::SurfaceRotated(float width, float height, int32_t windowOrientation, int32_t screenOrientation)
+{
+  mScene.SurfaceRotated(width, height, windowOrientation, screenOrientation);
+}
+
+void SceneHolder::SetRotationCompletedAcknowledgement()
+{
+  mScene.SetRotationCompletedAcknowledgement();
+}
+
+void SceneHolder::FeedTouchPoint(Dali::Integration::Point& point, int timeStamp)
+{
+  if(DALI_UNLIKELY(!mAdaptorStarted))
+  {
+    DALI_LOG_ERROR("Adaptor is stopped, or not be started yet. Ignore this feed.\n");
+    return;
+  }
+
+  if(timeStamp < 1)
+  {
+    timeStamp = TimeService::GetMilliSeconds();
+  }
+  Vector2 convertedPosition = RecalculatePosition(point.GetScreenPosition());
+  point.SetScreenPosition(convertedPosition);
+
+  Integration::TouchEvent                            touchEvent;
+  Integration::HoverEvent                            hoverEvent;
+  Integration::TouchEventCombiner::EventDispatchType type = mCombiner.GetNextTouchEvent(point, timeStamp, touchEvent, hoverEvent, mHandledMultiTouch);
+  if(type != Integration::TouchEventCombiner::DISPATCH_NONE)
+  {
+    DALI_LOG_INFO(gSceneHolderLogFilter, Debug::Verbose, "%d: Device %d: Button state %d (%.2f, %.2f)\n", timeStamp, point.GetDeviceId(), point.GetState(), point.GetScreenPosition().x, point.GetScreenPosition().y);
+
+    // Signals can be emitted while processing core events, and the scene holder could be deleted in the signal callback.
+    // Keep the handle alive until the core events are processed.
+    Dali::BaseHandle sceneHolder(this);
+
+    uint32_t pointCount = touchEvent.GetPointCount();
+    if(pointCount > MAX_PRESSED_POINT_COUNT)
+    {
+      mPreviousTouchEvent = touchEvent;
+      mPreviousHoverEvent = hoverEvent;
+      if(mPreviousType == Integration::TouchEventCombiner::DISPATCH_NONE)
+      {
+        mPreviousType = type;
+      }
+      else if(mPreviousType != type)
+      {
+        mPreviousType = Integration::TouchEventCombiner::DISPATCH_BOTH;
+      }
+      mHandledMultiTouch = true;
+    }
+
+    if(type == Integration::TouchEventCombiner::DISPATCH_TOUCH || type == Integration::TouchEventCombiner::DISPATCH_BOTH)
+    {
+      mLastTouchEvent = Dali::Integration::NewTouchEvent(timeStamp, point);
+    }
+
+    if(type == Integration::TouchEventCombiner::DISPATCH_HOVER || type == Integration::TouchEventCombiner::DISPATCH_BOTH)
+    {
+      mLastHoverEvent = Dali::HoverEvent::New(static_cast<uint32_t>(timeStamp));
+      mLastHoverEvent.AddPoint(point.GetDeviceId(), point.GetState(), point.GetScreenPosition(), point.GetDeviceClass(), point.GetDeviceSubclass(), point.GetDeviceName());
+    }
+
+    // Next the events are processed with a single call into Core
+    if(pointCount <= MAX_PRESSED_POINT_COUNT || (point.GetState() != PointState::MOTION))
+    {
+      mHandledMultiTouch = false;
+      mPreviousType      = Integration::TouchEventCombiner::DISPATCH_NONE;
+
+      // First the touch and/or hover event & related gesture events are queued
+      if(type == Integration::TouchEventCombiner::DISPATCH_TOUCH || type == Integration::TouchEventCombiner::DISPATCH_BOTH)
+      {
+        mScene.QueueEvent(touchEvent);
+      }
+
+      if(type == Integration::TouchEventCombiner::DISPATCH_HOVER || type == Integration::TouchEventCombiner::DISPATCH_BOTH)
+      {
+        mScene.QueueEvent(hoverEvent);
+      }
+      mAdaptor->ProcessCoreEvents();
+    }
+  }
+}
+
+void SceneHolder::FeedTouchEvent(Dali::Integration::TouchEvent& touchEvent)
+{
+  // Feed each point separately, the same way the points of a real touch event arrive,
+  // so that the touch event combiner sees them as it normally would.
+  for(auto&& point : touchEvent.points)
+  {
+    FeedTouchPoint(point, static_cast<int>(touchEvent.time));
+  }
+}
+
+void SceneHolder::FeedMouseFrameEvent()
+{
+  if(DALI_UNLIKELY(!mAdaptorStarted))
+  {
+    DALI_LOG_ERROR("Adaptor is stopped, or not be started yet. Ignore this feed.\n");
+    return;
+  }
+
+  if(mPreviousType == Integration::TouchEventCombiner::DISPATCH_TOUCH || mPreviousType == Integration::TouchEventCombiner::DISPATCH_BOTH)
+  {
+    mScene.QueueEvent(mPreviousTouchEvent);
+  }
+
+  if(mPreviousType == Integration::TouchEventCombiner::DISPATCH_HOVER || mPreviousType == Integration::TouchEventCombiner::DISPATCH_BOTH)
+  {
+    mScene.QueueEvent(mPreviousHoverEvent);
+  }
+
+  if(mPreviousType != Integration::TouchEventCombiner::DISPATCH_NONE)
+  {
+    mAdaptor->ProcessCoreEvents();
+  }
+
+  mHandledMultiTouch = false;
+  mPreviousType      = Integration::TouchEventCombiner::DISPATCH_NONE;
+}
+
+void SceneHolder::FeedHoverEvent(Dali::Integration::Point& point)
+{
+  Integration::HoverEvent hoverEvent;
+  hoverEvent.AddPoint(point);
+
+  FeedHoverEvent(hoverEvent);
+}
+
+void SceneHolder::FeedHoverEvent(Dali::Integration::HoverEvent& hoverEvent)
+{
+  if(DALI_UNLIKELY(!mAdaptorStarted))
+  {
+    DALI_LOG_ERROR("Adaptor is stopped, or not be started yet. Ignore this feed.\n");
+    return;
+  }
+
+  if(hoverEvent.time < 1)
+  {
+    hoverEvent.time = TimeService::GetMilliSeconds();
+  }
+
+  // Signals can be emitted while processing core events, and the scene holder could be deleted in the signal callback.
+  // Keep the handle alive until the core events are processed.
+  Dali::BaseHandle sceneHolder(this);
+
+  // Send HoverEvent to Core.
+  mScene.QueueEvent(hoverEvent);
+  mAdaptor->ProcessCoreEvents();
+}
+
+void SceneHolder::FeedWheelEvent(Dali::Integration::WheelEvent& wheelEvent)
+{
+  if(DALI_UNLIKELY(!mAdaptorStarted))
+  {
+    DALI_LOG_ERROR("Adaptor is stopped, or not be started yet. Ignore this feed.\n");
+    return;
+  }
+
+  // Signals can be emitted while processing core events, and the scene holder could be deleted in the signal callback.
+  // Keep the handle alive until the core events are processed.
+  Dali::BaseHandle sceneHolder(this);
+
+  Vector2 convertedPosition = RecalculatePosition(wheelEvent.point);
+  wheelEvent.point          = convertedPosition;
+
+  mScene.QueueEvent(wheelEvent);
+  mAdaptor->ProcessCoreEvents();
+}
+
+void SceneHolder::FeedKeyEvent(Dali::Integration::KeyEvent& keyEvent)
+{
+  if(DALI_UNLIKELY(!mAdaptorStarted))
+  {
+    DALI_LOG_ERROR("Adaptor is stopped, or not be started yet. Ignore this feed.\n");
+    return;
+  }
+
+  Dali::PhysicalKeyboard physicalKeyboard = PhysicalKeyboard::Get();
+  if(physicalKeyboard)
+  {
+    if(!KeyLookup::IsDeviceButton(keyEvent.keyName.CStr()))
+    {
+      GetImplementation(physicalKeyboard).KeyReceived(keyEvent.time > 1);
+    }
+  }
+
+  // Signals can be emitted while processing core events, and the scene holder could be deleted in the signal callback.
+  // Keep the handle alive until the core events are processed.
+  Dali::BaseHandle sceneHolder(this);
+
+  // Create send KeyEvent to Core.
+  mScene.QueueEvent(keyEvent);
+  mAdaptor->ProcessCoreEvents();
+}
+
+const Dali::TouchEvent& SceneHolder::GetLastTouchEvent() const
+{
+  return mLastTouchEvent;
+}
+
+const Dali::HoverEvent& SceneHolder::GetLastHoverEvent() const
+{
+  return mLastHoverEvent;
+}
+
+Dali::GestureState SceneHolder::GetLastPanGestureState() const
+{
+  if(DALI_UNLIKELY(!mAdaptorStarted))
+  {
+    DALI_LOG_ERROR("Adaptor is stopped, or not be started yet. Ignore this GetLastPanGestureState.\n");
+    return Dali::GestureState::CLEAR;
+  }
+
+  return mScene.GetLastPanGestureState();
+}
+
+void SceneHolder::SetGeometryHittestEnabled(bool enabled)
+{
+  mScene.SetGeometryHittestEnabled(enabled);
+}
+
+bool SceneHolder::IsGeometryHittestEnabled()
+{
+  return mScene.IsGeometryHittestEnabled();
+}
+
+int32_t SceneHolder::GetNativeId() const
+{
+  return mScene.GetNativeId();
+}
+
+void SceneHolder::SetDepthBufferEnabled(bool enabled)
+{
+  mScene.SetDepthBufferEnabled(enabled);
+  if(mSurface)
+  {
+    mSurface->SetDepthBufferRequired(enabled);
+    mSurface->SetSurfaceConfigDirty();
+  }
+}
+
+bool SceneHolder::IsDepthBufferEnabled() const
+{
+  return mScene.IsDepthBufferEnabled();
+}
+
+void SceneHolder::SetStencilBufferEnabled(bool enabled)
+{
+  mScene.SetStencilBufferEnabled(enabled);
+  if(mSurface)
+  {
+    mSurface->SetStencilBufferRequired(enabled);
+    mSurface->SetSurfaceConfigDirty();
+  }
+}
+
+bool SceneHolder::IsStencilBufferEnabled() const
+{
+  return mScene.IsStencilBufferEnabled();
+}
+
+void SceneHolder::SetMultiSampledAntiAliasingLevel(uint8_t level)
+{
+  // A single sample is not anti-aliasing, so anything below two counts as off.
+  // MSAA is decided by the surface configuration alone; the scene has no say in it.
+  const int msaaLevel = (level > 1u) ? static_cast<int>(level) : 0;
+
+  if(mSurface)
+  {
+    mSurface->SetMSAALevel(msaaLevel);
+    mSurface->SetSurfaceConfigDirty();
+  }
+}
+
+uint8_t SceneHolder::GetMultiSampledAntiAliasingLevel() const
+{
+  const int msaaLevel = mSurface ? mSurface->GetMSAALevel() : 0;
+  return (msaaLevel > 1) ? static_cast<uint8_t>(msaaLevel) : 0u;
+}
+
+void SceneHolder::SetPartialUpdateEnabled(bool enabled)
+{
+  mScene.SetPartialUpdateEnabled(enabled);
+  if(mSurface)
+  {
+    mSurface->SetPartialUpdateRequired(enabled);
+    mSurface->SetSurfaceConfigDirty();
+  }
+}
+
+bool SceneHolder::IsPartialUpdateEnabled() const
+{
+  return mScene.IsPartialUpdateEnabled();
+}
+
+void SceneHolder::FocusChanged(bool focusIn)
+{
+  // Emit the focus changed signal
+  if(!mFocusChangedGeneratedSignal.Empty())
+  {
+    Dali::Integration::SceneHolder handle(this);
+    mFocusChangedGeneratedSignal.Emit(handle, focusIn);
+  }
+}
+
+void SceneHolder::AddFrameRenderedCallback(std::unique_ptr<CallbackBase> callback, int32_t frameId)
+{
+  mScene.AddFrameRenderedCallback(std::move(callback), frameId);
+
+  DALI_LOG_RELEASE_INFO("SceneHolder::AddFrameRenderedCallback:: Added [%d]\n", frameId);
+}
+
+void SceneHolder::AddFramePresentedCallback(std::unique_ptr<CallbackBase> callback, int32_t frameId)
+{
+  mScene.AddFramePresentedCallback(std::move(callback), frameId);
+
+  DALI_LOG_RELEASE_INFO("SceneHolder::AddFramePresentedCallback:: Added [%d]\n", frameId);
+}
+
+Dali::RenderTaskList SceneHolder::GetRenderTaskList() const
+{
+  return mScene.GetRenderTaskList();
+}
+
+Dali::Integration::SceneHolder SceneHolder::Get(Dali::Actor actor)
+{
+  SceneHolder* sceneHolderImpl = nullptr;
+
+  if(Internal::Adaptor::Adaptor::IsAvailable())
+  {
+    Dali::Internal::Adaptor::Adaptor& adaptor = Internal::Adaptor::Adaptor::GetImplementation(Internal::Adaptor::Adaptor::Get());
+    sceneHolderImpl                           = adaptor.GetWindow(actor);
+  }
+
+  return Dali::Integration::SceneHolder(sceneHolderImpl);
+}
+
+void SceneHolder::Reset()
+{
+  DALI_ASSERT_ALWAYS(mAdaptorStarted && "Adaptor is stopped, or not be started yet!");
+
+  mCombiner.Reset();
+
+  // Any touch listeners should be told of the interruption.
+  Integration::TouchEvent event;
+  Integration::Point      point;
+  point.SetState(PointState::INTERRUPTED);
+  event.AddPoint(point);
+
+  // First the touch event & related gesture events are queued
+  mScene.QueueEvent(event);
+
+  // Any hover listeners should be told of the interruption.
+  Integration::HoverEvent hoverEvent;
+  Integration::Point      hoverPoint;
+  hoverPoint.SetState(PointState::INTERRUPTED);
+  hoverEvent.AddPoint(hoverPoint);
+
+  // First the hover event & related gesture events are queued
+  mScene.QueueEvent(hoverEvent);
+
+  // Next the events are processed with a single call into Core
+  mHandledMultiTouch = false;
+  mPreviousType      = Integration::TouchEventCombiner::DISPATCH_NONE;
+  mAdaptor->ProcessCoreEvents();
+}
+
+void SceneHolder::InitializeDpi()
+{
+  unsigned int dpiHorizontal, dpiVertical;
+  dpiHorizontal = dpiVertical = 0;
+
+  mSurface->GetDpi(dpiHorizontal, dpiVertical);
+  mScene.SetDpi(Vector2(static_cast<float>(dpiHorizontal), static_cast<float>(dpiVertical)));
+
+  mDpi.SetX(dpiHorizontal);
+  mDpi.SetY(dpiVertical);
+}
+
+void SceneHolder::OnSceneKeyEvent(Dali::KeyEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  mSceneHolderKeyEventSignal.Emit(handle, event);
+}
+
+void SceneHolder::OnSceneKeyEventDelayed(Dali::KeyEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  mSceneHolderKeyEventDelayedSignal.Emit(handle, event);
+}
+
+void SceneHolder::OnSceneTouchEvent(Dali::TouchEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  mSceneHolderTouchEventSignal.Emit(handle, event);
+}
+
+void SceneHolder::OnSceneWheelEvent(Dali::WheelEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  mSceneHolderWheelEventSignal.Emit(handle, event);
+}
+
+bool SceneHolder::OnSceneKeyEventGenerated(Dali::KeyEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  if(mScene.IsGeometryHittestEnabled())
+  {
+    // Any connected callback consuming the event consumes it for all of them.
+    // Gated so that legacy applications keep the previous last-callback-wins behaviour.
+    return mSceneHolderKeyEventGeneratedSignal.EmitOr(handle, event);
+  }
+  return mSceneHolderKeyEventGeneratedSignal.Emit(handle, event);
+}
+
+bool SceneHolder::OnSceneInterceptKeyEvent(Dali::KeyEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  if(mScene.IsGeometryHittestEnabled())
+  {
+    // Any connected callback consuming the event consumes it for all of them.
+    // Gated so that legacy applications keep the previous last-callback-wins behaviour.
+    return mSceneHolderInterceptKeyEventSignal.EmitOr(handle, event);
+  }
+  return mSceneHolderInterceptKeyEventSignal.Emit(handle, event);
+}
+
+bool SceneHolder::OnSceneWheelEventGenerated(Dali::WheelEvent event)
+{
+  Dali::Integration::SceneHolder handle(this);
+  if(mScene.IsGeometryHittestEnabled())
+  {
+    // Any connected callback consuming the event consumes it for all of them.
+    // Gated so that legacy applications keep the previous last-callback-wins behaviour.
+    return mSceneHolderWheelEventGeneratedSignal.EmitOr(handle, event);
+  }
+  return mSceneHolderWheelEventGeneratedSignal.Emit(handle, event);
+}
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

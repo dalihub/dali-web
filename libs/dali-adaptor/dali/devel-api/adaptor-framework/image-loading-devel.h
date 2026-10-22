@@ -1,0 +1,133 @@
+#ifndef DALI_IMAGE_LOADING_DEVEL_H
+#define DALI_IMAGE_LOADING_DEVEL_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/common/vector-wrapper.h>
+#include <string>
+
+// INTERNAL INCLUDES
+#include <dali/public-api/adaptor-framework/image-loading.h>
+#include <dali/public-api/adaptor-framework/image-options.h>
+#include <dali/public-api/dali-adaptor-common.h>
+
+namespace DALI_NAMESPACE
+{
+/**
+ * @brief Load an image and save each plane to a separate buffer synchronously from local file.
+ *
+ * @note This method is thread safe, i.e. can be called from any thread.
+ *       If the image file doesn't support to load planes, this method returns a bitmap image instead.
+ *
+ * @param [in] url The URL of the image file to load.
+ * @param [out] buffers The loaded PixelBuffer object list or an empty list in case loading failed.
+ * @param [in] size The width and height to fit the loaded image to, 0.0 means whole image
+ * @param [in] samplingMode The filtering method used when sampling pixels from the input image while fitting it to desired size.
+ * @param [in] orientationCorrection Reorient the image to respect any orientation metadata in its header.
+ */
+DALI_ADAPTOR_API void LoadImagePlanesFromFile(
+  const std::string&              url,
+  std::vector<Dali::PixelBuffer>& buffers,
+  ImageDimensions                 size                  = ImageDimensions(0, 0),
+  SamplingMode::Type              samplingMode          = SamplingMode::BOX_THEN_LINEAR,
+  bool                            orientationCorrection = true);
+
+/**
+ * @brief Load an image synchronously from encoded buffer.
+ *
+ * @note This method is thread safe, i.e. can be called from any thread.
+ *
+ * @param [in] buffer The encoded buffer of the image to load.
+ *                    The buffer is not owned by FileStream and must be valid for entire lifetime of FileStream
+ * @param [in] size The width and height to fit the loaded image to, 0.0 means whole image
+ * @param [in] samplingMode The filtering method used when sampling pixels from the input image while fitting it to desired size.
+ * @param [in] orientationCorrection Reorient the image to respect any orientation metadata in its header.
+ * @return handle to the loaded PixelBuffer object or an empty handle in case loading failed.
+ */
+DALI_ADAPTOR_API Dali::PixelBuffer LoadImageFromBuffer(
+  const Dali::Vector<uint8_t>& buffer,
+  ImageDimensions              size                  = ImageDimensions(0, 0),
+  SamplingMode::Type           samplingMode          = SamplingMode::BOX_THEN_LINEAR,
+  bool                         orientationCorrection = true);
+
+/**
+ * @brief Load an image synchronously from encoded buffer.
+ *
+ * @note This method is thread safe, i.e. can be called from any thread.
+ *
+ * @param [in] buffer The encoded buffer of the image to load.
+ *                    The buffer is not owned by FileStream and must be valid for entire lifetime of FileStream
+ * @param [in] bufferSize Size of the encoded buffer.
+ * @param [in] size The width and height to fit the loaded image to, 0.0 means whole image
+ * @param [in] samplingMode The filtering method used when sampling pixels from the input image while fitting it to desired size.
+ * @param [in] orientationCorrection Reorient the image to respect any orientation metadata in its header.
+ * @return handle to the loaded PixelBuffer object or an empty handle in case loading failed.
+ */
+DALI_ADAPTOR_API Dali::PixelBuffer LoadImageFromBuffer(
+  uint8_t*           buffer,
+  size_t             bufferSize,
+  ImageDimensions    size                  = ImageDimensions(0, 0),
+  SamplingMode::Type samplingMode          = SamplingMode::BOX_THEN_LINEAR,
+  bool               orientationCorrection = true);
+
+/**
+ * @brief Determine the size of an image that LoadImageFromFile will provide when
+ * given the same image loading parameters.
+ *
+ * This is a synchronous request.
+ * This function is used to determine the size of an image before it has loaded.
+ * @param[in] filename name of the image.
+ * @param[in] size The requested size for the image.
+ * @param[in] samplingMode The image filter to use if the image needs to be
+ * downsampled to the requested size.
+ * @param[in] orientationCorrection Whether to use image metadata to rotate or
+ * flip the image, e.g., from portrait to landscape.
+ * @return dimensions that image will have if it is loaded with given parameters.
+ */
+DALI_ADAPTOR_API ImageDimensions GetClosestImageSize(
+  const std::string& filename,
+  ImageDimensions    size                  = ImageDimensions(0, 0),
+  SamplingMode::Type samplingMode          = SamplingMode::BOX_THEN_LINEAR,
+  bool               orientationCorrection = true);
+
+/**
+ * @brief Load an image synchronously from a remote resource.
+ *
+ * @param [in] url The URL of the image file to load.
+ * @param [in] size The width and height to fit the loaded image to, 0.0 means whole image
+ * @param [in] samplingMode The filtering method used when sampling pixels from the input image while fitting it to desired size.
+ * @param [in] orientationCorrection Reorient the image to respect any orientation metadata in its header.
+ *
+ * @return handle to the loaded PixelBuffer object or an empty handle in case downloading or decoding failed.
+ */
+DALI_ADAPTOR_API Dali::PixelBuffer DownloadImageSynchronously(
+  const std::string& url,
+  ImageDimensions    size                  = ImageDimensions(0, 0),
+  SamplingMode::Type samplingMode          = SamplingMode::BOX_THEN_LINEAR,
+  bool               orientationCorrection = true);
+
+/**
+ * @brief get the maximum texture size.
+ *
+ * @return The maximum texture size
+ */
+DALI_ADAPTOR_API unsigned int GetMaxTextureSize();
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_IMAGE_LOADING_DEVEL_H

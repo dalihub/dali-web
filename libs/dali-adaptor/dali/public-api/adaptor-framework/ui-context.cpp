@@ -1,0 +1,104 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/public-api/adaptor-framework/ui-context.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/string-utils.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/adaptor/common/ui-context-impl.h>
+
+using Dali::Integration::ToStdString;
+
+namespace DALI_NAMESPACE
+{
+
+UiContext UiContext::Get()
+{
+  return Internal::Adaptor::UiContext::Get();
+}
+
+UiContext::UiContext(Internal::Adaptor::UiContext* uiContext)
+: BaseHandle(uiContext)
+{
+}
+
+UiContext::UiContext() = default;
+
+UiContext::~UiContext() = default;
+
+UiContext::UiContext(const UiContext& copy) = default;
+
+UiContext& UiContext::operator=(const UiContext& rhs) = default;
+
+UiContext::UiContext(UiContext&& rhs) noexcept = default;
+
+UiContext& UiContext::operator=(UiContext&& rhs) noexcept = default;
+
+Window UiContext::GetDefaultWindow()
+{
+  return Internal::Adaptor::GetImplementation(*this).GetDefaultWindow();
+}
+
+bool UiContext::AddIdle(CallbackBase* callback)
+{
+  return Internal::Adaptor::GetImplementation(*this).AddIdle(callback);
+}
+
+void UiContext::RemoveIdle(CallbackBase* callback)
+{
+  Internal::Adaptor::GetImplementation(*this).RemoveIdle(callback);
+}
+
+void UiContext::FlushPendingChanges()
+{
+  Internal::Adaptor::GetImplementation(*this).FlushPendingChanges();
+}
+
+void UiContext::RenderOnce()
+{
+  Internal::Adaptor::GetImplementation(*this).RenderOnce();
+}
+
+void UiContext::AddFrameCallback(FrameCallbackInterface& frameCallback, Actor rootActor)
+{
+  Internal::Adaptor::GetImplementation(*this).AddFrameCallback(frameCallback, rootActor);
+}
+
+void UiContext::RemoveFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  Internal::Adaptor::GetImplementation(*this).RemoveFrameCallback(frameCallback);
+}
+
+UpdateProxy::NotifySyncPoint UiContext::NotifyFrameCallback(FrameCallbackInterface& frameCallback)
+{
+  return Internal::Adaptor::GetImplementation(*this).NotifyFrameCallback(frameCallback);
+}
+
+void UiContext::SetRenderingBehavior(UiContext::RenderingBehavior renderingBehavior)
+{
+  Internal::Adaptor::GetImplementation(*this).SetRenderingBehavior(renderingBehavior);
+}
+
+UiContext::RenderingBehavior UiContext::GetRenderingBehavior() const
+{
+  return Internal::Adaptor::GetImplementation(*this).GetRenderingBehavior();
+}
+
+} //namespace DALI_NAMESPACE

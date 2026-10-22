@@ -1,0 +1,186 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+
+// CLASS HEADER
+#include <dali/internal/network/common/network-performance-protocol.h>
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/dali-utility.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+namespace DALI_NAMESPACE
+{
+namespace PerformanceProtocol
+{
+namespace
+{
+/**
+ * Command parameter type
+ */
+enum ParameterType
+{
+  NO_PARAMS,
+  UNSIGNED_INT,
+  STRING
+};
+
+/**
+ * Command information structure
+ */
+struct CommandInfo
+{
+  CommandId     cmdId;
+  CommandString cmdString;
+  ParameterType paramType;
+};
+
+/**
+ * Command lookup table
+ */
+// clang-format off
+CommandInfo CommandLookup[]=
+{
+  {HELP_MESSAGE,                "help",           NO_PARAMS   },
+  {ENABLE_METRIC,               "enable_metric",  UNSIGNED_INT},
+  {DISABLE_METRIC,              "disable_metric", UNSIGNED_INT},
+  {LIST_METRICS_AVAILABLE,      "list_metrics",   NO_PARAMS   },
+  {ENABLE_TIME_MARKER_BIT_MASK, "set_marker",     UNSIGNED_INT},
+  {DUMP_SCENE_GRAPH,            "dump_scene",     NO_PARAMS   },
+  {DUMP_RENDER_TASKS,           "dump_render_tasks",NO_PARAMS },
+  {DUMP_MEMORY_POOLS,           "dump_memory_pools", NO_PARAMS},
+  {SET_PROPERTIES,              "set_properties", STRING      },
+  {CUSTOM_COMMAND,              "custom_command", STRING      },
+  {UNKNOWN_COMMAND,             "unknown",        NO_PARAMS   }
+};
+// clang-format on
+const unsigned int CommandLookupLength = sizeof(CommandLookup) / sizeof(CommandInfo);
+
+// Blah
+#define BLAH "blah"
+#define GREEN "\033[01;32m"
+#define NORMAL "\e[m"
+#define PARAM "\033[22;32m"
+#define YELLOW "\033[01;33m"
+
+// clang-format off
+const char* const helpMsg =
+    YELLOW
+    "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    "  Dali performance console                           \n"
+    "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" NORMAL
+    GREEN " list_metrics " NORMAL " - list available metrics\n"
+    GREEN " enable_metric " PARAM " metricId" NORMAL " - enable a metric \n"
+    GREEN " disable_metric " PARAM " metricId" NORMAL " - disable a metric\n\n"
+    GREEN " set_marker " PARAM " value " NORMAL "-output Dali markers\n"
+    "            : Bit 0  = V_SYNC (1)\n"
+    "            : Bit 1  = Update task (2)\n"
+    "            : Bit 2  = Render task (4) \n"
+    "            : Bit 3  = Event Processing task (8)\n"
+    "            : Bit 4  = SwapBuffers (16)\n"
+    "            : Bit 5  = Life cycle events  (32)\n"
+    "            : Bit 6  = Resource event (64)\n"
+    "\n"
+    GREEN " set_properties " NORMAL " - set an actor property command. Format:\n\n"
+    GREEN " set_properties " PARAM "|ActorIndex;Property;Value|" NORMAL ", e.g: \n"
+    GREEN " set_properties " PARAM "|178;Size;[ 144.0, 144.0, 144.0 ]|178;Color;[ 1.0, 1,0, 1.0 ]|\n"
+    "\n"
+    GREEN " custom_command " NORMAL " - A custom command for an application. Format:\n\n"
+    GREEN " custom_command " PARAM "ANY_STRING" NORMAL "\n"
+    "\n"
+    GREEN " dump_scene" NORMAL " - dump the current scene in json format\n"
+    GREEN " dump_render_tasks" NORMAL " - dump the render tasks in json format\n"
+    GREEN " dump_memory_pools" NORMAL " - dump the memory pools\n";
+// clang-format on
+
+const char* const DELIMITERS = " \t\n";
+
+inline bool IsDelimChar(char endOfCommand)
+{
+  // DevNote : If endOfCommand is \0, it will always return true.
+  return (strchr(DELIMITERS, endOfCommand) != NULL);
+}
+} // namespace
+
+bool GetCommandId(const char* const commandString, unsigned int lengthInBytes, CommandId& commandId, unsigned int& intParam, std::string& stringParam)
+{
+  commandId = UNKNOWN_COMMAND;
+  intParam  = 0;
+
+  // the command list is small so just do a O(n) search for the commandID.
+  for(unsigned int i = 0; i < CommandLookupLength; ++i)
+  {
+    auto cmdLength = strlen(CommandLookup[i].cmdString);
+    if(strncmp(commandString, CommandLookup[i].cmdString, cmdLength) == 0 && IsDelimChar(*(commandString + cmdLength)))
+    {
+      commandId = CommandLookup[i].cmdId;
+
+      // if the command has a parameter read it
+      if(CommandLookup[i].paramType == UNSIGNED_INT)
+      {
+        int count = sscanf(commandString, "%*s %d", &intParam);
+        if(count != 1)
+        {
+          // missing parameter
+          return false;
+        }
+      }
+      else if(CommandLookup[i].paramType == STRING)
+      {
+        char* charParam(NULL);
+        // allocates the character array
+        int count = sscanf(commandString, "%*s %ms", &charParam);
+        if(count != 1)
+        {
+          // missing parameter
+          return false;
+        }
+        stringParam = std::string(charParam);
+        free(charParam);
+      }
+      return true;
+    }
+  }
+  // not found
+  return false;
+}
+
+bool GetCommandString(CommandId commandId, CommandString& commandString)
+{
+  for(unsigned int i = 0; i < CommandLookupLength; ++i)
+  {
+    if(CommandLookup[i].cmdId == commandId)
+    {
+      strncpy(commandString, CommandLookup[i].cmdString, Min(size_t(MAX_COMMAND_STRING_LENGTH), strlen(CommandLookup[i].cmdString) + 1));
+      return true;
+    }
+  }
+  strncpy(commandString, CommandLookup[CommandLookupLength - 1].cmdString, MAX_COMMAND_STRING_LENGTH);
+  return false;
+}
+
+const char* const GetHelpMessage()
+{
+  return helpMsg;
+}
+
+} // namespace PerformanceProtocol
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,1933 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/window-system/common/window-impl.h>
+
+// EXTERNAL HEADERS
+#include <dali/devel-api/events/key-event-devel.h>
+#include <dali/devel-api/object/type-registry.h>
+#include <dali/integration-api/core.h>
+#include <dali/integration-api/events/touch-event-integ.h>
+#include <dali/public-api/actors/actor.h>
+#include <dali/public-api/actors/camera-actor.h>
+#include <dali/public-api/actors/layer.h>
+#include <dali/public-api/adaptor-framework/window-definitions.h>
+#include <dali/public-api/events/wheel-event.h>
+#include <dali/public-api/rendering/frame-buffer.h>
+#include <memory>
+#include <thread>
+
+// INTERNAL HEADERS
+#include <dali/devel-api/adaptor-framework/actor-accessible.h>
+#include <dali/integration-api/adaptor-framework/accessibility/accessibility-bridge.h>
+#include <dali/integration-api/adaptor-framework/render-surface-interface.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/internal/system/common/logging.h>
+#include <dali/internal/window-system/common/event-handler.h>
+#include <dali/internal/window-system/common/render-surface-factory.h>
+#include <dali/internal/window-system/common/window-base.h>
+#include <dali/internal/window-system/common/window-data-impl.h>
+#include <dali/internal/window-system/common/window-factory.h>
+#include <dali/internal/window-system/common/window-render-surface.h>
+#include <dali/internal/window-system/common/window-system-impl.h>
+#include <dali/internal/window-system/common/window-visibility-observer.h>
+
+// Window::Initialize() runs before the adaptor installs the DALi log function, so
+// Integration::Log output would only reach stdout there. Call the platform logging
+// backend directly instead (dlog on Tizen).
+#define DALI_WINDOW_INIT_LOG(format, ...) Dali::TizenPlatform::LogMessageFormat(Dali::Integration::Log::INFO, DALI_LOG_FORMAT_PREFIX format, DALI_LOG_FORMAT_PREFIX_ARGS, ##__VA_ARGS__)
+
+using Dali::Integration::ToStdString;
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace
+{
+Dali::TypeRegistration WINDOW_TYPE(typeid(Dali::Internal::Adaptor::Window), typeid(Dali::BaseHandle), nullptr);
+} // unnamed namespace
+
+Window* Window::New(Any surface, const std::string& name, const std::string& className, const WindowData& windowData, const bool isUsePreLoader, const bool isShowOnAdaptorSet)
+{
+  std::unique_ptr<Window> window = std::unique_ptr<Window>(new Window());
+
+  // OnAdaptorSet() is dispatched from SceneHolder::SetAdaptor() when the window is added to
+  // the adaptor, which happens after this function returns. Setting the flag here is therefore
+  // early enough for OnAdaptorSet() to observe it.
+  window->mIsShowOnAdaptorSet = isShowOnAdaptorSet;
+
+  window->Initialize(surface, windowData, name, className, isUsePreLoader);
+  return window.release();
+}
+
+Window* Window::New(PositionSize positionSize)
+{
+  Any                     surface;
+  std::unique_ptr<Window> window = std::unique_ptr<Window>(new Window());
+  window->Initialize(surface, positionSize);
+  DALI_WINDOW_INIT_LOG("Window (%p), WinId (%d), (%d, %d) [%d x %d]\n", window.get(), window->mNativeWindowId, positionSize.x, positionSize.y, positionSize.width, positionSize.height);
+  return window.release();
+}
+
+Window::Window()
+: mWindowSurface(nullptr),
+  mWindowBase(),
+  mParentWindow(NULL),
+  mPreferredAngle(static_cast<int>(WindowOrientation::NO_ORIENTATION_PREFERENCE)),
+  mRotationAngle(0),
+  mWindowWidth(0),
+  mWindowHeight(0),
+  mNativeWindowId(-1),
+  mOrientationMode(Internal::Adaptor::Window::OrientationMode::PORTRAIT),
+  mDeleteRequestSignal(),
+  mFocusChangedSignal(),
+  mResizedSignal(),
+  mVisibilityChangedSignal(),
+  mTransitionEffectEventSignal(),
+  mAuxiliaryMessageSignal(),
+  mMovedSignal(),
+  mOrientationChangedSignal(),
+  mMouseInOutEventSignal(),
+  mMouseRelativeEventSignal(),
+  mMoveCompletedSignal(),
+  mResizeCompletedSignal(),
+  mInsetsChangedSignal(),
+  mPointerConstraintsSignal(),
+  mLastKeyEvent(),
+  mIsTransparent(false),
+  mIsFocusAcceptable(true),
+  mIconified(false),
+  mMaximized(false),
+  mOpaqueState(false),
+  mWindowRotationAcknowledgement(false),
+  mFocused(false),
+  mIsOrientationChanging(false),
+  mIsEnabledUserGeometry(false),
+  mIsEmittedWindowCreatedEvent(false),
+  mIsFrontBufferRendering(false),
+  mIsUsePreLoader(false),
+  mIsShowOnAdaptorSet(false),
+  mIsScreenReaderAutoReadEnabled(true)
+{
+}
+
+Window::~Window()
+{
+  if(mAdaptor)
+  {
+    mAdaptor->RemoveWindow(this);
+  }
+
+  if(mEventHandler)
+  {
+    mEventHandler->RemoveObserver(*this);
+  }
+}
+
+void Window::Initialize(Any surface, const PositionSize& positionSize)
+{
+  DALI_WINDOW_INIT_LOG("Window (%p), Initialize with position (%d, %d) size [%d x %d], transparent(%d), surface(%d)\n", this, positionSize.x, positionSize.y, positionSize.width, positionSize.height, mIsTransparent, !surface.Empty());
+
+  // Create a window render surface
+  auto renderSurfaceFactory = Dali::Internal::Adaptor::GetRenderSurfaceFactory();
+  DALI_ASSERT_DEBUG(renderSurfaceFactory && "Cannot create render surface factory\n");
+
+  mSurface       = renderSurfaceFactory->CreateWindowRenderSurface(positionSize, surface, mIsTransparent);
+  mWindowSurface = static_cast<WindowRenderSurface*>(mSurface.get());
+
+  // Get a window base
+  mWindowBase = mWindowSurface->GetWindowBase();
+  DALI_WINDOW_INIT_LOG("Window (%p), render surface (%p) and window base (%p) created\n", this, mWindowSurface, mWindowBase);
+
+  // Connect signals
+  mWindowBase->IconifyChangedSignal().Connect(this, &Window::OnIconifyChanged);
+  mWindowBase->MaximizeChangedSignal().Connect(this, &Window::OnMaximizeChanged);
+  mWindowBase->FocusChangedSignal().Connect(this, &Window::OnFocusChanged);
+  mWindowBase->DeleteRequestSignal().Connect(this, &Window::OnDeleteRequest);
+  mWindowBase->TransitionEffectEventSignal().Connect(this, &Window::OnTransitionEffectEvent);
+  mWindowBase->WindowRedrawRequestSignal().Connect(this, &Window::OnWindowRedrawRequest);
+  mWindowBase->UpdatePositionSizeSignal().Connect(this, &Window::OnUpdatePositionSize);
+  mWindowBase->AuxiliaryMessageSignal().Connect(this, &Window::OnAuxiliaryMessage);
+  mWindowBase->MouseInOutEventSignal().Connect(this, &Window::OnMouseInOutEvent);
+  mWindowBase->MouseRelativeEventSignal().Connect(this, &Window::OnMouseRelativeEvent);
+  mWindowBase->MoveCompletedSignal().Connect(this, &Window::OnMoveCompleted);
+  mWindowBase->ResizeCompletedSignal().Connect(this, &Window::OnResizeCompleted);
+  mWindowBase->PointerConstraintsSignal().Connect(this, &Window::OnPointerConstraints);
+
+  mWindowSurface->OutputTransformedSignal().Connect(this, &Window::OnOutputTransformed);
+  mWindowSurface->RotationFinishedSignal().Connect(this, &Window::OnRotationFinished);
+
+  mWindowBase->InsetsChangedSignal().Connect(this, &Window::OnInsetsChanged);
+
+  // Get OrientationMode
+  int screenWidth, screenHeight;
+  WindowSystem::GetScreenSize(screenWidth, screenHeight);
+  if(screenWidth > screenHeight)
+  {
+    mOrientationMode = Internal::Adaptor::Window::OrientationMode::LANDSCAPE;
+  }
+  else
+  {
+    mOrientationMode = Internal::Adaptor::Window::OrientationMode::PORTRAIT;
+  }
+
+  mWindowWidth  = positionSize.width;
+  mWindowHeight = positionSize.height;
+
+  bool isSetWithScreenSize = false;
+  if(mWindowWidth <= 0 || mWindowHeight <= 0)
+  {
+    mWindowWidth        = screenWidth;
+    mWindowHeight       = screenHeight;
+    isSetWithScreenSize = true;
+    DALI_WINDOW_INIT_LOG("Window (%p), size is set with screen size(%d x %d)\n", this, mWindowWidth, mWindowHeight);
+  }
+
+  if(isSetWithScreenSize == false || positionSize.x != 0 || positionSize.y != 0)
+  {
+    SetUserGeometryPolicy();
+  }
+
+  // For Debugging
+  mNativeWindowId = mWindowBase->GetNativeWindowId();
+
+  DALI_WINDOW_INIT_LOG("Window (%p), WinId (%d), Initialized. screen(%d x %d), orientationMode(%s), window(%d x %d), userGeometry(%d)\n", this, mNativeWindowId, screenWidth, screenHeight, (mOrientationMode == Internal::Adaptor::Window::OrientationMode::LANDSCAPE) ? "LANDSCAPE" : "PORTRAIT", mWindowWidth, mWindowHeight, mIsEnabledUserGeometry);
+}
+
+void Window::Initialize(Any surface, const WindowData& windowData, const std::string& name, const std::string& className, const bool isUsePreLoader)
+{
+  const WindowType type = windowData.GetWindowType();
+
+  mIsTransparent = windowData.GetTransparency();
+
+#ifdef DALI_PROFILE_UBUNTU
+  // Ubuntu doesn't support transparent windows; force ColorDepth to 24-bit (RGB888)
+  if(mIsTransparent)
+  {
+    DALI_WINDOW_INIT_LOG("Forcing transparency to false for Ubuntu (ColorDepth: 24-bit RGB888)\n");
+    mIsTransparent = false;
+  }
+#endif
+
+  mIsFrontBufferRendering = windowData.IsFrontBufferRenderingEnabled();
+
+  // The buffers this window renders into are fixed once its graphics surface exists,
+  // so they have to be taken before the adaptor is set. A negative value means the
+  // window follows the system-wide setting.
+  const WindowData::Impl& windowDataImpl = windowData.GetImplementation();
+  mDepthBufferEnabled                    = windowDataImpl.mDepthBufferEnabled;
+  mStencilBufferEnabled                  = windowDataImpl.mStencilBufferEnabled;
+  mMultiSamplingLevel                    = windowDataImpl.mMultiSamplingLevel;
+
+  DALI_WINDOW_INIT_LOG("Window (%p), Initialize with name(%s), className(%s), type(%d), transparent(%d), frontBufferRendering(%d), depth(%d), stencil(%d), msaa(%d)\n", this, name.c_str(), className.c_str(), static_cast<int>(type), mIsTransparent, mIsFrontBufferRendering, mDepthBufferEnabled, mStencilBufferEnabled, mMultiSamplingLevel);
+
+  Initialize(surface, windowData.GetPositionSize());
+
+  // Set the flag of preloader is used.
+  mIsUsePreLoader = isUsePreLoader;
+  DALI_WINDOW_INIT_LOG("Window (%p), WinId (%d), isUsePreLoader(%d)\n", this, mNativeWindowId, mIsUsePreLoader);
+
+  // Set Window Type
+  mWindowBase->SetType(type);
+
+  // Initialize for Ime window type
+  if(type == WindowType::IME)
+  {
+    InitializeImeInfo();
+  }
+
+  SetClass(name, className);
+
+  if(mIsFrontBufferRendering)
+  {
+    SetFrontBufferRenderingEnabled(mIsFrontBufferRendering);
+  }
+
+  SetScreen(ToStdString(windowData.GetScreen()));
+}
+
+void Window::SetRenderNotification(TriggerEventInterface* renderNotification)
+{
+  if(!mWindowSurface)
+  {
+    return;
+  }
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), render notification = %p\n", this, mNativeWindowId, renderNotification);
+  mWindowSurface->SetRenderNotification(renderNotification);
+}
+
+void Window::OnAdaptorSet(Dali::Adaptor& adaptor)
+{
+  mEventHandler = EventHandlerPtr(new EventHandler(mWindowSurface->GetWindowBase(), *mAdaptor));
+  mEventHandler->AddObserver(*this);
+
+  // Second phase initialize after adaptor set.
+  if(DALI_LIKELY(mWindowSurface))
+  {
+    mWindowSurface->Initialize();
+  }
+
+  if(mWindowBase->GetType() == WindowType::IME)
+  {
+    InitializeImeInfo();
+  }
+
+  // Add Window to bridge for ATSPI
+  if(auto bridge = Integration::Accessibility::Bridge::GetCurrentBridge())
+  {
+    bridge->EnabledSignal().Connect(this, &Window::OnAccessibilityEnabled);
+    bridge->DisabledSignal().Connect(this, &Window::OnAccessibilityDisabled);
+
+    if(bridge->IsUp())
+    {
+      OnAccessibilityEnabled();
+    }
+    else
+    {
+      OnAccessibilityDisabled();
+    }
+  }
+
+  if(mScene)
+  {
+    bool isGeometry = Dali::Internal::Adaptor::WindowSystem::IsGeometryHittestEnabled();
+    mScene.SetGeometryHittestEnabled(isGeometry);
+
+    mScene.SetNativeId(GetNativeId());
+
+    // Connect SceneHolder's wrapped signals (with SceneHolder prepended) to Window's re-emit methods
+    // so that Window handle can be passed as the first argument to the public Window signals.
+    SceneHolder::KeyEventSignal().Connect(this, &Window::OnSceneKeyEvent);
+    SceneHolder::TouchEventSignal().Connect(this, &Window::OnSceneTouchEvent);
+    SceneHolder::WheelEventSignal().Connect(this, &Window::OnSceneWheelEvent);
+    SceneHolder::InterceptKeyEventSignal().Connect(this, &Window::OnSceneInterceptKeyEvent);
+    SceneHolder::KeyEventDelayedSignal().Connect(this, &Window::OnSceneKeyEventDelayed);
+  }
+
+  // If this window is created by pre loader process, window show()'s calling should be delayed.
+  // Because detail window property is not decided yet in preloader.
+  // So, show() will be callled on ApplicationController::UpdatePreInitializedWindowInfo().
+  // mIsShowOnAdaptorSet is opted in by the creator through DevelWindow::New(); a window that does
+  // not request it is shown by whoever created it instead of from here. The default window is
+  // shown from Adaptor::NotifySceneCreated(), and a native secondary window by the application.
+  const bool showFromHere = !mIsUsePreLoader && mIsShowOnAdaptorSet;
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), OnAdaptorSet(): mIsUsePreLoader = %d, mIsShowOnAdaptorSet = %d, calls Show() = %d\n", this, mNativeWindowId, mIsUsePreLoader, mIsShowOnAdaptorSet, showFromHere);
+  if(showFromHere)
+  {
+    // If you call the 'Show' before creating the adaptor, the application cannot know the app resource id.
+    // The show must be called after the adaptor is initialized.
+    Show();
+  }
+}
+
+void Window::OnSurfaceSet(Dali::Integration::RenderSurfaceInterface* surface)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), surface = %p\n", this, mNativeWindowId, surface);
+
+  mWindowSurface = static_cast<WindowRenderSurface*>(surface);
+  if(DALI_LIKELY(mWindowSurface && mAdaptor))
+  {
+    mWindowSurface->Initialize();
+  }
+}
+
+void Window::SetClass(std::string name, std::string className)
+{
+  mName      = name;
+  mClassName = className;
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), name = %s, className = %s\n", this, mNativeWindowId, name.c_str(), className.c_str());
+  mWindowBase->SetClass(name, className);
+}
+
+std::string Window::GetClassName() const
+{
+  return mClassName;
+}
+
+void Window::Raise()
+{
+  mWindowBase->Raise();
+
+  mSurface->SetFullSwapNextFrame();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Raise() \n", this, mNativeWindowId);
+}
+
+void Window::Lower()
+{
+  mWindowBase->Lower();
+
+  mSurface->SetFullSwapNextFrame();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Lower() \n", this, mNativeWindowId);
+}
+
+void Window::Activate()
+{
+  mWindowBase->Activate();
+
+  mSurface->SetFullSwapNextFrame();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Activate() \n", this, mNativeWindowId);
+}
+
+void Window::Maximize(bool maximize)
+{
+  mWindowBase->Maximize(maximize);
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Maximize: %d\n", this, mNativeWindowId, maximize);
+}
+
+bool Window::IsMaximized() const
+{
+  return mWindowBase->IsMaximized();
+}
+
+void Window::SetMaximumSize(Dali::Window::WindowSize size)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), maximum size = %d x %d\n", this, mNativeWindowId, size.GetWidth(), size.GetHeight());
+  mWindowBase->SetMaximumSize(size);
+}
+
+void Window::Minimize(bool minimize)
+{
+  mWindowBase->Minimize(minimize);
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Minimize: %d\n", this, mNativeWindowId, minimize);
+}
+
+bool Window::IsMinimized() const
+{
+  return mWindowBase->IsMinimized();
+}
+
+void Window::SetMinimumSize(Dali::Window::WindowSize size)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), minimum size = %d x %d\n", this, mNativeWindowId, size.GetWidth(), size.GetHeight());
+  mWindowBase->SetMinimumSize(size);
+}
+
+void Window::MaximizeWithRestoreSize(bool maximize, Dali::Window::WindowSize size)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), maximize = %d, restore size = %d x %d\n", this, mNativeWindowId, maximize, size.GetWidth(), size.GetHeight());
+  mWindowBase->MaximizeWithRestoreSize(maximize, size);
+}
+
+uint32_t Window::GetLayerCount() const
+{
+  return mScene.GetLayerCount();
+}
+
+Dali::Layer Window::GetLayer(uint32_t depth) const
+{
+  return mScene.GetLayer(depth);
+}
+
+void Window::KeepRendering(float durationSeconds)
+{
+  mScene.KeepRendering(durationSeconds);
+}
+
+std::string Window::GetNativeResourceId() const
+{
+  return mWindowBase->GetNativeWindowResourceId();
+}
+
+void Window::AddAvailableOrientation(WindowOrientation orientation)
+{
+  if(IsOrientationAvailable(orientation) == false)
+  {
+    return;
+  }
+
+  bool found          = false;
+  int  convertedAngle = ConvertToAngle(orientation);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), AddAvailableOrientation: %d\n", this, mNativeWindowId, convertedAngle);
+  for(std::size_t i = 0; i < mAvailableAngles.size(); i++)
+  {
+    if(mAvailableAngles[i] == convertedAngle)
+    {
+      found = true;
+      break;
+    }
+  }
+
+  if(!found)
+  {
+    mAvailableAngles.push_back(convertedAngle);
+    SetAvailableAnlges(mAvailableAngles);
+  }
+}
+
+void Window::RemoveAvailableOrientation(WindowOrientation orientation)
+{
+  if(IsOrientationAvailable(orientation) == false)
+  {
+    return;
+  }
+
+  int convertedAngle = ConvertToAngle(orientation);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), RemoveAvailableOrientation: %d\n", this, mNativeWindowId, convertedAngle);
+  for(std::vector<int>::iterator iter = mAvailableAngles.begin();
+      iter != mAvailableAngles.end();
+      ++iter)
+  {
+    if(*iter == convertedAngle)
+    {
+      mAvailableAngles.erase(iter);
+      break;
+    }
+  }
+
+  SetAvailableAnlges(mAvailableAngles);
+}
+
+void Window::SetPreferredOrientation(WindowOrientation orientation)
+{
+  if(orientation < WindowOrientation::NO_ORIENTATION_PREFERENCE || orientation > WindowOrientation::LANDSCAPE_INVERSE)
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), Invalid input orientation [%d]\n", this, mNativeWindowId, orientation);
+    return;
+  }
+  mPreferredAngle = ConvertToAngle(orientation);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetPreferredOrientation: %d\n", this, mNativeWindowId, mPreferredAngle);
+  mWindowBase->SetPreferredAngle(mPreferredAngle);
+}
+
+WindowOrientation Window::GetPreferredOrientation()
+{
+  WindowOrientation preferredOrientation = ConvertToOrientation(mPreferredAngle);
+  return preferredOrientation;
+}
+
+void Window::SetPositionSizeWithOrientation(PositionSize positionSize, WindowOrientation orientation)
+{
+  int angle = ConvertToAngle(orientation);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), (%d, %d) [%d x %d], orientation = %d, angle = %d\n", this, mNativeWindowId, positionSize.x, positionSize.y, positionSize.width, positionSize.height, orientation, angle);
+  mWindowBase->SetPositionSizeWithAngle(positionSize, angle);
+}
+
+void Window::EmitAccessibilityHighlightSignal(bool highlight)
+{
+  Dali::Window handle(this);
+  mAccessibilityHighlightSignal.Emit(handle, highlight);
+}
+
+void Window::SetAvailableAnlges(const std::vector<int>& angles)
+{
+  if(angles.size() > 4)
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), Invalid vector size! [%zu]\n", this, mNativeWindowId, angles.size());
+    return;
+  }
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetAvailableAnlges: count = %zu\n", this, mNativeWindowId, angles.size());
+  mWindowBase->SetAvailableAnlges(angles);
+}
+
+int Window::ConvertToAngle(WindowOrientation orientation)
+{
+  int convertAngle = static_cast<int>(orientation);
+  if(mOrientationMode == Internal::Adaptor::Window::OrientationMode::LANDSCAPE)
+  {
+    switch(orientation)
+    {
+      case WindowOrientation::LANDSCAPE:
+      {
+        convertAngle = 0;
+        break;
+      }
+      case WindowOrientation::PORTRAIT:
+      {
+        convertAngle = 90;
+        break;
+      }
+      case WindowOrientation::LANDSCAPE_INVERSE:
+      {
+        convertAngle = 180;
+        break;
+      }
+      case WindowOrientation::PORTRAIT_INVERSE:
+      {
+        convertAngle = 270;
+        break;
+      }
+      case WindowOrientation::NO_ORIENTATION_PREFERENCE:
+      {
+        convertAngle = -1;
+        break;
+      }
+    }
+  }
+  return convertAngle;
+}
+
+WindowOrientation Window::ConvertToOrientation(int angle) const
+{
+  WindowOrientation orientation = static_cast<WindowOrientation>(angle);
+  if(mOrientationMode == Internal::Adaptor::Window::OrientationMode::LANDSCAPE)
+  {
+    switch(angle)
+    {
+      case 0:
+      {
+        orientation = WindowOrientation::LANDSCAPE;
+        break;
+      }
+      case 90:
+      {
+        orientation = WindowOrientation::PORTRAIT;
+        break;
+      }
+      case 180:
+      {
+        orientation = WindowOrientation::LANDSCAPE_INVERSE;
+        break;
+      }
+      case 270:
+      {
+        orientation = WindowOrientation::PORTRAIT_INVERSE;
+        break;
+      }
+      case -1:
+      {
+        orientation = WindowOrientation::NO_ORIENTATION_PREFERENCE;
+        break;
+      }
+    }
+  }
+  return orientation;
+}
+
+bool Window::IsOrientationAvailable(WindowOrientation orientation) const
+{
+  if(orientation <= WindowOrientation::NO_ORIENTATION_PREFERENCE || orientation > WindowOrientation::LANDSCAPE_INVERSE)
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), Invalid input orientation [%d]\n", this, mNativeWindowId, orientation);
+    return false;
+  }
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), IsOrientationAvailable: orientation = %d, available = 1\n", this, mNativeWindowId, orientation);
+  return true;
+}
+
+Dali::Any Window::GetNativeHandle() const
+{
+  return mWindowSurface->GetNativeWindow();
+}
+
+Dali::Any Window::GetNativeRawHandle() const
+{
+  void* raw = mWindowBase ? mWindowBase->GetNativeRawHandle() : nullptr;
+  if(raw)
+  {
+    return Any(raw);
+  }
+  return Any();
+}
+
+void Window::SetAcceptFocus(bool accept)
+{
+  mIsFocusAcceptable = accept;
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), accept = %d\n", this, mNativeWindowId, accept);
+  mWindowBase->SetAcceptFocus(accept);
+}
+
+bool Window::IsFocusAcceptable() const
+{
+  return mIsFocusAcceptable;
+}
+
+bool Window::IsFocused() const
+{
+  return mFocused;
+}
+
+void Window::Show()
+{
+  mVisible = true;
+
+  mWindowBase->Show();
+
+  if(!mIconified)
+  {
+    Dali::Window handle(this);
+
+    // mScene should be shown here because Scene::IsVisible need to be returned true in the Window::VisibilityChangedSignal
+    mScene.Show();
+
+    mVisibilityChangedSignal.Emit(handle, true);
+    if(auto bridge = Integration::Accessibility::Bridge::GetCurrentBridge())
+    {
+      bridge->WindowShown(handle);
+    }
+
+    WindowVisibilityObserver* observer(mAdaptor);
+    observer->OnWindowShown();
+  }
+
+  mSurface->SetFullSwapNextFrame();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Show(): iconified = %d, visible = %d\n", this, mNativeWindowId, mIconified, mVisible);
+}
+
+void Window::Hide()
+{
+  mVisible = false;
+
+  mWindowBase->Hide();
+
+  if(!mIconified)
+  {
+    Dali::Window handle(this);
+
+    // mScene should be hidden here because Scene::IsVisible need to be returned false in the Window::VisibilityChangedSignal
+    mScene.Hide();
+
+    mVisibilityChangedSignal.Emit(handle, false);
+    if(auto bridge = Integration::Accessibility::Bridge::GetCurrentBridge())
+    {
+      bridge->WindowHidden(handle);
+    }
+
+    WindowVisibilityObserver* observer(mAdaptor);
+    observer->OnWindowHidden();
+  }
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Hide(): iconified = %d, visible = %d\n", this, mNativeWindowId, mIconified, mVisible);
+}
+
+bool Window::IsVisible() const
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), IsVisible(): iconified = %d, visible = %d\n", this, mNativeWindowId, mIconified, mVisible);
+  return mVisible && !mIconified;
+}
+
+unsigned int Window::GetSupportedAuxiliaryHintCount() const
+{
+  return mWindowBase->GetSupportedAuxiliaryHintCount();
+}
+
+std::string Window::GetSupportedAuxiliaryHint(unsigned int index) const
+{
+  return mWindowBase->GetSupportedAuxiliaryHint(index);
+}
+
+unsigned int Window::AddAuxiliaryHint(const std::string& hint, const std::string& value)
+{
+  unsigned int id = mWindowBase->AddAuxiliaryHint(hint, value);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), hint = %s, value = %s, id = %u\n", this, mNativeWindowId, hint.c_str(), value.c_str(), id);
+  return id;
+}
+
+bool Window::RemoveAuxiliaryHint(unsigned int id)
+{
+  bool result = mWindowBase->RemoveAuxiliaryHint(id);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), id = %u, result = %d\n", this, mNativeWindowId, id, result);
+  return result;
+}
+
+bool Window::SetAuxiliaryHintValue(unsigned int id, const std::string& value)
+{
+  bool result = mWindowBase->SetAuxiliaryHintValue(id, value);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), id = %u, value = %s, result = %d\n", this, mNativeWindowId, id, value.c_str(), result);
+  return result;
+}
+
+std::string Window::GetAuxiliaryHintValue(unsigned int id) const
+{
+  return mWindowBase->GetAuxiliaryHintValue(id);
+}
+
+unsigned int Window::GetAuxiliaryHintId(const std::string& hint) const
+{
+  return mWindowBase->GetAuxiliaryHintId(hint);
+}
+
+void Window::ResetInput(const BoundsInteger& inputRegion)
+{
+  // when inputRegion is (-1, -1, 1, 1) which means reset input region.
+  if(inputRegion.x == -1 && inputRegion.y == -1 && inputRegion.width == 1 && inputRegion.height == 1)
+  {
+    // All touch events that were being input will be clear
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), input region reset\n", this, mNativeWindowId);
+    Reset();
+  }
+}
+
+void Window::SetInputRegion(const BoundsInteger& inputRegion)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetInputRegion, (%d,%d), (%d x %d)\n", this, mNativeWindowId, inputRegion.x, inputRegion.y, inputRegion.width, inputRegion.height);
+  ResetInput(inputRegion);
+  mWindowBase->SetInputRegion(inputRegion);
+}
+
+void Window::SetType(WindowType type)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), type = %d\n", this, mNativeWindowId, type);
+  mWindowBase->SetType(type);
+}
+
+WindowType Window::GetType() const
+{
+  return mWindowBase->GetType();
+}
+
+WindowOperationResult Window::SetNotificationLevel(WindowNotificationLevel level)
+{
+  WindowType type = mWindowBase->GetType();
+  if(type != WindowType::NOTIFICATION)
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), Not supported window type [%d]\n", this, mNativeWindowId, type);
+    return WindowOperationResult::INVALID_OPERATION;
+  }
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetNotificationLevel: level = %d\n", this, mNativeWindowId, level);
+  return mWindowBase->SetNotificationLevel(level);
+}
+
+WindowNotificationLevel Window::GetNotificationLevel() const
+{
+  WindowType type = mWindowBase->GetType();
+  if(type != WindowType::NOTIFICATION)
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), Not supported window type [%d]\n", this, mNativeWindowId, type);
+    return WindowNotificationLevel::NONE;
+  }
+
+  WindowNotificationLevel level = mWindowBase->GetNotificationLevel();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), GetNotificationLevel: level = %d\n", this, mNativeWindowId, level);
+  return level;
+}
+
+void Window::SetOpaqueState(bool opaque)
+{
+  mOpaqueState = opaque;
+
+  mWindowBase->SetOpaqueState(opaque);
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetOpaqueState: opaque = %d\n", this, mNativeWindowId, opaque);
+}
+
+bool Window::IsOpaqueState() const
+{
+  return mOpaqueState;
+}
+
+WindowOperationResult Window::SetScreenOffMode(WindowScreenOffMode screenOffMode)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), screenOffMode = %d\n", this, mNativeWindowId, screenOffMode);
+  return mWindowBase->SetScreenOffMode(screenOffMode);
+}
+
+WindowScreenOffMode Window::GetScreenOffMode() const
+{
+  return mWindowBase->GetScreenOffMode();
+}
+
+WindowOperationResult Window::SetBrightness(int brightness)
+{
+  if(brightness < 0 || brightness > 100)
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), Invalid brightness value [%d]\n", this, mNativeWindowId, brightness);
+    return WindowOperationResult::INVALID_OPERATION;
+  }
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetBrightness: brightness = %d\n", this, mNativeWindowId, brightness);
+  return mWindowBase->SetBrightness(brightness);
+}
+
+int Window::GetBrightness() const
+{
+  return mWindowBase->GetBrightness();
+}
+
+PositionSize Window::GetPositionSize() const
+{
+  PositionSize positionSize = mSurface->GetPositionSize();
+  positionSize.width        = mWindowWidth;
+  positionSize.height       = mWindowHeight;
+  return positionSize;
+}
+
+void Window::SetPositionSize(PositionSize positionSize)
+{
+  SetUserGeometryPolicy();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), requested (%d, %d) [%d x %d]\n", this, mNativeWindowId, positionSize.x, positionSize.y, positionSize.width, positionSize.height);
+
+  // It is asked by application to change window position and size.
+  // The related API is called to ask to display server in the backend.
+  UpdatePositionSize(positionSize, true);
+}
+
+void Window::SetLayout(unsigned int numCols, unsigned int numRows, unsigned int column, unsigned int row, unsigned int colSpan, unsigned int rowSpan)
+{
+  SetUserGeometryPolicy();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), layout = %u x %u, cell = (%u, %u), span = (%u, %u)\n", this, mNativeWindowId, numCols, numRows, column, row, colSpan, rowSpan);
+  mWindowBase->SetLayout(numCols, numRows, column, row, colSpan, rowSpan);
+}
+
+Dali::Layer Window::GetRootLayer() const
+{
+  return mScene.GetRootLayer();
+}
+
+void Window::SetBackgroundColor(const Vector4& color)
+{
+  mBackgroundColor = color;
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), color = (%f, %f, %f, %f), transparent = %d\n", this, mNativeWindowId, color.r, color.g, color.b, color.a, mIsTransparent);
+  if(mIsTransparent)
+  {
+    Vector4 backgroundColor = color;
+    backgroundColor.r *= backgroundColor.a;
+    backgroundColor.g *= backgroundColor.a;
+    backgroundColor.b *= backgroundColor.a;
+    SceneHolder::SetBackgroundColor(backgroundColor);
+  }
+  else
+  {
+    SceneHolder::SetBackgroundColor(color);
+  }
+}
+
+Vector4 Window::GetBackgroundColor() const
+{
+  return mBackgroundColor;
+}
+
+void Window::SetTransparency(bool transparent)
+{
+  if(mIsTransparent != transparent)
+  {
+    mIsTransparent = transparent;
+    Window::SetBackgroundColor(mBackgroundColor);
+  }
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetTransparency = %d\n", this, mNativeWindowId, transparent);
+  mWindowSurface->SetTransparency(mIsTransparent);
+}
+
+bool Window::GrabKey(Dali::Key key, KeyGrab::KeyGrabMode grabMode)
+{
+  bool result = mWindowBase->GrabKey(key, grabMode);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), key = %d, grabMode = %d, result = %d\n", this, mNativeWindowId, key, grabMode, result);
+  return result;
+}
+
+bool Window::UngrabKey(Dali::Key key)
+{
+  bool result = mWindowBase->UngrabKey(key);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), key = %d, result = %d\n", this, mNativeWindowId, key, result);
+  return result;
+}
+
+bool Window::GrabKeyList(const Dali::Vector<Dali::Key>& key, const Dali::Vector<KeyGrab::KeyGrabMode>& grabMode, Dali::Vector<bool>& result)
+{
+  bool ret = mWindowBase->GrabKeyList(key, grabMode, result);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), key count = %zu, result = %d\n", this, mNativeWindowId, key.Count(), ret);
+  return ret;
+}
+
+bool Window::UngrabKeyList(const Dali::Vector<Dali::Key>& key, Dali::Vector<bool>& result)
+{
+  bool ret = mWindowBase->UngrabKeyList(key, result);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), key count = %zu, result = %d\n", this, mNativeWindowId, key.Count(), ret);
+  return ret;
+}
+
+Window::TouchEventSignalType& Window::TouchEventSignal()
+{
+  return mTouchEventSignal;
+}
+
+Window::WheelEventSignalType& Window::WheelEventSignal()
+{
+  return mWheelEventSignal;
+}
+
+Window::InterceptKeyEventSignalType& Window::InterceptKeyEventSignal()
+{
+  return mInterceptKeyEventSignal;
+}
+
+void Window::OnIconifyChanged(bool iconified)
+{
+  const bool   isActuallyChanged = (iconified != mIconified);
+  auto         bridge            = Dali::Integration::Accessibility::Bridge::GetCurrentBridge();
+  Dali::Window handle(this);
+
+  if(iconified)
+  {
+    mIconified = true;
+
+    if(mVisible)
+    {
+      mScene.Hide();
+
+      mVisibilityChangedSignal.Emit(handle, false);
+      if(DALI_LIKELY(bridge))
+      {
+        bridge->WindowHidden(handle);
+      }
+
+      WindowVisibilityObserver* observer(mAdaptor);
+      observer->OnWindowHidden();
+    }
+
+    if(isActuallyChanged)
+    {
+      if(DALI_LIKELY(bridge))
+      {
+        bridge->WindowMinimized(handle);
+      }
+    }
+
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Iconified: visible = %d\n", this, mNativeWindowId, mVisible);
+  }
+  else
+  {
+    mIconified = false;
+
+    if(mVisible)
+    {
+      mScene.Show();
+
+      mVisibilityChangedSignal.Emit(handle, true);
+      if(DALI_LIKELY(bridge))
+      {
+        bridge->WindowShown(handle);
+      }
+
+      WindowVisibilityObserver* observer(mAdaptor);
+      observer->OnWindowShown();
+    }
+
+    if(isActuallyChanged)
+    {
+      if(DALI_LIKELY(bridge))
+      {
+        bridge->WindowRestored(handle, Dali::Devel::Accessibility::WindowRestoreType::RESTORE_FROM_ICONIFY);
+      }
+    }
+
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Deiconified: visible = %d\n", this, mNativeWindowId, mVisible);
+  }
+
+  mSurface->SetFullSwapNextFrame();
+
+  // Need to update/render once if surface set full swaped after adaptor call ProcessCoreEvents().
+  if(DALI_LIKELY(mAdaptor) && !iconified)
+  {
+    mAdaptor->RequestUpdateOnce();
+  }
+}
+
+void Window::OnMaximizeChanged(bool maximized)
+{
+  const bool isActuallyChanged = (maximized != mMaximized);
+
+  if(isActuallyChanged)
+  {
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), maximized = %d\n", this, mNativeWindowId, maximized);
+
+    auto         bridge = Dali::Integration::Accessibility::Bridge::GetCurrentBridge();
+    Dali::Window handle(this);
+
+    if(maximized)
+    {
+      mMaximized = true;
+      if(DALI_LIKELY(bridge))
+      {
+        bridge->WindowMaximized(handle);
+      }
+    }
+    else
+    {
+      mMaximized = false;
+      if(DALI_LIKELY(bridge))
+      {
+        bridge->WindowRestored(handle, Dali::Devel::Accessibility::WindowRestoreType::RESTORE_FROM_MAXIMIZE);
+      }
+    }
+  }
+}
+
+void Window::OnFocusChanged(bool focusIn)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), focusIn = %d, previous = %d\n", this, mNativeWindowId, focusIn, mFocused);
+
+  Dali::Window handle(this);
+  mFocused = focusIn;
+  mFocusChangedSignal.Emit(handle, focusIn);
+  FocusChanged(focusIn);
+
+  mSurface->SetFullSwapNextFrame();
+  if(auto bridge = Dali::Integration::Accessibility::Bridge::GetCurrentBridge())
+  {
+    if(focusIn)
+    {
+      bridge->WindowFocused(handle);
+    }
+    else
+    {
+      bridge->WindowUnfocused(handle);
+    }
+  }
+}
+
+void Window::OnOutputTransformed(int screenRotationAngle)
+{
+  PositionSize positionSize = GetPositionSize();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Window Resize by screen rotation, screen angle = %d\n", this, mNativeWindowId, screenRotationAngle);
+
+  SurfaceRotated(static_cast<float>(positionSize.width), static_cast<float>(positionSize.height), mRotationAngle, screenRotationAngle);
+
+  mAdaptor->SurfaceResizePrepare(mSurface.get(), Adaptor::SurfaceSize(positionSize.width, positionSize.height));
+  mAdaptor->SurfaceResizeComplete(mSurface.get(), Adaptor::SurfaceSize(positionSize.width, positionSize.height));
+}
+
+void Window::OnDeleteRequest()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), delete request received\n", this, mNativeWindowId);
+
+  mDeleteRequestSignal.Emit();
+}
+
+void Window::OnTransitionEffectEvent(WindowEffectState state, WindowEffectType type)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), transition effect, state = %d, type = %d\n", this, mNativeWindowId, state, type);
+
+  Dali::Window handle(this);
+  mTransitionEffectEventSignal.Emit(handle, state, type);
+}
+
+void Window::OnWindowRedrawRequest()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), window redraw request\n", this, mNativeWindowId);
+
+  SetForceRendering(1u);
+}
+
+void Window::OnUpdatePositionSize(Dali::PositionSize& positionSize)
+{
+  // It is from configure notification event, window move/resize signal will be emit.
+  // Just Update position size in window render surface without emit move/resize signal.
+  UpdatePositionSize(positionSize, false);
+}
+
+void Window::OnTouchPoint(Dali::Integration::Point& point, int timeStamp)
+{
+  // Keep the handle alive
+  Dali::Window handle(this);
+
+  FeedTouchPoint(point, timeStamp);
+}
+
+void Window::OnMouseFrameEvent()
+{
+  // Keep the handle alive
+  Dali::Window handle(this);
+
+  FeedMouseFrameEvent();
+}
+
+void Window::OnWheelEvent(Dali::Integration::WheelEvent& wheelEvent)
+{
+  // Keep the handle alive
+  Dali::Window handle(this);
+
+  FeedWheelEvent(wheelEvent);
+}
+
+void Window::OnKeyEvent(Dali::Integration::KeyEvent& keyEvent)
+{
+  mLastKeyEvent = Dali::DevelKeyEvent::New(keyEvent.keyName, keyEvent.logicalKey, keyEvent.keyString, keyEvent.keyCode, keyEvent.keyModifier, keyEvent.time, static_cast<Dali::KeyEvent::State>(keyEvent.state), keyEvent.compose, keyEvent.deviceName, keyEvent.deviceClass, keyEvent.deviceSubclass);
+  mLastKeyEvent.SetWindowId(keyEvent.windowId);
+
+  // Keep the handle alive
+  Dali::Window handle(this);
+
+  FeedKeyEvent(keyEvent);
+}
+
+void Window::OnMouseInOutEvent(const Dali::MouseInOutEvent& mouseInOutEvent)
+{
+  Dali::Window handle(this);
+
+  mMouseInOutEventSignal.Emit(handle, mouseInOutEvent);
+}
+
+void Window::OnMouseRelativeEvent(const Dali::DevelWindow::MouseRelativeEvent& mouseRelativeEvent)
+{
+  Dali::Window handle(this);
+
+  mMouseRelativeEventSignal.Emit(handle, mouseRelativeEvent);
+}
+
+void Window::OnPointerConstraints(const Dali::Int32Pair& position, bool locked, bool confined)
+{
+  Dali::Window handle(this);
+
+  Vector2                                    newPosition = RecalculatePosition(Vector2(static_cast<float>(position.GetX()), static_cast<float>(position.GetY())));
+  Dali::DevelWindow::PointerConstraintsEvent pointerConstraintsEvent(static_cast<int32_t>(newPosition.x), static_cast<int32_t>(newPosition.y), locked, confined);
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), pointer constraints (%d, %d), locked = %d, confined = %d\n", this, mNativeWindowId, static_cast<int32_t>(newPosition.x), static_cast<int32_t>(newPosition.y), locked, confined);
+
+  mPointerConstraintsSignal.Emit(handle, pointerConstraintsEvent);
+}
+
+void Window::OnRotation(const RotationEvent& rotation)
+{
+  PositionSize newPositionSize(rotation.x, rotation.y, rotation.width, rotation.height);
+
+  mRotationAngle = rotation.angle;
+  mWindowWidth   = rotation.width;
+  mWindowHeight  = rotation.height;
+
+  mIsOrientationChanging = true;
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), angle(%d), Window Rotation (%d , %d) [%d x %d]\n", this, mNativeWindowId, mRotationAngle, newPositionSize.x, newPositionSize.y, mWindowWidth, mWindowHeight);
+
+  mWindowSurface->RequestRotation(mRotationAngle, newPositionSize);
+
+  SurfaceRotated(static_cast<float>(mWindowWidth), static_cast<float>(mWindowHeight), mRotationAngle, mWindowBase->GetScreenRotationAngle(false));
+
+  mAdaptor->SurfaceResizePrepare(mSurface.get(), Adaptor::SurfaceSize(mWindowWidth, mWindowHeight));
+
+  Dali::Window handle(this);
+  mResizedSignal.Emit(handle, Dali::Window::WindowSize(mWindowWidth, mWindowHeight));
+  mOrientationChangedSignal.Emit(handle, GetCurrentOrientation());
+
+  mAdaptor->SurfaceResizeComplete(mSurface.get(), Adaptor::SurfaceSize(mWindowWidth, mWindowHeight));
+}
+
+void Window::OnRotationFinished()
+{
+  mIsOrientationChanging = false;
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), window rotation is finised\n", this, mNativeWindowId);
+}
+
+void Window::OnPause()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), paused\n", this, mNativeWindowId);
+
+  if(mEventHandler)
+  {
+    mEventHandler->Pause();
+  }
+}
+
+void Window::OnResume()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), resumed\n", this, mNativeWindowId);
+
+  if(mEventHandler)
+  {
+    mEventHandler->Resume();
+  }
+
+  mSurface->SetFullSwapNextFrame();
+}
+
+void Window::OnAuxiliaryMessage(const std::string& key, const std::string& value, const Property::Array& options)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), auxiliary message, key = %s, value = %s\n", this, mNativeWindowId, key.c_str(), value.c_str());
+
+  mAuxiliaryMessageSignal.Emit(key, value, options);
+}
+
+void Window::OnInsetsChanged(const WindowInsetsInfo& insetsInfo)
+{
+  const auto& insets = insetsInfo.GetInsets();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), insets changed, partType = %d, partState = %d, insets = (%f, %f, %f, %f)\n", this, mNativeWindowId, insetsInfo.GetPartType(), insetsInfo.GetPartState(), insets.start, insets.end, insets.top, insets.bottom);
+
+  mInsetsChangedSignal.Emit(Dali::Window(this), insetsInfo);
+}
+
+void Window::OnAccessibilityEnabled()
+{
+  auto bridge    = Integration::Accessibility::Bridge::GetCurrentBridge();
+  auto rootLayer = mScene.GetRootLayer();
+  if(auto accessible = Accessibility::Accessible::Get(rootLayer))
+  {
+    if(DALI_LIKELY(bridge))
+    {
+      bridge->AddTopLevelWindow(accessible);
+    }
+  }
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Accessibility is enabled\n", this, mNativeWindowId);
+
+  InterceptKeyEventSignal().Connect(this, &Window::OnAccessibilityInterceptKeyEvent);
+
+  Dali::Window handle(this);
+  if(!mIsEmittedWindowCreatedEvent)
+  {
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Emit Accessbility Window Created Event\n", this, mNativeWindowId);
+    if(DALI_LIKELY(bridge))
+    {
+      bridge->WindowCreated(handle);
+    }
+    mIsEmittedWindowCreatedEvent = true;
+  }
+
+  if(DALI_LIKELY(bridge))
+  {
+    if(IsVisible())
+    {
+      bridge->WindowShown(handle);
+
+      if(mFocused)
+      {
+        DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Emit Accessbility Window Focused Event\n", this, mNativeWindowId);
+        bridge->WindowFocused(handle);
+      }
+    }
+    else
+    {
+      bridge->WindowHidden(handle);
+    }
+  }
+}
+
+void Window::OnAccessibilityDisabled()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Accessibility is disabled\n", this, mNativeWindowId);
+
+  InterceptKeyEventSignal().Disconnect(this, &Window::OnAccessibilityInterceptKeyEvent);
+}
+
+bool Window::OnAccessibilityInterceptKeyEvent(Dali::Window /*window*/, Dali::KeyEvent keyEvent)
+{
+  auto bridge = Integration::Accessibility::Bridge::GetCurrentBridge();
+
+  if(!bridge || !bridge->IsUp() || Dali::DevelKeyEvent::IsInterceptProcessed(keyEvent))
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), This KeyEvent should not have been intercepted!\n", this, mNativeWindowId);
+
+    return false;
+  }
+
+  auto callback = [handle = Dali::Window(this)](Dali::KeyEvent keyEvent, bool consumed) mutable
+  {
+    if(!consumed)
+    {
+      Dali::DevelKeyEvent::SetInterceptProcessed(keyEvent, true);
+      handle.FeedKeyEvent(keyEvent);
+    }
+  };
+
+  bool emitted = bridge->EmitKeyEvent(keyEvent, callback);
+
+  // If emitted, consume the event in order not to have to wait for the D-Bus call
+  // to finish. If the event turns out not to be consumed by the remote client,
+  // then it is fed back to the window from the D-Bus callback.
+  return emitted;
+}
+
+void Window::OnSceneKeyEvent(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::KeyEvent keyEvent)
+{
+  if(!mKeyEventSignal.Empty())
+  {
+    Dali::Window handle(this);
+    mKeyEventSignal.Emit(handle, keyEvent);
+  }
+}
+
+void Window::OnSceneTouchEvent(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::TouchEvent touchEvent)
+{
+  Dali::Window handle(this);
+  mTouchEventSignal.Emit(handle, touchEvent);
+}
+
+void Window::OnSceneWheelEvent(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::WheelEvent wheelEvent)
+{
+  Dali::Window handle(this);
+  mWheelEventSignal.Emit(handle, wheelEvent);
+}
+
+bool Window::OnSceneInterceptKeyEvent(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::KeyEvent keyEvent)
+{
+  Dali::Window handle(this);
+  bool         consumed = false;
+  if(mScene.IsGeometryHittestEnabled())
+  {
+    // Any connected callback consuming the event consumes it for all of them.
+    // The accessibility bridge connects here alongside the application's handler.
+    // Gated so that legacy applications keep the previous last-callback-wins behaviour.
+    consumed = mInterceptKeyEventSignal.EmitOr(handle, keyEvent);
+  }
+  else
+  {
+    consumed = mInterceptKeyEventSignal.Emit(handle, keyEvent);
+  }
+  if(consumed)
+  {
+    DALI_LOG_RELEASE_INFO("[KeyEvent] code=%d state=%d consumed at Window::InterceptKeyEventSignal\n", keyEvent.GetKeyCode(), static_cast<int>(keyEvent.GetState()));
+  }
+  return consumed;
+}
+
+void Window::OnSceneKeyEventDelayed(Dali::Integration::SceneHolder /*sceneHolder*/, Dali::KeyEvent keyEvent)
+{
+  if(!mKeyEventDelayedSignal.Empty())
+  {
+    Dali::Window handle(this);
+    mKeyEventDelayedSignal.Emit(handle, keyEvent);
+  }
+}
+
+void Window::OnMoveCompleted(Dali::Window::WindowPosition& position)
+{
+  Dali::Window handle(this);
+
+  PositionSize positionSize = GetPositionSize();
+  positionSize.x            = position.GetX();
+  positionSize.y            = position.GetY();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Window move completed, (%d, %d)\n", this, mNativeWindowId, positionSize.x, positionSize.y);
+
+  // It is from window move completed event. This event is generated by displayer server
+  // Window move signal is emitted, too.
+  // Just Update position size in window render surface without emit move/resize signal.
+  UpdatePositionSize(positionSize, false);
+
+  mMoveCompletedSignal.Emit(handle, position);
+}
+
+void Window::OnResizeCompleted(Dali::Window::WindowSize& size)
+{
+  Dali::Window handle(this);
+
+  PositionSize positionSize = GetPositionSize();
+  positionSize.width        = size.GetWidth();
+  positionSize.height       = size.GetHeight();
+
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Window resize completed, (%d x %d)\n", this, mNativeWindowId, positionSize.width, positionSize.height);
+
+  // It is from window resized completed event. This event is generated by displayer server.
+  // Window resize signal is emitted, too.
+  // Just Update position size in window render surface without emit move/resize signal.
+  UpdatePositionSize(positionSize, false);
+
+  mResizeCompletedSignal.Emit(handle, size);
+}
+
+Vector2 Window::RecalculatePosition(const Vector2& position)
+{
+  Vector2 convertedPosition;
+
+  // Note: We need to subtract 1 from width and height because the range of touch coordinates is from to width - 1 or height - 1
+  switch(mRotationAngle)
+  {
+    case 90:
+    {
+      convertedPosition.x = static_cast<float>(mWindowWidth - 1) - position.y;
+      convertedPosition.y = position.x;
+      break;
+    }
+    case 180:
+    {
+      convertedPosition.x = static_cast<float>(mWindowWidth - 1) - position.x;
+      convertedPosition.y = static_cast<float>(mWindowHeight - 1) - position.y;
+      break;
+    }
+    case 270:
+    {
+      convertedPosition.x = position.y;
+      convertedPosition.y = static_cast<float>(mWindowHeight - 1) - position.x;
+      break;
+    }
+    default:
+    {
+      convertedPosition = position;
+      break;
+    }
+  }
+  return convertedPosition;
+}
+
+Dali::Window Window::Get(Dali::Actor actor)
+{
+  Internal::Adaptor::Window* windowImpl = nullptr;
+
+  if(Internal::Adaptor::Adaptor::IsAvailable())
+  {
+    Dali::Internal::Adaptor::Adaptor& adaptor = Internal::Adaptor::Adaptor::GetImplementation(Internal::Adaptor::Adaptor::Get());
+    windowImpl                                = dynamic_cast<Internal::Adaptor::Window*>(adaptor.GetWindow(actor));
+    if(windowImpl)
+    {
+      return Dali::Window(windowImpl);
+    }
+  }
+
+  return Dali::Window();
+}
+
+void Window::SetParent(Dali::Window& parent, bool belowParent)
+{
+  if(DALI_UNLIKELY(parent))
+  {
+    mParentWindow     = parent;
+    Dali::Window self = Dali::Window(this);
+    // check circular parent window setting
+    if(parent.GetParent() == self)
+    {
+      parent.Unparent();
+    }
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), parent = %p, belowParent = %d\n", this, mNativeWindowId, &GetImplementation(mParentWindow), belowParent);
+    mWindowBase->SetParent(GetImplementation(mParentWindow).mWindowBase, belowParent);
+  }
+}
+
+void Window::Unparent()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), unparent\n", this, mNativeWindowId);
+  mWindowBase->SetParent(nullptr, false);
+  mParentWindow.Reset();
+}
+
+Dali::Window Window::GetParent()
+{
+  return mParentWindow;
+}
+
+void Window::EnableScreenReaderAutoRead(bool enable)
+{
+  mIsScreenReaderAutoReadEnabled = enable;
+}
+
+bool Window::IsScreenReaderAutoReadEnabled() const
+{
+  return mIsScreenReaderAutoReadEnabled;
+}
+
+WindowOrientation Window::GetCurrentOrientation() const
+{
+  return ConvertToOrientation(mRotationAngle);
+}
+
+int Window::GetPhysicalOrientation() const
+{
+  return (mRotationAngle + mWindowBase->GetScreenRotationAngle(false)) % 360;
+}
+
+void Window::SetAvailableOrientations(const Dali::Vector<WindowOrientation>& orientations)
+{
+  Dali::Vector<float>::SizeType count = orientations.Count();
+  for(Dali::Vector<float>::SizeType index = 0; index < count; ++index)
+  {
+    if(IsOrientationAvailable(orientations[index]) == false)
+    {
+      DALI_LOG_ERROR("Window (%p), WinId (%d), invalid orientation: %d\n", this, mNativeWindowId, orientations[index]);
+      continue;
+    }
+
+    bool found          = false;
+    int  convertedAngle = ConvertToAngle(orientations[index]);
+
+    for(std::size_t i = 0; i < mAvailableAngles.size(); i++)
+    {
+      if(mAvailableAngles[i] == convertedAngle)
+      {
+        found = true;
+        break;
+      }
+    }
+
+    if(!found)
+    {
+      DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetAvailableOrientations: %d\n", this, mNativeWindowId, convertedAngle);
+      mAvailableAngles.push_back(convertedAngle);
+    }
+  }
+  SetAvailableAnlges(mAvailableAngles);
+}
+
+int32_t Window::GetNativeId() const
+{
+  return mWindowBase->GetNativeWindowId();
+}
+
+void Window::RequestMoveToServer()
+{
+  SetUserGeometryPolicy();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), request move to server\n", this, mNativeWindowId);
+  mWindowBase->RequestMoveToServer();
+}
+
+void Window::RequestResizeToServer(WindowResizeDirection direction)
+{
+  SetUserGeometryPolicy();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), request resize to server, direction = %d\n", this, mNativeWindowId, direction);
+  mWindowBase->RequestResizeToServer(direction);
+}
+
+void Window::EnableFloatingMode(bool enable)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), floating mode enable = %d\n", this, mNativeWindowId, enable);
+  mWindowBase->EnableFloatingMode(enable);
+}
+
+bool Window::IsFloatingModeEnabled() const
+{
+  return mWindowBase->IsFloatingModeEnabled();
+}
+
+void Window::IncludeInputRegion(const BoundsInteger& inputRegion)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), IncludeInputRegion, (%d,%d), (%d x %d)\n", this, mNativeWindowId, inputRegion.x, inputRegion.y, inputRegion.width, inputRegion.height);
+  ResetInput(inputRegion);
+  mWindowBase->IncludeInputRegion(inputRegion);
+}
+
+void Window::ExcludeInputRegion(const BoundsInteger& inputRegion)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), ExcludeInputRegion, (%d,%d), (%d x %d)\n", this, mNativeWindowId, inputRegion.x, inputRegion.y, inputRegion.width, inputRegion.height);
+  mWindowBase->ExcludeInputRegion(inputRegion);
+}
+
+void Window::SetNeedsRotationCompletedAcknowledgement(bool needAcknowledgement)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), needAcknowledgement(%d) Set needs Rotation Completed Acknowledgement\n", this, mNativeWindowId, needAcknowledgement);
+  mWindowSurface->SetNeedsRotationCompletedAcknowledgement(needAcknowledgement);
+  mWindowRotationAcknowledgement = needAcknowledgement;
+}
+
+void Window::SendRotationCompletedAcknowledgement()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SendRotationCompletedAcknowledgement(): orientation: %d, mWindowRotationAcknowledgement: %d\n", this, mNativeWindowId, mRotationAngle, mWindowRotationAcknowledgement);
+  if(mWindowRotationAcknowledgement)
+  {
+    SetRotationCompletedAcknowledgement();
+  }
+}
+
+bool Window::IsOrientationChanging() const
+{
+  return mIsOrientationChanging;
+}
+
+const Dali::KeyEvent& Window::GetLastKeyEvent() const
+{
+  return mLastKeyEvent;
+}
+
+void Window::SetUserGeometryPolicy()
+{
+  if(mIsEnabledUserGeometry == true)
+  {
+    return;
+  }
+
+  mIsEnabledUserGeometry = true;
+  AddAuxiliaryHint("wm.policy.win.user.geometry", "1");
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), window user.geometry is changed\n", this, mNativeWindowId);
+}
+
+bool Window::PointerConstraintsLock()
+{
+  bool result = mWindowBase->PointerConstraintsLock();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), pointer constraints lock, result = %d\n", this, mNativeWindowId, result);
+  return result;
+}
+
+bool Window::PointerConstraintsUnlock()
+{
+  bool result = mWindowBase->PointerConstraintsUnlock();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), pointer constraints unlock, result = %d\n", this, mNativeWindowId, result);
+  return result;
+}
+
+void Window::LockedPointerRegionSet(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), locked pointer region (%d, %d) [%d x %d]\n", this, mNativeWindowId, x, y, width, height);
+  mWindowBase->LockedPointerRegionSet(x, y, width, height);
+}
+
+void Window::LockedPointerCursorPositionHintSet(int32_t x, int32_t y)
+{
+  mWindowBase->LockedPointerCursorPositionHintSet(x, y);
+}
+
+bool Window::PointerWarp(int32_t x, int32_t y)
+{
+  return mWindowBase->PointerWarp(x, y);
+}
+
+void Window::CursorVisibleSet(bool visible)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), cursor visible = %d\n", this, mNativeWindowId, visible);
+  mWindowBase->CursorVisibleSet(visible);
+}
+
+bool Window::KeyboardGrab(Device::Subclass::Type deviceSubclass)
+{
+  bool result = mWindowBase->KeyboardGrab(deviceSubclass);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), deviceSubclass = %d, result = %d\n", this, mNativeWindowId, deviceSubclass, result);
+  return result;
+}
+
+bool Window::KeyboardUngrab()
+{
+  bool result = mWindowBase->KeyboardUngrab();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), keyboard ungrab, result = %d\n", this, mNativeWindowId, result);
+  return result;
+}
+
+void Window::SetFullScreen(bool fullscreen)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), fullscreen = %d\n", this, mNativeWindowId, fullscreen);
+  mWindowBase->SetFullScreen(fullscreen);
+}
+
+bool Window::GetFullScreen()
+{
+  return mWindowBase->GetFullScreen();
+}
+
+void Window::SetFrontBufferRenderingEnabled(bool enable)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), front buffer rendering enable = %d\n", this, mNativeWindowId, enable);
+  mWindowBase->SetFrontBufferRenderingEnabled(enable);
+  mWindowSurface->SetFrontBufferRenderingEnabled(enable);
+}
+
+bool Window::IsFrontBufferRenderingEnabled() const
+{
+  return mWindowBase->IsFrontBufferRenderingEnabled();
+}
+
+void Window::SetModal(bool modal)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), modal = %d\n", this, mNativeWindowId, modal);
+  mWindowBase->SetModal(modal);
+}
+
+bool Window::IsModal()
+{
+  return mWindowBase->IsModal();
+}
+
+void Window::SetAlwaysOnTop(bool alwaysOnTop)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), alwaysOnTop = %d\n", this, mNativeWindowId, alwaysOnTop);
+  mWindowBase->SetAlwaysOnTop(alwaysOnTop);
+}
+
+bool Window::IsAlwaysOnTop() const
+{
+  return mWindowBase->IsAlwaysOnTop();
+}
+
+void Window::SetBottom(bool enable)
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), bottom enable = %d\n", this, mNativeWindowId, enable);
+  mWindowBase->SetBottom(enable);
+}
+
+bool Window::IsBottom()
+{
+  return mWindowBase->IsBottom();
+}
+
+Dali::Any Window::GetNativeBuffer() const
+{
+  return mWindowBase->GetNativeBuffer();
+}
+
+bool Window::RelativeMotionGrab(uint32_t boundary)
+{
+  bool result = mWindowBase->RelativeMotionGrab(boundary);
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), relative motion grab boundary = %u, result = %d\n", this, mNativeWindowId, boundary, result);
+  return result;
+}
+
+bool Window::RelativeMotionUngrab()
+{
+  bool result = mWindowBase->RelativeMotionUngrab();
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), relative motion ungrab, result = %d\n", this, mNativeWindowId, result);
+  return result;
+}
+
+void Window::SetBlur(const WindowBlurInfo& blurInfo)
+{
+  if(mBlurInfo == blurInfo)
+  {
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), same window blur Info\n", this, mNativeWindowId);
+    return;
+  }
+
+  WindowDimInfo previousBehindBlurDimInfo = mBlurInfo.GetBehindBlurDimInfo();
+  mBlurInfo                               = blurInfo;
+  WindowDimInfo currentBehindBlurDimInfo  = mBlurInfo.GetBehindBlurDimInfo();
+
+  if(mBlurInfo.windowBlurType == WindowBlurType::BACKGROUND)
+  {
+    mWindowBase->SetBackgroundBlur(mBlurInfo.windowBlurRadius, mBlurInfo.backgroundCornerRadius);
+  }
+  else if(mBlurInfo.windowBlurType == WindowBlurType::BEHIND)
+  {
+    mWindowBase->SetBehindBlur(mBlurInfo.windowBlurRadius);
+    if(previousBehindBlurDimInfo.isEnabled != currentBehindBlurDimInfo.isEnabled)
+    {
+      mWindowBase->SetBehindBlurDim(currentBehindBlurDimInfo.isEnabled, currentBehindBlurDimInfo.dimColor);
+    }
+    else
+    {
+      if(currentBehindBlurDimInfo.isEnabled)
+      {
+        mWindowBase->SetBehindBlurDim(currentBehindBlurDimInfo.isEnabled, currentBehindBlurDimInfo.dimColor);
+      }
+    }
+  }
+  else
+  {
+    mWindowBase->SetBackgroundBlur(0, 0);
+  }
+}
+
+WindowBlurInfo Window::GetBlur() const
+{
+  return mBlurInfo;
+}
+
+Insets Window::GetInsets()
+{
+  return mWindowBase->GetInsets();
+}
+
+Insets Window::GetInsets(WindowInsetsPartFlags insetsFlags)
+{
+  return mWindowBase->GetInsets(insetsFlags);
+}
+
+int Window::GetCurrentWindowRotationAngle() const
+{
+  return mRotationAngle;
+}
+
+int Window::GetCurrentScreenRotationAngle() const
+{
+  return mWindowBase->GetScreenRotationAngle(false);
+}
+
+void Window::UpdatePositionSize(Dali::PositionSize& positionSize, bool requestChangeGeometry)
+{
+  bool moved  = false;
+  bool resize = false;
+
+  Dali::Window handle(this);
+
+  PositionSize oldRect = GetPositionSize();
+  PositionSize newRect = positionSize;
+
+  if((oldRect.x != newRect.x) || (oldRect.y != newRect.y))
+  {
+    moved = true;
+  }
+
+  if((oldRect.width != newRect.width) || (oldRect.height != newRect.height))
+  {
+    resize = true;
+  }
+
+  if(moved || resize)
+  {
+    if(requestChangeGeometry)
+    {
+      DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), current angle (%d), position or size is updated by Application , (%d, %d) [%d x %d]\n", this, mNativeWindowId, mRotationAngle, newRect.x, newRect.y, newRect.width, newRect.height);
+      mWindowSurface->MoveResize(positionSize);
+    }
+    else
+    {
+      DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), current angle (%d), position or size is updated by server , (%d, %d) [%d x %d]\n", this, mNativeWindowId, mRotationAngle, newRect.x, newRect.y, newRect.width, newRect.height);
+      mWindowSurface->UpdatePositionSize(positionSize);
+    }
+  }
+
+  if(moved)
+  {
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Moved signal emit (%d, %d)\n", this, mNativeWindowId, newRect.x, newRect.y);
+    Dali::Window::WindowPosition position(newRect.x, newRect.y);
+    mMovedSignal.Emit(handle, position);
+  }
+
+  // When surface size is updated, inform adaptor of resizing and emit ResizeSignal
+  if(resize)
+  {
+    Adaptor::SurfaceSize newSize(newRect.width, newRect.height);
+
+    mWindowWidth  = newRect.width;
+    mWindowHeight = newRect.height;
+
+    SurfaceResized(static_cast<float>(mWindowWidth), static_cast<float>(mWindowHeight));
+
+    mAdaptor->SurfaceResizePrepare(mSurface.get(), newSize);
+
+    DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), Resized signal emit [%d x %d]\n", this, mNativeWindowId, newRect.width, newRect.height);
+    mResizedSignal.Emit(handle, newSize);
+
+    mAdaptor->SurfaceResizeComplete(mSurface.get(), newSize);
+  }
+
+  if((moved || resize) && Dali::Integration::Accessibility::IsUp())
+  {
+    if(auto accessible = dynamic_cast<Accessibility::ActorAccessible*>(Accessibility::Accessible::Get(mScene.GetRootLayer())))
+    {
+      accessible->EmitBoundsChanged(Dali::BoundsInteger(positionSize.x, positionSize.y, positionSize.width, positionSize.height));
+    }
+  }
+
+  mSurface->SetFullSwapNextFrame();
+}
+
+void Window::SetScreen(const std::string& screenName)
+{
+  if(screenName.empty())
+  {
+    DALI_LOG_ERROR("Window (%p), WinId (%d), input Screen name is empty\n", this, mNativeWindowId);
+    return;
+  }
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), SetScreen: screenName = %s\n", this, mNativeWindowId, screenName.c_str());
+  mWindowBase->SetScreen(screenName);
+}
+
+std::string Window::GetScreen() const
+{
+  return mWindowBase->GetScreen();
+}
+
+void Window::InitializeImeInfo()
+{
+  DALI_LOG_RELEASE_INFO("Window (%p), WinId (%d), initialize ime window and surface (mAdaptorStarted:%d)\n", this, mNativeWindowId, mAdaptorStarted);
+  mWindowBase->InitializeIme();
+  if(mAdaptorStarted)
+  {
+    mWindowSurface->InitializeImeSurface();
+  }
+}
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

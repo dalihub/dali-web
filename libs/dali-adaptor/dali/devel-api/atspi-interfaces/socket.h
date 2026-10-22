@@ -1,0 +1,72 @@
+#ifndef DALI_ADAPTOR_ATSPI_SOCKET_H
+#define DALI_ADAPTOR_ATSPI_SOCKET_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/accessibility-types.h>
+#include <dali/devel-api/atspi-interfaces/accessibility-feature.h>
+#include <dali/integration-api/adaptor-framework/accessibility/accessibility-integ.h>
+
+namespace DALI_NAMESPACE::Accessibility
+{
+/**
+ * @brief A Socket is the root of the AT-SPI tree that can be embedded as a subtree
+ * in the tree belonging to another process (the Plug). The Plug initiates the Plug-Socket
+ * connection by calling Embed() and terminates it by calling Unembed().
+ *
+ * See AT_SPI2_CORE/xml/Socket.xml for a description of this interface in XML format.
+ */
+class DALI_ADAPTOR_API Socket : public IAccessibilityFeature
+{
+public:
+  /**
+   * @brief Establishes the Plug-Socket connection.
+   *
+   * @param plug Dali::Devel::Accessibility::Address of the Plug (remote parent)
+   * @return Dali::Devel::Accessibility::Address of the Socket
+   */
+  virtual Dali::Devel::Accessibility::Address Embed(Dali::Devel::Accessibility::Address plug) = 0;
+
+  /**
+   * @brief Terminates the Plug-Socket connection.
+   *
+   * @param plug Dali::Devel::Accessibility::Address of the Plug (remote parent)
+   */
+  virtual void Unembed(Dali::Devel::Accessibility::Address plug) = 0;
+
+  /**
+   * @brief Set the offset (position information).
+   *
+   * @param[in] x Horizontal offset
+   * @param[in] y Vertical offset
+   */
+  virtual void SetOffset(std::int32_t x, std::int32_t y) = 0;
+};
+
+} //namespace DALI_NAMESPACE::Accessibility
+
+namespace DALI_NAMESPACE::Integration::Accessibility
+{
+template<>
+struct AccessibilityInterfaceTypeHelper<Dali::Integration::Accessibility::AccessibilityInterface::SOCKET>
+{
+  using Type = Dali::Accessibility::Socket;
+};
+} //namespace DALI_NAMESPACE::Integration::Accessibility
+
+#endif // DALI_ADAPTOR_ATSPI_SOCKET_H

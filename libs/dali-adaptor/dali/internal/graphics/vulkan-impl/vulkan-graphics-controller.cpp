@@ -1,0 +1,1323 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// CLASS HEADER
+#include <dali/internal/graphics/vulkan-impl/vulkan-graphics-controller.h>
+
+// INTERNAL INCLUDES
+#include <dali/devel-api/threading/conditional-wait.h>
+#include <dali/graphics-api/graphics-types.h>
+
+#include <dali/internal/graphics/vulkan/vulkan-device.h>
+
+#include <dali/internal/graphics/vulkan-impl/vulkan-buffer-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-buffer.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-command-buffer-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-command-buffer.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-discard-queue.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-fence-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-graphics-controller-debug.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-image-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-memory.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-pipeline-cache-manager.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-pipeline.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-program.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-render-pass.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-render-target.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-resource-transfer.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-sampler-impl.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-sampler.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-shader.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-texture-dependency-checker.h>
+#include <dali/internal/graphics/vulkan-impl/vulkan-texture.h>
+#include <dali/internal/window-system/common/window-render-surface.h>
+
+#include <algorithm>
+#include <queue>
+#include <unordered_map>
+
+#include "vulkan-framebuffer-impl.h"
+
+#if defined(DEBUG_ENABLED)
+extern Debug::Filter* gVulkanFilter;
+#endif
+
+// Uncomment the following to enable dumping the command buffers to a log file
+// Set GRAPHICS_CMDBUF_OUTFILE to some temporary log file in shell env
+// Start the program - the first 10 cmd bufs will get dumped to this file.
+// Trigger a dump to a subsequent file by touching /tmp/dump_cmd_buf whilst
+// the app is running
+//#define ENABLE_COMMAND_BUFFER_FRAME_DUMP 1
+#include <dali/internal/graphics/vulkan-impl/vulkan-graphics-controller-debug.h>
+DUMP_FRAME_INIT();
+
+namespace
+{
+const uint32_t INITIAL_POOL_CAPACITY = 32u;
+
+constexpr Dali::Graphics::GraphicsFeatureFlags DEFAULT_GRAPHICS_FEATURE_FLAGS = 0 | Dali::Graphics::GraphicsFeatureFlagBits::HAS_CLIP_MATRIX_BIT | Dali::Graphics::GraphicsFeatureFlagBits::PIPELINE_USE_RENDER_TARGET_BIT;
+} // Anonymous namespace
+
+namespace DALI_NAMESPACE::Graphics::Vulkan
+{
+/**
+ * @brief Custom deleter for all Graphics objects created
+ * with use of the Controller.
+ *
+ * When Graphics object dies the unique pointer (Graphics::UniquePtr)
+ * doesn't destroy it directly but passes the ownership back
+ * to the Controller. The GraphicsDeleter is responsible for passing
+ * the graphics object to the discard queue (by calling Resource::DiscardResource()).
+ */
+template<typename T>
+struct GraphicsDeleter
+{
+  GraphicsDeleter() = default;
+
+  void operator()(T* object)
+  {
+    // Discard resource (add it to discard queue)
+    object->DiscardResource();
+  }
+};
+
+/**
+ * @brief Helper function allocating graphics object
+ *
+ * @tparam VKType The Vulkan type to allocate
+ * @tparam GfxCreateInfo The associated CreateInfo type
+ * @tparam T The Graphics base class of VKType
+ * @tparam Types optional argument types of the VKType constructor
+ * @param[in] info Create info structure
+ * @param[in] controller Controller object
+ * @param[in] oldObject R-value to old object for recycling
+ * @param[in] args Optional arguments to the VKType constructor
+ * @return Unique pointer to the new object
+ */
+template<class VKType, class GfxCreateInfo, class T, typename... Types>
+auto NewGraphicsObject(const GfxCreateInfo& info, VulkanGraphicsController& controller, T&& oldObject, Types... args)
+{
+  // Use allocator
+  using Type = typename T::element_type;
+  using UPtr = Dali::Graphics::UniquePtr<Type>;
+  if(info.allocationCallbacks)
+  {
+    auto* memory = info.allocationCallbacks->allocCallback(
+      sizeof(VKType),
+      0,
+      info.allocationCallbacks->userData);
+    return UPtr(new(memory) VKType(info, controller), GraphicsDeleter<VKType>());
+  }
+  else // Use standard allocator
+  {
+    // We are given old object for recycling
+    if(oldObject)
+    {
+      auto reusedObject = oldObject.release();
+      // If succeeded, attach the object to the unique_ptr and return it back
+      if(static_cast<VKType*>(reusedObject)->TryRecycle(info, controller))
+      {
+        return UPtr(reusedObject, GraphicsDeleter<VKType>());
+      }
+      else
+      {
+        // can't reuse so kill object by giving it back to original
+        // unique pointer.
+        oldObject.reset(reusedObject);
+      }
+    }
+
+    // Create brand-new object
+    UPtr gfxObject(new VKType(info, controller, args...), GraphicsDeleter<VKType>());
+
+    ResourceBase::InitializationResult result = static_cast<VKType*>(gfxObject.get())->InitializeResource();
+    if(result == ResourceBase::InitializationResult::NOT_SUPPORTED)
+    {
+      DALI_LOG_ERROR("Vulkan resource failed to initialize.");
+    }
+    return gfxObject;
+  }
+}
+
+template<class T0, class T1>
+T0* CastObject(T1* apiObject)
+{
+  return static_cast<T0*>(apiObject);
+}
+
+struct VulkanGraphicsController::Impl
+{
+  explicit Impl(VulkanGraphicsController& controller)
+  : mGraphicsController(controller),
+    mDependencyChecker(controller),
+    mResourceTransfer(controller)
+  {
+  }
+
+  ~Impl()
+  {
+    if(mSamplerImpl)
+    {
+      mSamplerImpl->Destroy();
+      mSamplerImpl = nullptr;
+    }
+    if(mDepthTextureSamplerImpl)
+    {
+      mDepthTextureSamplerImpl->Destroy();
+      mDepthTextureSamplerImpl = nullptr;
+    }
+    if(!mTextureArrays.empty())
+    {
+      for(auto textureArray : mTextureArrays)
+      {
+        textureArray->DestroyResource();
+      }
+      mTextureArrays.clear();
+    }
+  }
+
+  bool Initialize(Vulkan::Device& device)
+  {
+    mGraphicsDevice = &device;
+    mDiscardQueues.Initialize(device);
+    mResourceTransfer.Initialize();
+
+    // @todo Create pipeline cache & descriptor set allocator here
+    return true;
+  }
+
+  void CreateDeferredTextures()
+  {
+    // Expect only color attachments. For better performance, we will batch all images with the same size
+    // into a render target array.
+    std::unordered_map<Uint16Pair::DataType, std::vector<Vulkan::Texture*>> texturesBySize{};
+    for(auto texture : mDeferredTextures)
+    {
+      Uint16Pair           imgSize(texture->GetWidth(), texture->GetHeight());
+      Uint16Pair::DataType data = *reinterpret_cast<Uint16Pair::DataType*>(&imgSize);
+      if(auto iter = texturesBySize.find(data); iter != texturesBySize.end())
+      {
+        iter->second.emplace_back(texture);
+      }
+      else
+      {
+        texturesBySize.insert(std::pair<const Uint16Pair::DataType, std::vector<Texture*>>{data, {texture}});
+      }
+    }
+    mDeferredTextures.clear();
+    const auto MAX_ARRAY_LAYERS = mGraphicsDevice->GetPhysicalDeviceProperties().limits.maxImageArrayLayers;
+
+    for(auto keyValue : texturesBySize)
+    {
+      uint32_t arrayLayers = keyValue.second.size();
+      auto&    textures    = keyValue.second;
+      if(arrayLayers > 1)
+      {
+        const int numTextureArrays    = 1 + arrayLayers / MAX_ARRAY_LAYERS; // Batch into numTextures.
+        int       currentTextureSlice = 0;                                  // index of "child" texture in batched texture array.
+        for(int i = 0; i < numTextureArrays; ++i)
+        {
+          uint32_t numArrayLayers = MAX_ARRAY_LAYERS;
+          if(i == numTextureArrays - 1)
+          {
+            numArrayLayers = arrayLayers % MAX_ARRAY_LAYERS; // Number of layers in this batch.
+          }
+
+          auto          createInfo   = keyValue.second[0]->GetCreateInfo();
+          TextureArray* textureArray = TextureArray::New(createInfo, mGraphicsController, numArrayLayers);
+          mTextureArrays.emplace_back(textureArray); // Each Batch texture owned by controller.
+
+          for(uint32_t layer = 0; layer < numArrayLayers; ++layer)
+          {
+            // Initialize each "child" texture to use batch for image/image view.
+            textures[currentTextureSlice++]->InitializeFromTextureArray(textureArray, layer);
+          }
+          DALI_LOG_RELEASE_INFO("<=> Created texture array of size %u for %dx%d", numArrayLayers, textureArray->GetWidth(), textureArray->GetHeight());
+        }
+      }
+      else
+      {
+        // Only 1 texture - initialize normally.
+        textures[0]->Initialize();
+        textures[0]->GetProperties();
+      }
+    }
+  }
+
+  void RemoveTextureArray(TextureArray* textureArray)
+  {
+    if(auto iter = std::find(mTextureArrays.begin(), mTextureArrays.end(), textureArray);
+       iter != mTextureArrays.end())
+    {
+      mTextureArrays.erase(iter);
+    }
+    textureArray->DestroyResource();
+  }
+
+  bool EnableDepthStencilBuffer(const RenderTarget& renderTarget, bool enableDepth, bool enableStencil)
+  {
+    auto surface = static_cast<const Vulkan::RenderTarget*>(&renderTarget)->GetSurface();
+    if(!surface)
+    {
+      // Do nothing if this is not a surface.
+      return false;
+    }
+
+    auto renderSurface = static_cast<Internal::Adaptor::WindowRenderSurface*>(surface);
+    auto surfaceId     = renderSurface->GetSurfaceId();
+
+    mDepthStencilBufferRequestedState = GetDepthStencilState(enableDepth, enableStencil);
+
+    auto retval = mDepthStencilBufferRequestedState != mDepthStencilBufferCurrentState;
+
+    // @todo move state vars to surface
+    // They are now in the scene/sceneholder.
+    if(surface && mDepthStencilBufferCurrentState != mDepthStencilBufferRequestedState)
+    {
+      DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "UpdateDepthStencilBuffer(): New state: DEPTH: %d, STENCIL: %d\n", int(mDepthStencilBufferRequestedState & 1), int((mDepthStencilBufferRequestedState >> 1) & 1));
+
+      mGraphicsDevice->DeviceWaitIdle();
+
+      mGraphicsDevice->GetSwapchainForSurfaceId(surfaceId)->SetDepthStencil(DEPTH_STENCIL_FORMATS[mDepthStencilBufferRequestedState]);
+
+      // make sure GPU finished any pending work
+      mGraphicsDevice->DeviceWaitIdle();
+
+      mDepthStencilBufferCurrentState = mDepthStencilBufferRequestedState;
+    }
+    return retval;
+  }
+
+  void GarbageCollect(bool allQueues)
+  {
+    if(DALI_UNLIKELY(mGraphicsDevice == nullptr))
+    {
+      return;
+    }
+
+    // Only garbage collect from the oldest discard queue.
+    auto bufferIndex = mGraphicsDevice->GetCurrentBufferIndex() + 1;
+    bufferIndex %= mGraphicsDevice->GetBufferCount();
+    if(!allQueues)
+    {
+      mDiscardQueues.Process(bufferIndex);
+    }
+    else
+    {
+      for(uint32_t i = 0; i < mGraphicsDevice->GetBufferCount(); i++)
+      {
+        mDiscardQueues.Process(i);
+      }
+    }
+  }
+
+  void Flush()
+  {
+    // Flush any outstanding queues.
+    GarbageCollect(false);
+  }
+
+  SamplerImpl* GetDefaultSampler()
+  {
+    if(!mSamplerImpl)
+    {
+      // Create basic sampler to reuse for any texture
+      auto samplerCreateInfo = vk::SamplerCreateInfo()
+                                 .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+                                 .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+                                 .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
+                                 .setBorderColor(vk::BorderColor::eFloatOpaqueBlack)
+                                 .setCompareOp(vk::CompareOp::eNever)
+                                 .setMinFilter(vk::Filter::eLinear)
+                                 .setMagFilter(vk::Filter::eLinear)
+                                 .setMipmapMode(vk::SamplerMipmapMode::eLinear)
+                                 .setMaxAnisotropy(1.0f); // must be 1.0f when anisotropy feature isn't enabled
+
+      samplerCreateInfo.setBorderColor(vk::BorderColor::eFloatTransparentBlack);
+
+      mSamplerImpl.reset(SamplerImpl::New(*mGraphicsDevice, samplerCreateInfo));
+    }
+
+    return mSamplerImpl.get();
+  }
+
+  SamplerImpl* GetDepthTextureSampler()
+  {
+    if(!mDepthTextureSamplerImpl)
+    {
+      // Create sampler for depth textures using nearest filtering
+      // This is required because depth formats like VK_FORMAT_D16_UNORM don't support linear filtering
+      auto samplerCreateInfo = vk::SamplerCreateInfo()
+                                 .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+                                 .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+                                 .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
+                                 .setBorderColor(vk::BorderColor::eFloatOpaqueBlack)
+                                 .setCompareOp(vk::CompareOp::eNever)
+                                 .setMinFilter(vk::Filter::eNearest) // Use nearest for depth
+                                 .setMagFilter(vk::Filter::eNearest) // Use nearest for depth
+                                 .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                                 .setMaxAnisotropy(1.0f);
+
+      samplerCreateInfo.setBorderColor(vk::BorderColor::eFloatTransparentBlack);
+
+      mDepthTextureSamplerImpl.reset(SamplerImpl::New(*mGraphicsDevice, samplerCreateInfo));
+    }
+
+    return mDepthTextureSamplerImpl.get();
+  }
+
+  void CreateSubmissionData(const SubmitInfo&                                 submitInfo,
+                            std::vector<SubmissionData>&                      fboSubmitData,
+                            std::vector<SubmissionData>&                      surfaceSubmitData,
+                            std::unordered_map<RenderTarget*, size_t>&        fboLastSubmissionIndex,
+                            std::unordered_map<RenderTarget*, vk::Semaphore>& fboSignalSemaphores,
+                            RenderTarget*&                                    currentRenderSurface)
+  {
+    // Iterate over all command buffers:
+    //
+    // 1) Split them into FBO submissions and surface submissions.
+    // 2) Track the last submission index per FBO render target.
+    // 3) Track which render targets have semaphores.
+
+    for(auto gfxCmdBuffer : submitInfo.cmdBuffer)
+    {
+      auto cmdBuffer    = static_cast<const CommandBuffer*>(gfxCmdBuffer);
+      auto renderTarget = cmdBuffer->GetRenderTarget();
+
+      if(!renderTarget)
+      {
+        DALI_LOG_ERROR("Cmd buffer has no render target set.");
+        continue;
+      }
+      DUMP_FRAME_COMMAND_BUFFER(cmdBuffer->GetStoredCommandBuffer());
+      cmdBuffer->Process(); // Translate copy to Vulkan
+
+      if(renderTarget->GetSurface() == nullptr)
+      {
+        // Track submission index for FBO render targets
+        size_t submissionIndex = fboSubmitData.size();
+
+        DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "CreateSubmissionData: FBO CmdBuffer:%p\n", cmdBuffer->GetImpl());
+        renderTarget->CreateSubmissionData(cmdBuffer, fboSubmitData);
+
+        // Record this as the last submission for this render target
+        fboLastSubmissionIndex[renderTarget] = submissionIndex;
+
+#if defined(ENABLE_FBO_SEMAPHORE)
+        // Always track the semaphore, but we'll decide whether to signal it later
+        if(renderTarget->GetSubmitSemaphore())
+        {
+          fboSignalSemaphores[renderTarget] = renderTarget->GetSubmitSemaphore();
+        }
+#endif
+      }
+      else
+      {
+        // Surface target
+        if(currentRenderSurface == nullptr)
+        {
+          currentRenderSurface = renderTarget;
+        }
+        else
+        {
+          DALI_ASSERT_DEBUG(currentRenderSurface == renderTarget);
+        }
+        renderTarget->CreateSubmissionData(cmdBuffer, surfaceSubmitData);
+      }
+    }
+  }
+
+  void ResolveFboSemaphoreDependencies(std::vector<SubmissionData>&                      fboSubmitData,
+                                       const std::unordered_map<RenderTarget*, size_t>&  fboLastSubmissionIndex,
+                                       std::unordered_map<RenderTarget*, vk::Semaphore>& fboSignalSemaphores)
+  {
+    // Re-process all FBO submissions:
+    //
+    // 1) Validate wait semaphores.
+    // 2) Find earliest wait per semaphore, which constructs a dependency graph like this:
+    //
+    //    submission 0 waits on A
+    //    submission 1 waits on nothing
+    //    submission 2 waits on A and B
+    //    submission 3 waits on C
+    //    etc.
+    //
+    // 3) Decide which submission should signal each semaphore.
+    // 4) Insert the signal at the correct place.
+
+#if defined(ENABLE_FBO_SEMAPHORE)
+    std::unordered_set<VkSemaphore>         validSignalSemaphores; // Semaphores that can be signalled this frame (by some FBO render targets)
+    std::unordered_map<VkSemaphore, size_t> earliestWaitLocation;  // Maps semaphore -> earliest submission index (in fboSubmitData) that waits on it
+
+    // Build the valid signal semaphore set and handle map
+    for(const auto& [renderTarget, semaphore] : fboSignalSemaphores)
+    {
+      VkSemaphore semHandle = static_cast<VkSemaphore>(semaphore);
+      validSignalSemaphores.insert(semHandle);
+    }
+
+    // Process submissions, track wait locations, and make signal decisions
+    for(size_t i = 0; i < fboSubmitData.size(); ++i)
+    {
+      auto& submission     = fboSubmitData[i];
+      auto& waitSemaphores = submission.waitSemaphores;
+
+      // Process wait semaphores: validate and track earliest wait locations
+      waitSemaphores.erase(
+        std::remove_if(waitSemaphores.begin(), waitSemaphores.end(), [&validSignalSemaphores, &earliestWaitLocation, i](vk::Semaphore sem)
+      {
+        VkSemaphore semHandle = static_cast<VkSemaphore>(sem);
+
+        // Check if this semaphore is valid (has a corresponding signal)
+        bool isValid = validSignalSemaphores.count(semHandle) != 0;
+        if(isValid)
+        {
+          // Record earliest wait location for this semaphore
+          if(!earliestWaitLocation.count(semHandle))
+          {
+            earliestWaitLocation[semHandle] = i; // First (earliest) wait location
+          }
+          return false; // Keep valid semaphore
+        }
+        return true; // Remove invalid semaphore
+      }),
+        waitSemaphores.end());
+    }
+
+    // Decide where to signal each semaphore
+    for(const auto& [renderTarget, semaphore] : fboSignalSemaphores)
+    {
+      VkSemaphore semHandle = static_cast<VkSemaphore>(semaphore);
+
+      // MUST signal if:
+      // 1. Someone is waiting on this semaphore, OR
+      // 2. It's not dirty.
+      bool isBeingWaitedOn = earliestWaitLocation.count(semHandle) != 0;
+      bool shouldSignal    = isBeingWaitedOn || !renderTarget->IsSemaphoreDirty();
+
+      if(shouldSignal)
+      {
+        size_t signalSubmissionIndex;
+
+        if(isBeingWaitedOn)
+        {
+          // Get the earliest wait location
+          size_t earliestWaitSubmission = earliestWaitLocation.at(semHandle);
+
+          // Signal in the PREVIOUS submission to ensure signal comes before wait
+          if(earliestWaitSubmission == 0)
+          {
+            // If the earliest wait is submission 0, we can't signal in a previous submission
+            // In this case, we need to skip signaling this semaphore (it will be signaled in the next frame)
+            continue;
+          }
+          else
+          {
+            signalSubmissionIndex = earliestWaitSubmission - 1;
+          }
+        }
+        else
+        {
+          // No one is waiting on this semaphore, use the last submission as before
+          signalSubmissionIndex = fboLastSubmissionIndex.at(renderTarget);
+        }
+
+        // Check if semaphore is already in signal list to prevent duplicates
+        auto& signalSemaphores = fboSubmitData[signalSubmissionIndex].signalSemaphores;
+        if(std::find(signalSemaphores.begin(), signalSemaphores.end(), semaphore) == signalSemaphores.end())
+        {
+          signalSemaphores.push_back(semaphore);
+        }
+
+        // If we're signaling a dirty semaphore because someone is waiting on it,
+        // we need to mark it as no longer dirty to prevent future issues
+        if(isBeingWaitedOn && renderTarget->IsSemaphoreDirty())
+        {
+          // This is a special case where we override the dirty state
+          // because the semaphore is actually needed for synchronization
+          renderTarget->SetSemaphoreDirty(false);
+        }
+      }
+    }
+#endif
+  }
+
+  VulkanGraphicsController& mGraphicsController;
+  Vulkan::Device*           mGraphicsDevice{nullptr};
+
+  std::unique_ptr<Vulkan::PipelineCacheManager> mPipelineCacheManager{nullptr};
+
+  Vulkan::TextureDependencyChecker mDependencyChecker; ///< Dependencies between framebuffers/scene
+  std::vector<Vulkan::Texture*>    mDeferredTextures;
+  DiscardQueues<ResourceBase>      mDiscardQueues;
+
+  std::unique_ptr<SamplerImpl> mSamplerImpl{nullptr};
+  std::unique_ptr<SamplerImpl> mDepthTextureSamplerImpl{nullptr};
+  DepthStencilFlags            mDepthStencilBufferCurrentState{0u};
+  DepthStencilFlags            mDepthStencilBufferRequestedState{0u};
+
+  std::vector<TextureArray*>                                           mTextureArrays;                   ///< Batched textures (for color attachments)
+  std::unordered_map<uint32_t, Graphics::UniquePtr<Graphics::Texture>> mExternalTextureResources;        ///< Used for ResourceId.
+  std::queue<const Vulkan::Texture*>                                   mTextureMipmapGenerationRequests; ///< Queue for texture mipmap generation requests
+  bool                                                                 mDidPresent{false};
+  ResourceTransfer                                                     mResourceTransfer;
+
+  std::size_t mCapacity{0u}; ///< Memory Usage (of command buffers)
+
+  // Logical device creation synchronization
+  Dali::ConditionalWait mLogicalDeviceCreatedWaitCondition;
+  bool                  mIsLogicalDeviceCreated{false};
+
+  bool mIsAdvancedBlendEquationSupported{false};
+  bool mIsAdvancedBlendEquationCached{false};
+};
+
+VulkanGraphicsController::VulkanGraphicsController()
+: mImpl(std::make_unique<Impl>(*this))
+{
+}
+
+VulkanGraphicsController::~VulkanGraphicsController()
+{
+  mImpl->GarbageCollect(true);
+}
+
+void VulkanGraphicsController::Initialize(Dali::Graphics::VulkanGraphics& graphicsImplementation,
+                                          Vulkan::Device&                 graphicsDevice)
+{
+  mImpl->Initialize(graphicsDevice);
+}
+
+Integration::GraphicsConfig& VulkanGraphicsController::GetGraphicsConfig()
+{
+  return *this;
+}
+
+void VulkanGraphicsController::FrameStart()
+{
+  mImpl->mDependencyChecker.Reset(); // Clean down the dependency graph.
+  mImpl->mCapacity = 0;
+
+  DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "FrameStart: bufferIndex:%u\n", mImpl->mGraphicsDevice->GetCurrentBufferIndex());
+  // Check the size of the discard queues.
+  auto bufferCount = mImpl->mGraphicsDevice->GetBufferCount();
+  mImpl->mDiscardQueues.Resize(bufferCount);
+}
+
+void VulkanGraphicsController::RenderStart()
+{
+  if(!mImpl->mDeferredTextures.empty())
+  {
+    mImpl->CreateDeferredTextures();
+  }
+}
+
+void VulkanGraphicsController::ResetDidPresent()
+{
+  mImpl->mDidPresent = false;
+}
+
+bool VulkanGraphicsController::DidPresent() const
+{
+  return mImpl->mDidPresent;
+}
+
+void VulkanGraphicsController::CreatePipelineCacheManager()
+{
+  if(!mImpl->mPipelineCacheManager)
+  {
+    mImpl->mPipelineCacheManager = std::make_unique<Vulkan::PipelineCacheManager>(mImpl->mGraphicsController);
+  }
+}
+
+PipelineCacheManager* VulkanGraphicsController::GetPipelineCacheManager()
+{
+  return mImpl->mPipelineCacheManager.get();
+}
+
+void VulkanGraphicsController::SetResourceBindingHints(const std::vector<SceneResourceBinding>& resourceBindings)
+{
+  // Check if there is some extra information about used resources
+  // if so then apply optimizations
+
+  // update programs with descriptor pools
+  for(auto& binding : resourceBindings)
+  {
+    if(binding.type == ResourceType::PROGRAM)
+    {
+      auto programImpl = static_cast<Vulkan::Program*>(binding.programBinding->program)->GetImplementation();
+
+      // Start with conservative estimate, will grow dynamically on demand
+      programImpl->AddDescriptorPool(INITIAL_POOL_CAPACITY);
+
+      // Reset for fresh frame (returns all sets to free list)
+      uint32_t frameIndex = mImpl->mGraphicsDevice->GetCurrentBufferIndex();
+      programImpl->ResetDescriptorSetsForFrame(frameIndex);
+    }
+  }
+}
+
+void VulkanGraphicsController::SubmitCommandBuffers(const SubmitInfo& submitInfo)
+{
+  DUMP_FRAME_START();
+
+  // Wait for any pending resource transfers to finish.
+  mImpl->mResourceTransfer.WaitOnResourceTransferFutures();
+
+  DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "SubmitCommandBuffers() bufferIndex:%d\n", mImpl->mGraphicsDevice->GetCurrentBufferIndex());
+
+  std::vector<SubmissionData> fboSubmitData;
+  std::vector<SubmissionData> surfaceSubmitData;
+
+  std::unordered_map<RenderTarget*, size_t>        fboLastSubmissionIndex;
+  std::unordered_map<RenderTarget*, vk::Semaphore> fboSignalSemaphores;
+
+  RenderTarget* currentRenderSurface = nullptr;
+
+  // Collect each FBO’s submit semaphore and track its last signal point
+
+  mImpl->CreateSubmissionData(submitInfo, fboSubmitData, surfaceSubmitData, fboLastSubmissionIndex, fboSignalSemaphores, currentRenderSurface);
+
+  // Clear all signal semaphores from FBO submissions.
+  // We'll add them back only to the last submission for each render target
+  for(auto& submission : fboSubmitData)
+  {
+    submission.signalSemaphores.clear();
+  }
+
+  // Resolve the semaphore dependencies for all FBO submissions.
+  mImpl->ResolveFboSemaphoreDependencies(fboSubmitData, fboLastSubmissionIndex, fboSignalSemaphores);
+
+  // Submit FBO work first, then surface work, with the correct wait/signal lists
+  DUMP_FRAME_END();
+
+  if(!fboSubmitData.empty())
+  {
+    mImpl->mGraphicsDevice->GetGraphicsQueue(0).Submit(fboSubmitData, nullptr);
+  }
+
+  if(!surfaceSubmitData.empty())
+  {
+    auto surface   = currentRenderSurface->GetSurface();
+    auto surfaceId = static_cast<Internal::Adaptor::WindowRenderSurface*>(surface)->GetSurfaceId();
+    auto swapchain = mImpl->mGraphicsDevice->GetSwapchainForSurfaceId(surfaceId);
+
+    swapchain->UpdateSubmissionData(surfaceSubmitData);
+    swapchain->GetQueue()->Submit(surfaceSubmitData, swapchain->GetEndOfFrameFence());
+  }
+
+  // If flush bit set, flush all pending tasks
+  if(submitInfo.flags & (0 | SubmitFlagBits::FLUSH))
+  {
+    Flush();
+  }
+}
+
+void VulkanGraphicsController::PresentRenderTarget(Graphics::RenderTarget* renderTarget)
+{
+  DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "RenderTarget:%p  Surface:%p\n", renderTarget, static_cast<Vulkan::RenderTarget*>(renderTarget)->GetSurface());
+
+  if(auto surface = static_cast<Vulkan::RenderTarget*>(renderTarget)->GetSurface())
+  {
+    const auto surfaceId = static_cast<Internal::Adaptor::WindowRenderSurface*>(surface)->GetSurfaceId();
+    auto       swapchain = mImpl->mGraphicsDevice->GetSwapchainForSurfaceId(surfaceId);
+    mImpl->mDidPresent   = swapchain->Present();
+    surface->PostRender();
+  }
+  // else no presentation required for framebuffer render target.
+}
+
+void VulkanGraphicsController::WaitIdle()
+{
+}
+
+void VulkanGraphicsController::Pause()
+{
+}
+
+void VulkanGraphicsController::Resume()
+{
+  // Draw on resume - update manager could query.
+  // could use this to trigger debug output for a few frames (EGL dumps each swap-buffer)
+}
+
+void VulkanGraphicsController::Shutdown()
+{
+}
+
+void VulkanGraphicsController::Destroy()
+{
+  mImpl->Flush();
+}
+
+void VulkanGraphicsController::UpdateTextures(
+  const std::vector<Dali::Graphics::TextureUpdateInfo>&       updateInfoList,
+  const std::vector<Dali::Graphics::TextureUpdateSourceInfo>& sourceList)
+{
+  mImpl->mResourceTransfer.UpdateTextures(updateInfoList, sourceList);
+}
+
+void VulkanGraphicsController::GenerateTextureMipmaps(const Graphics::Texture& texture)
+{
+}
+
+bool VulkanGraphicsController::EnableDepthStencilBuffer(
+  const Graphics::RenderTarget& gfxRenderTarget,
+  bool                          enableDepth,
+  bool                          enableStencil)
+{
+  // if we enable depth/stencil dynamically we need to block and invalidate pipeline cache
+  auto renderTarget = static_cast<const Vulkan::RenderTarget*>(&gfxRenderTarget);
+  return mImpl->EnableDepthStencilBuffer(*renderTarget, enableDepth, enableStencil);
+}
+
+void VulkanGraphicsController::RunGarbageCollector(size_t numberOfDiscardedRenderers)
+{
+  mImpl->GarbageCollect(false);
+}
+
+void VulkanGraphicsController::DiscardUnusedResources()
+{
+}
+
+bool VulkanGraphicsController::IsDiscardQueueEmpty()
+{
+  auto bufferIndex = mImpl->mGraphicsDevice->GetCurrentBufferIndex();
+  return mImpl->mDiscardQueues.IsEmpty(bufferIndex);
+}
+
+bool VulkanGraphicsController::IsDrawOnResumeRequired()
+{
+  return true;
+}
+
+UniquePtr<Graphics::RenderTarget> VulkanGraphicsController::CreateRenderTarget(const Graphics::RenderTargetCreateInfo& renderTargetCreateInfo, UniquePtr<Graphics::RenderTarget>&& oldRenderTarget)
+{
+  auto renderTarget = NewGraphicsObject<Vulkan::RenderTarget>(renderTargetCreateInfo, *this, std::move(oldRenderTarget));
+  mImpl->mDependencyChecker.AddRenderTarget(CastObject<Vulkan::RenderTarget>(renderTarget.get()));
+  return renderTarget;
+}
+
+UniquePtr<Graphics::CommandBuffer> VulkanGraphicsController::CreateCommandBuffer(const Graphics::CommandBufferCreateInfo& commandBufferCreateInfo, UniquePtr<Graphics::CommandBuffer>&& oldCommandBuffer)
+{
+  auto commandBuffer = NewGraphicsObject<Vulkan::CommandBuffer>(commandBufferCreateInfo, *this, std::move(oldCommandBuffer));
+  return commandBuffer;
+}
+
+UniquePtr<Graphics::CommandBuffer> VulkanGraphicsController::CreateImmediateCommandBuffer(const Graphics::CommandBufferCreateInfo& commandBufferCreateInfo, UniquePtr<Graphics::CommandBuffer>&& oldCommandBuffer)
+{
+  auto commandBuffer = NewGraphicsObject<Vulkan::CommandBuffer>(commandBufferCreateInfo, *this, std::move(oldCommandBuffer), CommandBuffer::Storage::IMMEDIATE, false);
+
+  return commandBuffer;
+}
+
+UniquePtr<Graphics::RenderPass> VulkanGraphicsController::CreateRenderPass(const Graphics::RenderPassCreateInfo& renderPassCreateInfo, UniquePtr<Graphics::RenderPass>&& oldRenderPass)
+{
+  // Reuse the existing front-end object when the caller hands one back — its
+  // address may be cached in FramebufferImpl::mRenderPasses from earlier
+  // frames, so creating a fresh object would leave those entries dangling.
+  // Reinitialize() notifies registered observers so they drop stale backend
+  // RenderPassImpl handles tied to the previous load/store ops or attachment
+  // shape.
+  if(oldRenderPass)
+  {
+    static_cast<Vulkan::RenderPass*>(oldRenderPass.get())->Reinitialize(renderPassCreateInfo);
+    return std::move(oldRenderPass);
+  }
+
+  // Don't create actual vulkan resource here. It will instead be done on demand. (e.g. framebuffer creation, CommandBuffer::BeginRenderPass())
+  return UniquePtr<Graphics::RenderPass>(new Vulkan::RenderPass(renderPassCreateInfo, *this));
+}
+
+UniquePtr<Graphics::Buffer> VulkanGraphicsController::CreateBuffer(const Graphics::BufferCreateInfo& bufferCreateInfo, UniquePtr<Graphics::Buffer>&& oldBuffer)
+{
+  return NewGraphicsObject<Vulkan::Buffer>(bufferCreateInfo, *this, std::move(oldBuffer));
+}
+
+UniquePtr<Graphics::Texture> VulkanGraphicsController::CreateTexture(const Graphics::TextureCreateInfo& textureCreateInfo, UniquePtr<Graphics::Texture>&& oldTexture)
+{
+  auto gfxTexture = NewGraphicsObject<Vulkan::Texture>(textureCreateInfo, *this, std::move(oldTexture));
+  if(auto texture = static_cast<Vulkan::Texture*>(gfxTexture.get()); texture->WasInitializationDeferred())
+  {
+    mImpl->mDeferredTextures.emplace_back(texture);
+  }
+  return gfxTexture;
+}
+
+UniquePtr<Graphics::Framebuffer> VulkanGraphicsController::CreateFramebuffer(const Graphics::FramebufferCreateInfo& framebufferCreateInfo, UniquePtr<Graphics::Framebuffer>&& oldFramebuffer)
+{
+  return NewGraphicsObject<Vulkan::Framebuffer>(framebufferCreateInfo, *this, std::move(oldFramebuffer));
+}
+
+void VulkanGraphicsController::UpdateFramebufferRenderbufferUsage(Graphics::Framebuffer& framebuffer, const Graphics::DepthStencilState& depthStencilState)
+{
+  // Cast to Vulkan::Framebuffer and update
+  auto* vulkanFramebuffer = static_cast<Vulkan::Framebuffer*>(&framebuffer);
+  if(vulkanFramebuffer)
+  {
+    vulkanFramebuffer->UpdateDepthStencilState(depthStencilState);
+  }
+}
+
+UniquePtr<Graphics::Pipeline> VulkanGraphicsController::CreatePipeline(const Graphics::PipelineCreateInfo& pipelineCreateInfo, UniquePtr<Graphics::Pipeline>&& oldPipeline)
+{
+  return UniquePtr<Graphics::Pipeline>(new Vulkan::Pipeline(pipelineCreateInfo, *this, nullptr));
+}
+
+UniquePtr<Graphics::Program> VulkanGraphicsController::CreateProgram(const Graphics::ProgramCreateInfo& programCreateInfo, UniquePtr<Graphics::Program>&& oldProgram)
+{
+  return UniquePtr<Graphics::Program>(new Vulkan::Program(programCreateInfo, *this));
+}
+
+UniquePtr<Graphics::Shader> VulkanGraphicsController::CreateShader(const Graphics::ShaderCreateInfo& shaderCreateInfo, UniquePtr<Graphics::Shader>&& oldShader)
+{
+  return UniquePtr<Graphics::Shader>(new Vulkan::Shader(shaderCreateInfo, *this));
+}
+
+UniquePtr<Graphics::Sampler> VulkanGraphicsController::CreateSampler(const Graphics::SamplerCreateInfo& samplerCreateInfo, UniquePtr<Graphics::Sampler>&& oldSampler)
+{
+  return NewGraphicsObject<Vulkan::Sampler>(samplerCreateInfo, *this, std::move(oldSampler));
+}
+
+UniquePtr<Graphics::SyncObject> VulkanGraphicsController::CreateSyncObject(const Graphics::SyncObjectCreateInfo& syncObjectCreateInfo,
+                                                                           UniquePtr<Graphics::SyncObject>&&     oldSyncObject)
+{
+  return UniquePtr<Graphics::SyncObject>{};
+}
+
+void VulkanGraphicsController::DiscardResource(ResourceBase* resource)
+{
+  // If it is a texture, remove it from mDeferredTextures.
+  if(auto texture = dynamic_cast<Vulkan::Texture*>(resource); texture != nullptr)
+  {
+    if(texture->WasInitializationDeferred())
+    {
+      if(auto gfxTexture = std::find(mImpl->mDeferredTextures.begin(), mImpl->mDeferredTextures.end(), resource);
+         gfxTexture != mImpl->mDeferredTextures.end())
+      {
+        mImpl->mDeferredTextures.erase(gfxTexture);
+      }
+    }
+  }
+  mImpl->mDiscardQueues.Discard(resource);
+}
+
+UniquePtr<Graphics::Memory> VulkanGraphicsController::MapBufferRange(const MapBufferInfo& mapInfo)
+{
+  // @todo: Process create queues
+  auto        buffer     = static_cast<Vulkan::Buffer*>(mapInfo.buffer);
+  BufferImpl* bufferImpl = buffer->GetImpl();
+  DALI_ASSERT_DEBUG(bufferImpl && "Mapping CPU allocated buffer is not used in Vulkan");
+  if(bufferImpl)
+  {
+    auto memoryImpl = bufferImpl->GetMemory();
+    auto memory     = UniquePtr<Memory>(new Memory(mapInfo, *this));
+    memory->Initialize(memoryImpl);
+    return memory;
+  }
+  return nullptr;
+}
+
+UniquePtr<Graphics::Memory> VulkanGraphicsController::MapTextureRange(const MapTextureInfo& mapInfo)
+{
+  // Not implemented (@todo Remove from Graphics API?
+  return nullptr;
+}
+
+void VulkanGraphicsController::UnmapMemory(UniquePtr<Graphics::Memory> memory)
+{
+  // Do nothing. Let unique ptr die, and deal with it in the destructor.
+}
+
+MemoryRequirements VulkanGraphicsController::GetBufferMemoryRequirements(Graphics::Buffer& gfxBuffer) const
+{
+  auto        buffer     = static_cast<Vulkan::Buffer*>(&gfxBuffer);
+  BufferImpl* bufferImpl = buffer->GetImpl();
+  return bufferImpl->GetMemoryRequirements();
+}
+
+MemoryRequirements VulkanGraphicsController::GetTextureMemoryRequirements(Graphics::Texture& gfxTexture) const
+{
+  const Vulkan::Texture* texture = static_cast<const Vulkan::Texture*>(&gfxTexture);
+  return texture->GetMemoryRequirements();
+}
+
+TextureProperties VulkanGraphicsController::GetTextureProperties(const Graphics::Texture& gfxTexture)
+{
+  auto* texture = const_cast<Vulkan::Texture*>(static_cast<const Vulkan::Texture*>(&gfxTexture));
+  return texture->GetProperties();
+}
+
+const Graphics::Reflection& VulkanGraphicsController::GetProgramReflection(const Graphics::Program& program)
+{
+  return (static_cast<const Vulkan::Program*>(&program))->GetReflection();
+}
+
+bool VulkanGraphicsController::IsCompatible(
+  const Graphics::RenderTarget& gfxRenderTargetA, const Graphics::RenderTarget& gfxRenderTargetB, const Graphics::RenderPass& gfxRenderPassA, const Graphics::RenderPass& gfxRenderPassB)
+{
+  // If render target and render passes are compatible, we can re-use same pipeline.
+  auto renderTargetA = CastObject<const Vulkan::RenderTarget>(&gfxRenderTargetA);
+  auto renderTargetB = CastObject<const Vulkan::RenderTarget>(&gfxRenderTargetB);
+  auto fboA          = const_cast<Vulkan::Framebuffer*>(CastObject<Vulkan::Framebuffer>(renderTargetA->GetCreateInfo().framebuffer));
+  auto fboB          = const_cast<Vulkan::Framebuffer*>(CastObject<Vulkan::Framebuffer>(renderTargetB->GetCreateInfo().framebuffer));
+  auto renderPassA   = const_cast<Vulkan::RenderPass*>(CastObject<const Vulkan::RenderPass>(&gfxRenderPassA));
+  auto renderPassB   = const_cast<Vulkan::RenderPass*>(CastObject<const Vulkan::RenderPass>(&gfxRenderPassB));
+
+  if(fboA != nullptr && fboB != nullptr)
+  {
+    auto fboImplA        = fboA->GetImpl();
+    auto fboImplB        = fboB->GetImpl();
+    auto renderPassImplA = fboImplA->GetImplFromRenderPass(renderPassA);
+    auto renderPassImplB = fboImplB->GetImplFromRenderPass(renderPassB);
+    return renderPassImplA->IsCompatible(renderPassImplB);
+  }
+
+  auto surfaceA = renderTargetA->GetCreateInfo().surface;
+  auto surfaceB = renderTargetB->GetCreateInfo().surface;
+  return surfaceA == surfaceB;
+}
+
+void VulkanGraphicsController::UpdateRenderTarget(Graphics::RenderTarget& renderTarget, const Graphics::RenderTargetCreateInfo& renderTargetCreateInfo)
+{
+  auto glesRenderTarget     = static_cast<RenderTarget*>(&renderTarget);
+  auto createInfo           = const_cast<RenderTargetCreateInfo*>(&glesRenderTarget->GetCreateInfo());
+  createInfo->extent.width  = renderTargetCreateInfo.extent.width;
+  createInfo->extent.height = renderTargetCreateInfo.extent.height;
+}
+
+bool VulkanGraphicsController::PipelineEquals(const Graphics::Pipeline& pipeline0, const Graphics::Pipeline& pipeline1) const
+{
+  return true;
+}
+
+bool VulkanGraphicsController::GetProgramParameter(Graphics::Program& program, uint32_t parameterId, void* outData)
+{
+  return false;
+}
+
+uint32_t VulkanGraphicsController::GetDeviceLimitation(Graphics::DeviceCapability capability)
+{
+  switch(capability)
+  {
+    case DeviceCapability::MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT:
+    {
+      const auto& properties = mImpl->mGraphicsDevice->GetPhysicalDeviceProperties();
+      return properties.limits.minUniformBufferOffsetAlignment;
+    }
+    case DeviceCapability::SUPPORTED_DYNAMIC_STATES:
+    {
+      uint32_t dynamicStateBits = PipelineDynamicStateBits::VIEWPORT_BIT |
+                                  PipelineDynamicStateBits::SCISSOR_BIT;
+
+      if(mImpl->mGraphicsDevice->IsAdvancedBlendingSupported() &&
+         mImpl->mGraphicsDevice->IsExtendedDynamicState3Supported())
+      {
+        dynamicStateBits |= PipelineDynamicStateBits::COLOR_BLEND_ENABLE_BIT |
+                            PipelineDynamicStateBits::COLOR_BLEND_EQUATION_BIT;
+      }
+
+      return dynamicStateBits;
+    }
+    case DeviceCapability::SUPPORTED_GRAPHICS_FEATURE_FLAGS:
+    {
+      return static_cast<uint32_t>(DEFAULT_GRAPHICS_FEATURE_FLAGS);
+    }
+    default:
+    {
+      return 0u;
+    }
+  }
+}
+
+bool VulkanGraphicsController::IsBlendEquationSupported(BlendEquation::Type blendEquation)
+{
+  switch(blendEquation)
+  {
+    case BlendEquation::ADD:
+    case BlendEquation::SUBTRACT:
+    case BlendEquation::REVERSE_SUBTRACT:
+    case BlendEquation::MIN:
+    case BlendEquation::MAX:
+    {
+      return true;
+    }
+    case BlendEquation::MULTIPLY:
+    case BlendEquation::SCREEN:
+    case BlendEquation::OVERLAY:
+    case BlendEquation::DARKEN:
+    case BlendEquation::LIGHTEN:
+    case BlendEquation::COLOR_DODGE:
+    case BlendEquation::COLOR_BURN:
+    case BlendEquation::HARD_LIGHT:
+    case BlendEquation::SOFT_LIGHT:
+    case BlendEquation::DIFFERENCE:
+    case BlendEquation::EXCLUSION:
+    case BlendEquation::HUE:
+    case BlendEquation::SATURATION:
+    case BlendEquation::COLOR:
+    case BlendEquation::LUMINOSITY:
+    {
+      return IsAdvancedBlendEquationSupported();
+    }
+    default:
+    {
+      return false;
+    }
+  }
+  return false;
+}
+
+bool VulkanGraphicsController::IsAdvancedBlendEquationSupported()
+{
+  // Wait for logical device creation if not ready
+  {
+    Dali::ConditionalWait::ScopedLock lock(mImpl->mLogicalDeviceCreatedWaitCondition);
+    if(!mImpl->mIsLogicalDeviceCreated && !mImpl->mIsAdvancedBlendEquationCached)
+    {
+      DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "IsAdvancedBlendEquationSupported: waiting for logical device creation\n");
+      mImpl->mLogicalDeviceCreatedWaitCondition.Wait(lock);
+    }
+  }
+
+  if(mImpl->mIsAdvancedBlendEquationCached)
+  {
+    return mImpl->mIsAdvancedBlendEquationSupported;
+  }
+  else
+  {
+    auto& device = mImpl->mGraphicsDevice;
+    return device && device->IsAdvancedBlendingSupported();
+  }
+}
+
+void VulkanGraphicsController::SetIsAdvancedBlendEquationSupported(bool isSupported)
+{
+  mImpl->mIsAdvancedBlendEquationSupported = isSupported;
+  mImpl->mIsAdvancedBlendEquationCached    = true;
+}
+
+uint32_t VulkanGraphicsController::GetMaxTextureSize()
+{
+  // Wait for logical device creation if not ready
+  {
+    Dali::ConditionalWait::ScopedLock lock(mImpl->mLogicalDeviceCreatedWaitCondition);
+    if(!mImpl->mIsLogicalDeviceCreated)
+    {
+      DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "GetMaxTextureSize: waiting for logical device creation\n");
+      mImpl->mLogicalDeviceCreatedWaitCondition.Wait(lock);
+    }
+  }
+
+  // Query max texture size from Vulkan physical device properties
+  const auto& properties = mImpl->mGraphicsDevice->GetPhysicalDeviceProperties();
+  return properties.limits.maxImageDimension2D;
+}
+
+uint32_t VulkanGraphicsController::GetMaxCombinedTextureUnits()
+{
+  // Wait for logical device creation if not ready
+  {
+    Dali::ConditionalWait::ScopedLock lock(mImpl->mLogicalDeviceCreatedWaitCondition);
+    if(!mImpl->mIsLogicalDeviceCreated)
+    {
+      DALI_LOG_INFO(gVulkanFilter, Debug::Verbose, "GetMaxCombinedTextureUnits: waiting for logical device creation\n");
+      mImpl->mLogicalDeviceCreatedWaitCondition.Wait(lock);
+    }
+  }
+
+  // Query max combined texture units from Vulkan physical device properties
+  const auto& properties = mImpl->mGraphicsDevice->GetPhysicalDeviceProperties();
+  return properties.limits.maxPerStageDescriptorSamplers;
+}
+
+uint32_t VulkanGraphicsController::GetShaderLanguageVersion()
+{
+  return 4;
+}
+
+std::string VulkanGraphicsController::GetShaderVersionPrefix()
+{
+  return "";
+}
+
+std::string VulkanGraphicsController::GetVertexShaderPrefix()
+{
+  return "";
+}
+
+std::string VulkanGraphicsController::GetFragmentShaderPrefix()
+{
+  return "";
+}
+
+Vulkan::Device& VulkanGraphicsController::GetGraphicsDevice()
+{
+  return *mImpl->mGraphicsDevice;
+}
+
+Graphics::Texture* VulkanGraphicsController::CreateTextureByResourceId(uint32_t resourceId, const Graphics::TextureCreateInfo& createInfo)
+{
+  Graphics::UniquePtr<Graphics::Texture> texture;
+
+  // Check that this resource id hasn't been used previously
+  auto iter = mImpl->mExternalTextureResources.find(resourceId);
+  DALI_ASSERT_ALWAYS(iter == mImpl->mExternalTextureResources.end());
+
+  texture = CreateTexture(createInfo, std::move(texture));
+
+  auto gfxTexture = texture.get();
+  mImpl->mExternalTextureResources.insert(std::make_pair(resourceId, std::move(texture)));
+
+  return gfxTexture;
+}
+
+void VulkanGraphicsController::DiscardTextureFromResourceId(uint32_t resourceId)
+{
+  auto iter = mImpl->mExternalTextureResources.find(resourceId);
+  if(iter != mImpl->mExternalTextureResources.end())
+  {
+    mImpl->mExternalTextureResources.erase(iter);
+  }
+}
+
+Graphics::Texture* VulkanGraphicsController::GetTextureFromResourceId(uint32_t resourceId)
+{
+  Graphics::Texture* gfxTexture = nullptr;
+
+  auto iter = mImpl->mExternalTextureResources.find(resourceId);
+  if(iter != mImpl->mExternalTextureResources.end())
+  {
+    gfxTexture = iter->second.get();
+  }
+
+  return gfxTexture;
+}
+
+Graphics::UniquePtr<Graphics::Texture> VulkanGraphicsController::ReleaseTextureFromResourceId(uint32_t resourceId)
+{
+  Graphics::UniquePtr<Graphics::Texture> gfxTexture;
+
+  auto iter = mImpl->mExternalTextureResources.find(resourceId);
+  if(iter != mImpl->mExternalTextureResources.end())
+  {
+    gfxTexture = std::move(iter->second);
+    mImpl->mExternalTextureResources.erase(iter);
+  }
+
+  return gfxTexture;
+}
+
+void VulkanGraphicsController::Flush()
+{
+  mImpl->Flush();
+}
+
+void VulkanGraphicsController::NotifyLogicalDeviceCreated()
+{
+  // Signal that logical device is created
+  {
+    Dali::ConditionalWait::ScopedLock lock(mImpl->mLogicalDeviceCreatedWaitCondition);
+    mImpl->mIsLogicalDeviceCreated = true;
+    mImpl->mLogicalDeviceCreatedWaitCondition.Notify(lock);
+  }
+}
+
+std::size_t VulkanGraphicsController::GetCapacity() const
+{
+  return mImpl->mCapacity;
+}
+
+const Matrix& VulkanGraphicsController::GetClipMatrix(const Graphics::RenderTarget* gfxRenderTarget) const
+{
+  constexpr float CLIP_MATRIX_DATA[] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.5f, 0.0f,
+    0.0f, 0.0f, 0.5f, 1.0f};
+  constexpr float CLIP_INVERT_Y_MATRIX_DATA[] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, -1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.5f, 0.0f,
+    0.0f, 0.0f, 0.5f, 1.0f};
+
+  static const Matrix CLIP_MATRIX(CLIP_MATRIX_DATA);
+  static const Matrix CLIP_INVERT_Y_MATRIX(CLIP_INVERT_Y_MATRIX_DATA);
+
+  auto renderTarget = static_cast<const Vulkan::RenderTarget*>(gfxRenderTarget);
+  if(renderTarget->GetFramebuffer() != nullptr)
+  {
+    return CLIP_MATRIX;
+  }
+  return CLIP_INVERT_Y_MATRIX;
+}
+
+void VulkanGraphicsController::AddTextureDependencies(RenderTarget* renderTarget)
+{
+  auto framebuffer = renderTarget->GetFramebuffer();
+  DALI_ASSERT_DEBUG(framebuffer);
+
+  for(auto attachment : framebuffer->GetCreateInfo().colorAttachments)
+  {
+    auto texture = CastObject<Vulkan::Texture>(attachment.texture);
+    mImpl->mDependencyChecker.AddTexture(texture, renderTarget);
+  }
+  auto depthAttachment = framebuffer->GetCreateInfo().depthStencilAttachment;
+  if(depthAttachment.depthTexture)
+  {
+    mImpl->mDependencyChecker.AddTexture(CastObject<Vulkan::Texture>(depthAttachment.depthTexture), renderTarget);
+  }
+  if(depthAttachment.stencilTexture)
+  {
+    mImpl->mDependencyChecker.AddTexture(CastObject<Vulkan::Texture>(depthAttachment.stencilTexture), renderTarget);
+  }
+}
+
+void VulkanGraphicsController::CheckTextureDependencies(
+  const std::vector<Graphics::TextureBinding>& textureBindings,
+  RenderTarget*                                renderTarget)
+{
+  for(auto& binding : textureBindings)
+  {
+    if(binding.texture)
+    {
+      auto texture = CastObject<const Vulkan::Texture>(binding.texture);
+      mImpl->mDependencyChecker.CheckNeedsSync(const_cast<Texture*>(texture), renderTarget);
+    }
+  }
+}
+
+void VulkanGraphicsController::RemoveRenderTarget(RenderTarget* renderTarget)
+{
+  mImpl->mDependencyChecker.RemoveRenderTarget(renderTarget);
+}
+
+SamplerImpl* VulkanGraphicsController::GetDefaultSampler()
+{
+  return mImpl->GetDefaultSampler();
+}
+
+SamplerImpl* VulkanGraphicsController::GetDepthTextureSampler()
+{
+  return mImpl->GetDepthTextureSampler();
+}
+
+void VulkanGraphicsController::RemoveTextureArray(TextureArray* textureArray)
+{
+  mImpl->RemoveTextureArray(textureArray);
+}
+
+} //namespace DALI_NAMESPACE::Graphics::Vulkan

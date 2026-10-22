@@ -1,0 +1,230 @@
+#ifndef DALI_INTERNAL_ADAPTOR_ENVIRONMENT_VARIABLES_H
+#define DALI_INTERNAL_ADAPTOR_ENVIRONMENT_VARIABLES_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/public-api/common/dali-namespace.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+/**
+ * What performance statistics are logged out to dlog
+ * see StatisticsLogOptions in performance-interface.h for values
+ */
+#define DALI_ENV_LOG_PERFORMANCE_STATS "DALI_LOG_PERFORMANCE_STATS"
+
+/**
+ * How frequent in seconds to log out performance statistics
+ */
+#define DALI_ENV_LOG_PERFORMANCE_STATS_FREQUENCY "DALI_LOG_PERFORMANCE_STATS_FREQ"
+
+/**
+ * Where timestamped events for update/render/event and custom events
+ * are output.
+ * see TimeStampOutput in performance-interface.h for values
+ */
+#define DALI_ENV_PERFORMANCE_TIMESTAMP_OUTPUT "DALI_PERFORMANCE_TIMESTAMP_OUTPUT"
+
+/**
+ * Allow control and monitoring of DALi via the network
+ */
+#define DALI_ENV_NETWORK_CONTROL "DALI_NETWORK_CONTROL"
+
+// environment variable for enabling/disabling fps tracking
+#define DALI_ENV_FPS_TRACKING "DALI_FPS_TRACKING"
+
+#define DALI_ENV_UPDATE_STATUS_INTERVAL "DALI_UPDATE_STATUS_INTERVAL"
+
+#define DALI_ENV_OBJECT_PROFILER_INTERVAL "DALI_OBJECT_PROFILER_INTERVAL"
+#define DALI_ENV_MEMORY_POOL_INTERVAL "DALI_MEMORY_POOL_INTERVAL"
+
+// Pan-Gesture configuration:
+// Prediction Modes 1 & 2:
+#define DALI_ENV_PAN_PREDICTION_MODE "DALI_PAN_PREDICTION_MODE"
+#define DALI_ENV_PAN_PREDICTION_AMOUNT "DALI_PAN_PREDICTION_AMOUNT"
+#define DALI_ENV_PAN_SMOOTHING_MODE "DALI_PAN_SMOOTHING_MODE"
+
+// Prediction Mode 1:
+#define DALI_ENV_PAN_MAX_PREDICTION_AMOUNT "DALI_PAN_MAX_PREDICTION_AMOUNT"
+#define DALI_ENV_PAN_MIN_PREDICTION_AMOUNT "DALI_PAN_MIN_PREDICTION_AMOUNT"
+#define DALI_ENV_PAN_PREDICTION_AMOUNT_ADJUSTMENT "DALI_PAN_PREDICTION_AMOUNT_ADJUSTMENT"
+#define DALI_ENV_PAN_SMOOTHING_AMOUNT "DALI_PAN_SMOOTHING_AMOUNT"
+
+// Prediction Mode 2:
+#define DALI_ENV_PAN_USE_ACTUAL_TIMES "DALI_PAN_USE_ACTUAL_TIMES"
+#define DALI_ENV_PAN_INTERPOLATION_TIME_RANGE "DALI_PAN_INTERPOLATION_TIME_RANGE"
+#define DALI_ENV_PAN_SCALAR_ONLY_PREDICTION_ENABLED "DALI_PAN_SCALAR_ONLY_PREDICTION_ENABLED"
+#define DALI_ENV_PAN_TWO_POINT_PREDICTION_ENABLED "DALI_PAN_TWO_POINT_PREDICTION_ENABLED"
+#define DALI_ENV_PAN_TWO_POINT_PAST_INTERPOLATE_TIME "DALI_PAN_TWO_POINT_PAST_INTERPOLATE_TIME"
+#define DALI_ENV_PAN_TWO_POINT_VELOCITY_BIAS "DALI_PAN_TWO_POINT_VELOCITY_BIAS"
+#define DALI_ENV_PAN_TWO_POINT_ACCELERATION_BIAS "DALI_PAN_TWO_POINT_ACCELERATION_BIAS"
+#define DALI_ENV_PAN_MULTITAP_SMOOTHING_RANGE "DALI_PAN_MULTITAP_SMOOTHING_RANGE"
+
+// Pan-Gesture miscellaneous:
+#define DALI_ENV_LOG_PAN_GESTURE "DALI_LOG_PAN_GESTURE"
+#define DALI_ENV_PAN_MINIMUM_DISTANCE "DALI_PAN_MINIMUM_DISTANCE"
+#define DALI_ENV_PAN_MINIMUM_EVENTS "DALI_PAN_MINIMUM_EVENTS"
+
+// Pinch-Gesture
+#define DALI_ENV_PINCH_MINIMUM_DISTANCE "DALI_PINCH_MINIMUM_DISTANCE"
+#define DALI_ENV_PINCH_MINIMUM_TOUCH_EVENTS "DALI_PINCH_MINIMUM_TOUCH_EVENTS"
+#define DALI_ENV_PINCH_MINIMUM_TOUCH_EVENTS_AFTER_START "DALI_PINCH_MINIMUM_TOUCH_EVENTS_AFTER_START"
+
+// Rotation-Gesture
+#define DALI_ENV_ROTATION_MINIMUM_TOUCH_EVENTS "DALI_ROTATION_MINIMUM_TOUCH_EVENTS"
+#define DALI_ENV_ROTATION_MINIMUM_TOUCH_EVENTS_AFTER_START "DALI_ROTATION_MINIMUM_TOUCH_EVENTS_AFTER_START"
+
+/**
+ * The minimum holding time required to be recognized as a long press gesture (milliseconds)
+ */
+#define DALI_ENV_LONG_PRESS_MINIMUM_HOLDING_TIME "DALI_LONG_PRESS_MINIMUM_HOLDING_TIME"
+
+// Tap-Gesture maximum allowed time required to be recognized as a multi tap gesture (millisecond)
+#define DALI_ENV_TAP_MAXIMUM_ALLOWED_TIME "DALI_TAP_MAXIMUM_ALLOWED_TIME"
+
+#define DALI_GLES_CALL_TIME "DALI_GLES_CALL_TIME"
+
+#define DALI_GLES_CALL_ACCUMULATE "DALI_GLES_CALL_ACCUMULATE"
+
+#define DALI_WINDOW_WIDTH "DALI_WINDOW_WIDTH"
+
+#define DALI_WINDOW_HEIGHT "DALI_WINDOW_HEIGHT"
+
+#define DALI_WINDOW_NAME "DALI_WINDOW_NAME"
+
+#define DALI_WINDOW_CLASS_NAME "DALI_WINDOW_CLASS_NAME"
+
+#define DALI_THREADING_MODE "DALI_THREADING_MODE"
+
+/**
+ * Specify the Graphics Backend to use.
+ * Can be "GLES" or "VULKAN", or the appropriate integer value from Graphics::Backend.
+ */
+#define DALI_ENV_GRAPHICS_BACKEND "DALI_GRAPHICS_BACKEND"
+
+/**
+ * Specify the priority of current graphics context to use.
+ * Can be "LOW", "MEDIUM", "HIGH", "REALTIME", or the appropriate integer value from Graphics::ContextPriority.
+ */
+#define DALI_ENV_GRAPHICS_CONTEXT_PRIORITY "DALI_GRAPHICS_CONTEXT_PRIORITY"
+
+/**
+ * The render refresh rate as the number of vsyncs per render.
+ * e.g. 1 renders every frame, 2 renders every other frame. Values below one are ignored.
+ */
+#define DALI_ENV_REFRESH_RATE "DALI_REFRESH_RATE"
+
+/**
+ * The maximum render frame rate in frames per second, used for Vsync.
+ * e.g. 60.0 limits rendering to 60 fps, 90.0 to 90 fps.
+ * Values equal to or below zero are ignored.
+ */
+#define DALI_ENV_MAXIMUM_RENDER_FRAME_RATE "DALI_MAXIMUM_RENDER_FRAME_RATE"
+
+#define DALI_WIDGET_REFRESH_RATE "DALI_WIDGET_REFRESH_RATE"
+
+#define DALI_ENV_MULTI_SAMPLING_LEVEL "DALI_MULTI_SAMPLING_LEVEL"
+
+#define DALI_ENV_MAX_TEXTURE_SIZE "DALI_MAX_TEXTURE_SIZE"
+
+#define DALI_ENV_MAX_COMBINED_TEXTURE_UNITS "DALI_MAX_COMBINED_TEXTURE_UNITS"
+
+#define DALI_RENDER_TO_FBO "DALI_RENDER_TO_FBO"
+
+#define DALI_ENV_DISABLE_DEPTH_BUFFER "DALI_DISABLE_DEPTH_BUFFER"
+
+#define DALI_ENV_DISABLE_STENCIL_BUFFER "DALI_DISABLE_STENCIL_BUFFER"
+
+#define DALI_ENV_DISABLE_PARTIAL_UPDATE "DALI_DISABLE_PARTIAL_UPDATE"
+
+#define DALI_ENV_WEB_ENGINE_NAME "DALI_WEB_ENGINE_NAME"
+
+#define DALI_ENV_DPI_HORIZONTAL "DALI_DPI_HORIZONTAL"
+
+#define DALI_ENV_DPI_VERTICAL "DALI_DPI_VERTICAL"
+
+#define DALI_ENV_ADDONS_PATH "DALI_ADDONS_PATH"
+
+#define DALI_ENV_ADDONS_LIBS "DALI_ADDONS_LIBS"
+
+#define DALI_ENV_DISABLE_ATSPI "DALI_DISABLE_ATSPI"
+
+#define DALI_ENV_SUPPRESS_SCREEN_READER "DALI_SUPPRESS_SCREEN_READER"
+
+#define DALI_ENV_ENABLE_UI_THREAD "DALI_ENABLE_UI_THREAD"
+
+#define DALI_ENV_DISABLE_VSYNC_RENDER "DALI_DISABLE_VSYNC_RENDER"
+
+#define DALI_ENV_ENABLE_IMAGE_LOADER_PLUGIN "DALI_ENABLE_IMAGE_LOADER_PLUGIN"
+
+// Threshold time in miliseconds when we want to print the egl performance as a warning.
+#define DALI_ENV_EGL_PERFORMANCE_LOG_THRESHOLD_TIME "DALI_EGL_PERFORMANCE_LOG_THRESHOLD_TIME"
+
+#define DALI_ENV_TBM_SURFACE_QUEUE_SIZE "DALI_TBM_SURFACE_QUEUE_SIZE"
+
+#define DALI_ENV_ASYNC_MANAGER_THREAD_POOL_SIZE "DALI_ASYNC_MANAGER_THREAD_POOL_SIZE"
+
+#define DALI_ENV_ASYNC_MANAGER_LOW_PRIORITY_THREAD_POOL_SIZE "DALI_ASYNC_MANAGER_LOW_PRIORITY_THREAD_POOL_SIZE"
+
+// Face size Cache
+#define DALI_ENV_MAX_NUMBER_OF_FACE_SIZE_CACHE "DALI_FACE_SIZE_CACHE_MAX"
+
+// Glyph Cache
+#define DALI_ENV_MAX_NUMBER_OF_GLYPH_CACHE "DALI_GLYPH_CACHE_MAX"
+
+#define DALI_ENV_ENABLE_CACHE_RENDERED_GLYPH "DALI_ENABLE_CACHE_RENDERED_GLYPH"
+
+#define DALI_ENV_RENDERED_GLYPH_COMPRESS_POLICY "DALI_RENDERED_GLYPH_COMPRESS_POLICY"
+
+// Description Cache
+#define DALI_ENV_MAX_NUMBER_OF_DESCRIPTION_CACHE "DALI_DESCRIPTION_CACHE_MAX"
+
+// File download plugin configuration
+#define DALI_ENV_FILE_DOWNLOAD_PLUGIN_NAME "DALI_FILE_DOWNLOAD_PLUGIN_NAME"
+#define DALI_ENV_USE_CAPI_DOWNLOAD_PROVIDER_API "DALI_USE_CAPI_DOWNLOAD_PROVIDER_API"
+
+// Debug relative environments
+#define DALI_ENV_PRINT_LOG_LEVEL "DALI_PRINT_LOG_LEVEL"
+
+// Print DebugPriority::DEBUG messages at the platform's info priority. Useful where the platform
+// log daemon drops debug priority messages.
+#define DALI_ENV_PRINT_LOG_DEBUG_AS_INFO "DALI_PRINT_LOG_DEBUG_AS_INFO"
+
+#define DALI_ENV_TRACE_ENABLE_PRINT_LOG "DALI_TRACE_ENABLE_PRINT_LOG"
+
+// Emit the platform trace events themselves. Set to 0 where the platform reacts badly to the
+// graphics trace tag, in which case DALI_TRACE_ENABLE_PRINT_LOG still gives the trace as log.
+#define DALI_ENV_TRACE_ENABLE_PLATFORM_TRACE "DALI_TRACE_ENABLE_PLATFORM_TRACE"
+
+#define DALI_ENV_SHADER_USE_PROGRAM_BINARY "DALI_SHADER_USE_PROGRAM_BINARY"
+
+// Queue benchmark instrumentation
+#define DALI_ENV_QUEUE_BENCHMARK "DALI_QUEUE_BENCHMARK"
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTERNAL_ADAPTOR_ENVIRONMENT_VARIABLES_H

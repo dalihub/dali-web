@@ -1,0 +1,55 @@
+
+
+SET( adaptor_integration_api_src_files
+  ${adaptor_integration_api_dir}/adaptor-framework/application-controller.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/clipboard-integ.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/scene-holder.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/scene-holder-impl.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/native-image-surface.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/input-method-context-integ.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/input-method-options.cpp
+  ${adaptor_integration_api_dir}/adaptor-framework/shader-precompiler.cpp
+  ${adaptor_integration_api_dir}/system/system-settings.cpp
+)
+
+SET( adaptor_integration_api_file_download_plugin_src_files
+    ${adaptor_integration_api_dir}/adaptor-framework/file-download/file-download-plugin-proxy.cpp
+    ${adaptor_integration_api_dir}/adaptor-framework/file-download/remote-file-download-manager.cpp
+)
+
+SET( adaptor_integration_api_header_files
+  ${adaptor_integration_api_dir}/adaptor-framework/adaptor.h
+  ${adaptor_integration_api_dir}/adaptor-framework/accessibility/accessibility-integ.h
+  ${adaptor_integration_api_dir}/adaptor-framework/accessibility/accessibility-bitset.h
+  ${adaptor_integration_api_dir}/adaptor-framework/accessibility/accessibility-bridge.h
+  ${adaptor_integration_api_dir}/adaptor-framework/application-controller.h
+  ${adaptor_integration_api_dir}/adaptor-framework/accessibility/accessibility-service.h
+  ${adaptor_integration_api_dir}/adaptor-framework/clipboard-integ.h
+  ${adaptor_integration_api_dir}/adaptor-framework/color-depth.h
+  ${adaptor_integration_api_dir}/adaptor-framework/egl-interface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/focused-actor-provider.h
+  ${adaptor_integration_api_dir}/adaptor-framework/input-method-context-integ.h
+  ${adaptor_integration_api_dir}/adaptor-framework/input-method-options.h
+  ${adaptor_integration_api_dir}/adaptor-framework/log-factory-interface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/native-render-surface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/native-render-surface-factory.h
+  ${adaptor_integration_api_dir}/adaptor-framework/render-surface-interface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/round-robin-container-view.h
+  ${adaptor_integration_api_dir}/adaptor-framework/scene-holder.h
+  ${adaptor_integration_api_dir}/adaptor-framework/scene-holder-impl.h
+  ${adaptor_integration_api_dir}/adaptor-framework/thread-synchronization-interface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/trace-factory-interface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/trigger-event-interface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/trigger-event-factory.h
+  ${adaptor_integration_api_dir}/adaptor-framework/native-image-surface.h
+  ${adaptor_integration_api_dir}/adaptor-framework/shader-precompiler.h
+)
+
+SET( adaptor_integration_api_system_header_files
+  ${adaptor_integration_api_dir}/system/system-settings.h
+)
+
+SET( adaptor_integration_api_file_download_plugin_header_files
+    ${adaptor_integration_api_dir}/adaptor-framework/file-download/file-download-plugin-proxy.h
+    ${adaptor_integration_api_dir}/adaptor-framework/file-download/remote-file-download-manager.h
+)

@@ -1,0 +1,202 @@
+# module: system, backend: common
+SET( adaptor_system_common_src_files
+    ${adaptor_system_dir}/common/abort-handler.cpp
+    ${adaptor_system_dir}/common/capture-impl.cpp
+    ${adaptor_system_dir}/common/command-line-options.cpp
+    ${adaptor_system_dir}/common/configuration-manager.cpp
+    ${adaptor_system_dir}/common/environment-options.cpp
+    ${adaptor_system_dir}/common/fps-tracker.cpp
+    ${adaptor_system_dir}/common/frame-time-stamp.cpp
+    ${adaptor_system_dir}/common/frame-time-stats.cpp
+    ${adaptor_system_dir}/common/kernel-trace.cpp
+    ${adaptor_system_dir}/common/locale-utils.cpp
+    ${adaptor_system_dir}/common/object-profiler.cpp
+    ${adaptor_system_dir}/common/performance-interface-factory.cpp
+    ${adaptor_system_dir}/common/performance-logger-impl.cpp
+    ${adaptor_system_dir}/common/performance-marker.cpp
+    ${adaptor_system_dir}/common/performance-server.cpp
+    ${adaptor_system_dir}/common/sound-player-impl.cpp
+    ${adaptor_system_dir}/common/stat-context.cpp
+    ${adaptor_system_dir}/common/stat-context-manager.cpp
+    ${adaptor_system_dir}/common/system-settings-impl.cpp
+    ${adaptor_system_dir}/common/system-trace.cpp
+    ${adaptor_system_dir}/common/thread-controller.cpp
+    ${adaptor_system_dir}/common/timer-type-registration.cpp
+    ${adaptor_system_dir}/common/update-status-logger.cpp
+    ${adaptor_system_dir}/common/widget-application-impl.cpp
+    ${adaptor_system_dir}/common/async-task-manager-impl.cpp
+    ${adaptor_system_dir}/common/remote-file-download-manager-impl.cpp
+    ${adaptor_system_dir}/common/texture-upload-manager-impl.cpp
+)
+
+# module: system, backend: linux
+IF(USE_TCORE_BACKEND)
+  SET( adaptor_system_linux_src_files
+      ${adaptor_system_dir}/common/shared-file.cpp
+      ${adaptor_system_dir}/common/time-service.cpp
+      ${adaptor_system_dir}/common/trigger-event.cpp
+      ${adaptor_system_dir}/common/trigger-event-factory.cpp
+      ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+      ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+      ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+      ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+      ${adaptor_system_dir}/glib/callback-manager-glib.cpp
+      ${adaptor_system_dir}/glib/file-descriptor-monitor-glib.cpp
+      ${adaptor_system_dir}/glib/timer-impl-glib.cpp
+      ${adaptor_system_dir}/linux/tcore/callback-manager-tcore.cpp
+      ${adaptor_system_dir}/linux/tcore/event-loop-tcore.cpp
+      ${adaptor_system_dir}/linux/tcore/file-descriptor-monitor-tcore.cpp
+      ${adaptor_system_dir}/linux/tcore/system-factory-tcore.cpp
+      ${adaptor_system_dir}/linux/tcore/timer-impl-tcore.cpp
+  )
+ELSE()
+  SET( adaptor_system_linux_src_files
+      ${adaptor_system_dir}/common/shared-file.cpp
+      ${adaptor_system_dir}/common/time-service.cpp
+      ${adaptor_system_dir}/common/trigger-event.cpp
+      ${adaptor_system_dir}/common/trigger-event-factory.cpp
+      ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+      ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+      ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+      ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+      ${adaptor_system_dir}/glib/callback-manager-glib.cpp
+      ${adaptor_system_dir}/glib/file-descriptor-monitor-glib.cpp
+      ${adaptor_system_dir}/glib/timer-impl-glib.cpp
+      ${adaptor_system_dir}/linux/ecore/callback-manager-ecore.cpp
+      ${adaptor_system_dir}/linux/ecore/event-loop-ecore.cpp
+      ${adaptor_system_dir}/linux/ecore/file-descriptor-monitor-ecore.cpp
+      ${adaptor_system_dir}/linux/ecore/system-factory-ecore.cpp
+      ${adaptor_system_dir}/linux/ecore/timer-impl-ecore.cpp
+  )
+ENDIF()
+
+# module: system, backend: tizen
+SET( adaptor_system_tizen_src_files
+    ${adaptor_system_dir}/common/shared-file.cpp
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/common/trigger-event.cpp
+    ${adaptor_system_dir}/common/trigger-event-factory.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+    ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+    ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+    ${adaptor_system_dir}/tizen/logging-tizen.cpp
+    ${adaptor_system_dir}/tizen/system-settings-impl-tizen.cpp
+)
+
+# module: system, backend: tizen(widget)
+SET( adaptor_system_tizen_widget_src_files
+    ${adaptor_system_dir}/tizen/widget-application-impl-tizen.cpp
+    ${adaptor_system_dir}/tizen/widget-controller-tizen.cpp
+)
+
+# module: system, backend: ubuntu-x11
+SET( adaptor_system_ubuntu_x11_src_files
+    ${adaptor_system_dir}/common/shared-file.cpp
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/common/trigger-event.cpp
+    ${adaptor_system_dir}/common/trigger-event-factory.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+    ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+    ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+    ${adaptor_system_dir}/ubuntu-x11/logging-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/system-settings-impl-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/widget-application-impl-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/widget-controller-x.cpp
+)
+
+
+# module: system, backend: libuv-x11
+SET( adaptor_system_libuv_src_files
+    ${adaptor_system_dir}/common/shared-file.cpp
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/common/trigger-event.cpp
+    ${adaptor_system_dir}/common/trigger-event-factory.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+    ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+    ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+    ${adaptor_system_dir}/libuv/callback-manager-libuv.cpp
+    ${adaptor_system_dir}/libuv/file-descriptor-monitor-libuv.cpp
+    ${adaptor_system_dir}/libuv/system-factory-libuv.cpp
+    ${adaptor_system_dir}/libuv/timer-impl-libuv.cpp
+    ${adaptor_system_dir}/ubuntu-x11/logging-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/system-settings-impl-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/widget-application-impl-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/widget-controller-x.cpp
+)
+
+# module: system, backend: glib-x11
+SET( adaptor_system_glib_src_files
+    ${adaptor_system_dir}/common/shared-file.cpp
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/common/trigger-event.cpp
+    ${adaptor_system_dir}/common/trigger-event-factory.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+    ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+    ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+    ${adaptor_system_dir}/glib/callback-manager-glib.cpp
+    ${adaptor_system_dir}/glib/file-descriptor-monitor-glib.cpp
+    ${adaptor_system_dir}/glib/system-factory-glib.cpp
+    ${adaptor_system_dir}/glib/timer-impl-glib.cpp
+    ${adaptor_system_dir}/ubuntu-x11/logging-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/system-settings-impl-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/widget-application-impl-x.cpp
+    ${adaptor_system_dir}/ubuntu-x11/widget-controller-x.cpp
+)
+
+# module: system, backend: android
+SET( adaptor_system_android_src_files
+    ${adaptor_system_dir}/common/shared-file.cpp
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/common/trigger-event.cpp
+    ${adaptor_system_dir}/common/trigger-event-factory.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager.cpp
+    ${adaptor_system_dir}/common/unified-trigger-event-manager-impl.cpp
+    ${adaptor_system_dir}/android/callback-manager-android.cpp
+    ${adaptor_system_dir}/android/file-descriptor-monitor-android.cpp
+    ${adaptor_system_dir}/android/logging-android.cpp
+    ${adaptor_system_dir}/android/shared-file-operations-android.cpp
+    ${adaptor_system_dir}/android/system-factory-android.cpp
+    ${adaptor_system_dir}/android/system-settings-impl-android.cpp
+    ${adaptor_system_dir}/android/timer-impl-android.cpp
+    ${adaptor_system_dir}/android/widget-application-impl-android.cpp
+    ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+)
+
+# module: system, backend: windows
+SET( adaptor_system_windows_src_files
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/windows/callback-manager-win.cpp
+    ${adaptor_system_dir}/windows/file-descriptor-monitor-windows.cpp
+    ${adaptor_system_dir}/windows/system-error-print-win.cpp
+    ${adaptor_system_dir}/windows/system-factory-win.cpp
+    ${adaptor_system_dir}/windows/system-settings-impl-win.cpp
+    ${adaptor_system_dir}/windows/timer-impl-win.cpp
+    ${adaptor_system_dir}/windows/trigger-event-win.cpp
+    ${adaptor_system_dir}/windows/trigger-event-factory-win.cpp
+    ${adaptor_system_dir}/windows/unified-trigger-event-manager.cpp
+    ${adaptor_system_dir}/windows/unified-trigger-event-manager-impl-win.cpp
+    ${adaptor_system_dir}/windows/logging-win.cpp
+    ${adaptor_system_dir}/windows/widget-application-impl-win.cpp
+    ${adaptor_system_dir}/windows/widget-controller-win.cpp
+)
+
+# module: system, backend: macOS
+SET( adaptor_system_macos_src_files
+    ${adaptor_system_dir}/common/shared-file.cpp
+    ${adaptor_system_dir}/common/time-service.cpp
+    ${adaptor_system_dir}/generic/shared-file-operations-generic.cpp
+    ${adaptor_system_dir}/generic/system-error-print-generic.cpp
+    ${adaptor_system_dir}/macos/file-descriptor-monitor-macos.cpp
+    ${adaptor_system_dir}/macos/system-factory-mac.cpp
+    ${adaptor_system_dir}/macos/system-settings-impl-mac.cpp
+    ${adaptor_system_dir}/macos/timer-impl-mac.cpp
+    ${adaptor_system_dir}/macos/trigger-event-factory-mac.cpp
+    ${adaptor_system_dir}/macos/trigger-event-mac.mm
+    ${adaptor_system_dir}/macos/callback-manager-mac.mm
+    ${adaptor_system_dir}/macos/widget-application-impl-mac.cpp
+    ${adaptor_system_dir}/ubuntu-x11/logging-x.cpp
+)

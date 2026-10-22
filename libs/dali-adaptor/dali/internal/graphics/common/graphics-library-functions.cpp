@@ -1,0 +1,54 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// INTERNAL INCLUDES
+#include <dali/internal/graphics/common/graphics-factory.h>
+#include <dali/internal/graphics/common/surface-factory.h>
+#include <dali/internal/imaging/common/native-image-factory.h>
+#include <dali/internal/window-system/common/native-image-surface-factory.h>
+#include <dali/internal/window-system/common/native-image-surface-impl.h>
+#include <dali/internal/window-system/common/render-surface-factory.h>
+#include <dali/public-api/dali-adaptor-common.h>
+
+extern "C" {
+using namespace Dali::Internal::Adaptor;
+
+DALI_ADAPTOR_API GraphicsFactoryInterface* CreateGraphicsFactory(EnvironmentOptions& environmentOptions)
+{
+  return Dali::Internal::Adaptor::CreateGraphicsFactory(environmentOptions).release();
+}
+
+DALI_ADAPTOR_API RenderSurfaceFactory* GetRenderSurfaceFactory()
+{
+  return Dali::Internal::Adaptor::GetRenderSurfaceFactory().release();
+}
+
+DALI_ADAPTOR_API NativeImageFactory* GetNativeImageFactory()
+{
+  return Dali::Internal::Adaptor::GetNativeImageFactory().release();
+}
+
+DALI_ADAPTOR_API NativeImageSurface* CreateNativeImageSurface(Dali::NativeImageQueuePtr queue)
+{
+  return Dali::Internal::Adaptor::NativeImageSurfaceFactory::CreateNativeImageSurface(queue).release();
+}
+
+DALI_ADAPTOR_API Dali::Graphics::SurfaceFactory* CreateSurfaceFactory(Dali::Graphics::NativeWindowInterface& nativeWindow)
+{
+  return Dali::Graphics::SurfaceFactory::New(nativeWindow).release();
+}
+} // extern "C"

@@ -1,0 +1,117 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL_HEADERS
+#include <Ecore_X.h>
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+#include <dali/integration-api/adaptor-framework/scene-holder.h>
+#include <dali/integration-api/debug.h>
+
+// INTERNAL HEADERS
+#include <dali/internal/window-system/common/window-system-impl.h>
+#include <dali/public-api/adaptor-framework/keyboard.h>
+#include <memory>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace WindowSystem
+{
+namespace
+{
+class WindowSystemEcoreX : public WindowSystemBase
+{
+public:
+  void Initialize()
+  {
+    if(!mIsInitialized)
+    {
+      ecore_x_init(NULL);
+      mIsInitialized = true;
+    }
+  }
+
+  void Shutdown()
+  {
+    if(mIsInitialized)
+    {
+      ecore_x_shutdown();
+      mIsInitialized = false;
+    }
+  }
+
+  void GetScreenSize(int32_t& width, int32_t& height) override
+  {
+    ecore_x_screen_size_get(ecore_x_default_screen_get(), &width, &height);
+  }
+
+private:
+  bool mIsInitialized{false};
+};
+
+// The lifetime is managed explicitly by Initialize() / Shutdown().
+WindowSystemEcoreX* gWindowSystem{nullptr};
+bool                gShutdown{false}; ///< Set by Shutdown(), cleared by Initialize().
+
+WindowSystemEcoreX& GetImpl()
+{
+  if(!gWindowSystem)
+  {
+    gWindowSystem = new WindowSystemEcoreX();
+  }
+  return *gWindowSystem;
+}
+} // unnamed namespace
+
+void Initialize()
+{
+  gShutdown = false;
+  GetImpl().Initialize();
+}
+
+void Shutdown()
+{
+  if(gWindowSystem)
+  {
+    gWindowSystem->Shutdown();
+    delete gWindowSystem;
+    gWindowSystem = nullptr;
+  }
+  gShutdown = true;
+}
+
+WindowSystemBase* GetWindowSystem()
+{
+  if(gShutdown)
+  {
+    // Do not create the window system again; that would call ecore_x_init() during teardown.
+    DALI_LOG_ERROR("WindowSystem is used after Shutdown()\n");
+    return nullptr;
+  }
+  return &GetImpl();
+}
+
+} // namespace WindowSystem
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

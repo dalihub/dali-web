@@ -1,0 +1,129 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali/internal/canvas-renderer/generic/canvas-renderer-impl-generic.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+
+// INTERNAL INCLUDES
+#include <dali/internal/imaging/common/pixel-buffer-impl.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Internal
+{
+namespace Adaptor
+{
+namespace // unnamed namespace
+{
+} // unnamed namespace
+
+CanvasRendererPtr CanvasRendererGeneric::New(const Vector2& viewBox)
+{
+  auto* canvasRenderer = new CanvasRendererGeneric(viewBox);
+  canvasRenderer->Initialize(viewBox);
+  return canvasRenderer;
+}
+
+CanvasRendererGeneric::CanvasRendererGeneric(const Vector2& viewBox)
+: CanvasRenderer(viewBox)
+#ifdef THORVG_SUPPORT
+  ,
+  mPixelBuffer(nullptr)
+#endif
+{
+}
+
+Dali::Texture CanvasRendererGeneric::OnGetRasterizedTexture()
+{
+#ifdef THORVG_SUPPORT
+  if(mPixelBuffer)
+  {
+    auto width  = mPixelBuffer.GetWidth();
+    auto height = mPixelBuffer.GetHeight();
+    if(width <= 0 || height <= 0)
+    {
+      return Dali::Texture();
+    }
+
+    Dali::PixelData pixelData = Dali::PixelBuffer::Convert(mPixelBuffer);
+
+    if(!mRasterizedTexture || mRasterizedTexture.GetWidth() != width || mRasterizedTexture.GetHeight() != height)
+    {
+      mRasterizedTexture = Dali::Texture::New(Dali::TextureType::TEXTURE_2D, Dali::Pixel::BGRA8888, width, height);
+    }
+
+    mRasterizedTexture.Upload(pixelData);
+  }
+  return mRasterizedTexture;
+#else
+  return Dali::Texture();
+#endif
+}
+
+bool CanvasRendererGeneric::OnRasterize()
+{
+#ifdef THORVG_SUPPORT
+  Mutex::ScopedLock lock(mMutex);
+
+#ifdef THORVG_VERSION_1
+  if(mTvgCanvas->draw(true) != tvg::Result::Success)
+#else
+  if(mTvgCanvas->draw() != tvg::Result::Success)
+#endif
+  {
+    DALI_LOG_ERROR("ThorVG Draw fail [%p]\n", this);
+    return false;
+  }
+
+  mTvgCanvas->sync();
+
+  return true;
+#else
+  return false;
+#endif
+}
+
+void CanvasRendererGeneric::OnMakeTargetBuffer(const Vector2& size)
+{
+#ifdef THORVG_SUPPORT
+  mPixelBuffer = Dali::PixelBuffer::New(static_cast<uint32_t>(size.width), static_cast<uint32_t>(size.height), Dali::Pixel::BGRA8888);
+
+  unsigned char* pBuffer;
+  pBuffer = mPixelBuffer.GetBuffer();
+
+  if(!pBuffer)
+  {
+    DALI_LOG_ERROR("Pixel buffer create to fail [%p]\n", this);
+    return;
+  }
+
+#ifdef THORVG_VERSION_1
+  mTvgCanvas->target(reinterpret_cast<uint32_t*>(pBuffer), static_cast<uint32_t>(size.width), static_cast<uint32_t>(size.width), static_cast<uint32_t>(size.height), tvg::ColorSpace::ARGB8888);
+#else
+  mTvgCanvas->target(reinterpret_cast<uint32_t*>(pBuffer), size.width, size.width, size.height, tvg::SwCanvas::ARGB8888);
+#endif
+#endif
+}
+
+} // namespace Adaptor
+
+} // namespace Internal
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,59 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// CLASS HEADER
+#include "adaptor-environment-variable.h"
+
+// EXTERNAL INCLUDE
+#include <dali/public-api/common/dali-namespace.h>
+#include <cstdlib>
+#include <map>
+#include <string>
+
+namespace DALI_NAMESPACE
+{
+namespace EnvironmentVariable
+{
+namespace
+{
+std::map<std::string, std::string> gEnvironmentVariables;
+} // namespace
+
+const char* GetEnvironmentVariable(const char* variable)
+{
+  auto value = gEnvironmentVariables.find(variable);
+  if(value != gEnvironmentVariables.end())
+  {
+    return value->second.c_str();
+  }
+  return nullptr;
+}
+
+void SetTestEnvironmentVariable(const char* variable, const char* value)
+{
+  gEnvironmentVariables[variable] = value;
+
+#if defined(_WIN32)
+  // Unlike ELF test executables, a Windows DLL does not resolve its internal
+  // GetEnvironmentVariable call to the mock above. Keep the process
+  // environment in sync so the adaptor DLL observes the same test value.
+  _putenv_s(variable, value);
+#endif
+}
+
+} // namespace EnvironmentVariable
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,356 @@
+#ifndef DALI_INTEGRATION_SCENEHOLDER_H
+#define DALI_INTEGRATION_SCENEHOLDER_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/dali-adaptor-common.h>
+#include <dali/public-api/math/vector4.h>
+#include <dali/public-api/object/base-handle.h>
+#include <dali/public-api/signals/dali-signal.h>
+
+namespace DALI_NAMESPACE
+{
+class Actor;
+class Layer;
+class Any;
+class TouchEvent;
+class WheelEvent;
+struct TouchPoint;
+class KeyEvent;
+class RenderTaskList;
+
+namespace Internal DALI_INTERNAL
+{
+namespace Adaptor
+{
+class SceneHolder;
+
+}
+
+} //namespace Internal DALI_INTERNAL
+
+namespace Integration
+{
+/**
+ * @brief SceneHolder is responsible for creating a Scene for rendering.
+ */
+class DALI_ADAPTOR_API SceneHolder : public BaseHandle
+{
+public:
+  typedef Signal<void(Dali::Integration::SceneHolder, Dali::KeyEvent)> KeyEventSignalType; ///< Key event signal type
+
+  typedef Signal<bool(Dali::Integration::SceneHolder, Dali::KeyEvent)> KeyEventGeneratedSignalType; ///< Key event generated signal type
+
+  typedef Signal<void(Dali::Integration::SceneHolder, Dali::TouchEvent)> TouchEventSignalType; ///< Touch signal type
+
+  typedef Signal<void(Dali::Integration::SceneHolder, Dali::WheelEvent)> WheelEventSignalType; ///< Touched signal type
+
+  typedef Signal<bool(Dali::Integration::SceneHolder, Dali::WheelEvent)> WheelEventGeneratedSignalType; ///< Wheel event generated signal type
+
+  typedef Signal<void(Dali::Integration::SceneHolder, bool)> FocusChangedGeneratedSignalType; ///<  Focus changed generated signal type
+
+  /**
+   * @brief Create an uninitialized SceneHolder handle.
+   */
+  SceneHolder();
+
+  /**
+   * @brief Destructor
+   *
+   * This is non-virtual since derived Handle types must not contain data or virtual methods.
+   */
+  ~SceneHolder();
+
+  /**
+   * @brief This copy constructor is required for (smart) pointer semantics.
+   *
+   * @param [in] handle A reference to the copied handle
+   */
+  SceneHolder(const SceneHolder& handle);
+
+  /**
+   * @brief This assignment operator is required for (smart) pointer semantics.
+   *
+   * @param [in] rhs  A reference to the copied handle
+   * @return A reference to this
+   */
+  SceneHolder& operator=(const SceneHolder& rhs);
+
+  /**
+   * @brief This move constructor is required for (smart) pointer semantics.
+   *
+   * @param [in] handle A reference to the moved handle
+   */
+  SceneHolder(SceneHolder&& handle) noexcept;
+
+  /**
+   * @brief This move assignment operator is required for (smart) pointer semantics.
+   *
+   * @param [in] rhs  A reference to the moved handle
+   * @return A reference to this
+   */
+  SceneHolder& operator=(SceneHolder&& rhs) noexcept;
+
+  /**
+   * @brief Downcast BaseHandle to SceneHolder
+   *
+   * @SINCE_2_3.35
+   * @param[in] handle The handle need to downcast
+   * @return Whether it's a valid SceneHolder or not
+   */
+  static SceneHolder DownCast(BaseHandle handle);
+
+  /**
+   * @brief Adds a child Actor to the SceneHolder.
+   *
+   * The child will be referenced.
+   * @param[in] actor The child
+   * @pre The actor has been initialized.
+   * @pre The actor does not have a parent.
+   */
+  void Add(Actor actor);
+
+  /**
+   * @brief Removes a child Actor from the SceneHolder.
+   *
+   * The child will be unreferenced.
+   * @param[in] actor The child
+   * @pre The actor has been added to the SceneHolder.
+   */
+  void Remove(Actor actor);
+
+  /**
+   * @brief Returns the Scene's Root Layer.
+   *
+   * @return The root layer
+   */
+  Layer GetRootLayer() const;
+
+  /**
+   * @brief Sets the background color.
+   *
+   * @param[in] color The new background color
+   */
+  void SetBackgroundColor(Vector4 color);
+
+  /**
+   * @brief Gets the background color.
+   *
+   * @return The background color
+   */
+  Vector4 GetBackgroundColor() const;
+
+  /**
+   * @brief Gets the native handle.
+   *
+   * When users call this function, it wraps the actual type used by the underlying system.
+   *
+   * @return The native handle or an empty handle
+   */
+  Any GetNativeHandle() const;
+
+  /**
+   * @brief Gets the native raw handle.
+   *
+   * Returns the native window pointer as void* wrapped in Any.
+   * Unlike GetNativeHandle(), the value is always stored as void*.
+   *
+   * @return The native raw handle or an empty handle
+   */
+  Any GetNativeRawHandle() const;
+
+  /**
+   * @brief Feed (Send) touch event to core
+   * @param[in] point The touch point
+   * @param[in] timeStamp The time stamp
+   */
+  void FeedTouchPoint(Dali::TouchPoint& point, int timeStamp);
+
+  /**
+   * @brief Feed (Send) wheel event to core
+   * @param[in] wheelEvent The wheel event
+   */
+  void FeedWheelEvent(Dali::WheelEvent& wheelEvent);
+
+  /**
+   * @brief Feed (Send) key event to core
+   * @param[in] keyEvent The key event holding the key information.
+   */
+  void FeedKeyEvent(Dali::KeyEvent& keyEvent);
+
+  /**
+   * @brief Feed (Send) hover event to core
+   * @param[in] point The touch point that create a hover event
+   */
+  void FeedHoverEvent(Dali::TouchPoint& point);
+
+  /**
+   * @brief Sets whether the processes using geometry event propagation touch and hover events.
+   *
+   * @param[in] enabled True if the processes using geometry event propagation touch and hover events.
+   */
+  void SetGeometryHittestEnabled(bool enabled);
+
+  /**
+   * @brief Queries whether the scene using geometry event propagation touch and hover events.
+   *
+   * @return True if the scene using geometry event propagation touch and hover events.
+   */
+  bool IsGeometryHittestEnabled();
+
+  /**
+   * @brief Retrieves the list of render-tasks.
+   * @return A valid handle to a RenderTaskList
+   */
+  RenderTaskList GetRenderTaskList();
+
+  /**
+   * @brief Gets the native window id
+   *
+   * @return The native window id
+   */
+  int32_t GetNativeId() const;
+
+  /**
+   * @brief Retrieve the SceneHolder that the given actor is added to.
+   *
+   * @param[in] actor The actor
+   * @return The SceneHolder the actor is added to or an empty handle if the actor is not added to any SceneHolder.
+   */
+  static SceneHolder Get(Actor actor);
+
+  /**
+   * @brief This signal is emitted when key event is received.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName(SceneHolder sceneHolder, KeyEvent event);
+   * @endcode
+   * @return The signal to connect to
+   */
+  KeyEventSignalType& KeyEventSignal();
+
+  /**
+   * @brief This signal is emitted when key event is received.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   bool YourCallbackName(SceneHolder sceneHolder, KeyEvent event);
+   * @endcode
+   * @return The signal to connect to
+   */
+  KeyEventGeneratedSignalType& KeyEventGeneratedSignal();
+
+  /**
+   * @brief This signal is emitted when key event is received.
+   * Intercepts KeyEvents in the window before dispatching KeyEvents to the control.
+   * If a KeyEvent is consumed, no KeyEvent is delivered to the control.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   bool YourCallbackName(SceneHolder sceneHolder, KeyEvent event);
+   * @endcode
+   * @return The signal to connect to
+   */
+  KeyEventGeneratedSignalType& InterceptKeyEventSignal();
+
+  /**
+   * @brief This signal is emitted when a key event was delayed on its way to DALi.
+   *
+   * It is emitted only when the delay exceeds a predefined threshold, before the key event
+   * is dispatched, and regardless of whether the key event is subsequently consumed.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName(SceneHolder sceneHolder, KeyEvent event);
+   * @endcode
+   * @return The signal to connect to
+   */
+  KeyEventSignalType& KeyEventDelayedSignal();
+
+  /**
+   * @brief This signal is emitted when the screen is touched and when the touch ends
+   * (i.e. the down & up touch events only).
+   *
+   * If there are multiple touch points, then this will be emitted when the first touch occurs and
+   * then when the last finger is lifted.
+   * An interrupted event will also be emitted (if it occurs).
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName( SceneHolder sceneHolder, TouchEvent event );
+   * @endcode
+   * @return The touch signal to connect to
+   * @note Motion events are not emitted.
+   */
+  TouchEventSignalType& TouchEventSignal();
+
+  /**
+   * @brief This signal is emitted when wheel event is received.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName(SceneHolder sceneHolder, WheelEvent event);
+   * @endcode
+   * @return The signal to connect to
+   */
+  WheelEventSignalType& WheelEventSignal();
+
+  /**
+   * @brief This signal is emitted to KeyboardFocusManager when a custom wheel type event is received.
+   * When a custom wheel event occurs, it need to process the focused actor first.
+   *
+   * Therefore, KeyboardFocusManager first checks whether WheelEvent is generated as WheelEventGeneratedSignal.
+   * This is only valid for custom wheel events.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   bool YourCallbackName(SceneHolder sceneHolder, WheelEvent event);
+   * @endcode
+   * @return The signal to connect to
+   */
+  WheelEventGeneratedSignalType& WheelEventGeneratedSignal();
+
+  /**
+   * @brief This signal is emitted when the window focus changes.
+   *
+   * Although there is already a focus change signal in the window,
+   * it has been added to the scene-holder to ensure that the keyboardFocusManager processes the focus change signal after all window focus change signals have been handled.
+   *
+   * A callback of the following type may be connected:
+   * @code
+   *   void YourCallbackName(Dali::Integration::SceneHolder sceneHolder, bool focusIn);
+   * @endcode
+   * @return The signal to connect to
+   */
+  FocusChangedGeneratedSignalType& FocusChangedGeneratedSignal();
+
+public: // Not intended for application developers
+  /**
+   * @brief This constructor is used internally to create additional SceneHolder handles.
+   *
+   * @param[in] sceneHolder A pointer to a newly allocated Dali resource
+   */
+  explicit SceneHolder(Internal::Adaptor::SceneHolder* sceneHolder);
+};
+
+} // namespace Integration
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_INTEGRATION_SCENEHOLDER_H

@@ -1,0 +1,203 @@
+#ifndef DALI_WINDOW_DATA_H
+#define DALI_WINDOW_DATA_H
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/unique-ptr.h>
+#include <dali/public-api/math/rect.h>
+
+// INTERNAL INCLUDES
+#include <dali/public-api/adaptor-framework/window-definitions.h>
+#include <dali/public-api/common/dali-string.h>
+#include <dali/public-api/dali-adaptor-common.h>
+
+namespace DALI_NAMESPACE
+{
+/**
+ * The WindowData class is used as a parameter for Window::New().
+ * The data from the WindowData object is used to customize the window being created.
+ *
+ * The default values are below:
+ * PositionSize : x:0, y:0, w:0, h:0 (full-screen window)
+ * Transparency : true (Window is created with 32-bit color depth)
+ * WindowType : NORMAL
+ * mIsFrontBufferRendering : false
+ *
+ * If you want to customize the window, you can modify the values of the WindowData object as needed.
+ * @SINCE_2_2.23
+ */
+class DALI_ADAPTOR_API WindowData
+{
+public:
+  /**
+   * @brief Creates a WindowData object.
+   */
+  WindowData();
+
+  /**
+   * @brief Destructor.
+   */
+  ~WindowData();
+
+  /**
+   * @brief Sets the position and size
+   *
+   * @SINCE_2_2.23
+   * @param[in] positionSize Position and Size
+   */
+  void SetPositionSize(Dali::BoundsInteger& positionSize);
+
+  /**
+   * @brief Gets the PositionSize
+   *
+   * @SINCE_2_2.23
+   * @return The position and size
+   */
+  Dali::BoundsInteger GetPositionSize() const;
+
+  /**
+   * @brief Sets the transparency
+   *
+   * @SINCE_2_2.23
+   * @param[in] transparent transparency
+   */
+  void SetTransparency(bool transparent);
+
+  /**
+   * @brief Gets the transparency
+   *
+   * @SINCE_2_2.23
+   * @return whether transparency
+   */
+  bool GetTransparency() const;
+
+  /**
+   * @brief Sets the window type
+   *
+   * @SINCE_2_2.23
+   * @param[in] type the window type
+   */
+  void SetWindowType(WindowType type);
+
+  /**
+   * @brief Gets the window type
+   *
+   * @SINCE_2_2.23
+   * @return the window type
+   */
+  WindowType GetWindowType() const;
+
+  /**
+   * @brief Sets the front buffer rendering
+   *
+   * @SINCE_2_2.51
+   * @param[in] enable whether to use front buffer rendering
+   */
+  void SetFrontBufferRenderingEnabled(bool enable);
+
+  /**
+   * @brief Gets the front buffer rendering
+   *
+   * @SINCE_2_2.51
+   * @return whether front buffer rendering is enabled
+   */
+  bool IsFrontBufferRenderingEnabled() const;
+
+  /**
+   * @brief Sets the screen for the window
+   * It is base information from DevelWindowSystem::GetAvailableScreens
+   *
+   * This method sets the window to the specified screen.
+   * The window will be moved to the specified screen.
+   *
+   * @SINCE_2_4.35
+   * @param[in] screen The name of the screen to set
+   */
+  void SetScreen(const Dali::String& screen);
+
+  /**
+   * @brief Gets the screen
+   *
+   * @SINCE_2_4.35
+   * @return screen name
+   */
+  Dali::String GetScreen() const;
+
+  /**
+   * @brief Sets whether the window has a depth buffer.
+   *
+   * @SINCE_2_5.38
+   * @param[in] enabled True if a depth buffer should be created
+   * @note If this is not called, the system-wide setting is used.
+   * @note The buffers a window renders into are fixed when it is created, so
+   * this is the only place they can be chosen. Query the result with
+   * Window::IsDepthBufferEnabled().
+   */
+  void SetDepthBufferEnabled(bool enabled);
+
+  /**
+   * @brief Sets whether the window has a stencil buffer.
+   *
+   * @SINCE_2_5.38
+   * @param[in] enabled True if a stencil buffer should be created
+   * @note If this is not called, the system-wide setting is used.
+   * @note The buffers a window renders into are fixed when it is created, so
+   * this is the only place they can be chosen. Query the result with
+   * Window::IsStencilBufferEnabled().
+   */
+  void SetStencilBufferEnabled(bool enabled);
+
+  /**
+   * @brief Sets the number of samples per pixel used for multi-sampled anti-aliasing.
+   *
+   * @SINCE_2_5.38
+   * @param[in] level The number of samples per pixel. 0 or 1 disables it, as a
+   * single sample is not anti-aliasing.
+   * @note If this is not called, the system-wide setting is used.
+   * @note If the driver has no configuration matching the requested level, the
+   * window is created with the system-wide setting instead. Query the result
+   * with Window::GetMultiSampledAntiAliasingLevel().
+   */
+  void SetMultiSampledAntiAliasingLevel(uint8_t level);
+
+public:
+  /// @cond internal
+  struct Impl;
+
+  /**
+   * @brief Retrieves the internal implementation.
+   *
+   * @return The internal implementation
+   * @note Not intended for application use.
+   */
+  Impl& GetImplementation();
+
+  /**
+   * @copydoc Dali::WindowData::GetImplementation()
+   */
+  const Impl& GetImplementation() const;
+  /// @endcond
+
+private:
+  UniquePtr<Impl> mImpl;
+};
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_WINDOW_DATA_H

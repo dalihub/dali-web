@@ -1,0 +1,27 @@
+#version 320 es
+
+#define TEXTURE texture
+#define TEXTURE_CUBE texture
+#define TEXTURE_LOD textureLod
+#define TEXTURE_CUBE_LOD textureLod
+#define INSTANCE_INDEX gl_InstanceID
+#define VERTEX_INDEX gl_VertexID
+#define textureCube texture
+#define texture2D texture
+#define texture2DLod textureLod
+#define textureCubeLod textureLod
+in mediump vec2 aPosition;
+in mediump vec2 aTexCoord;
+out mediump vec2 vTexCoord;
+flat out mediump int vInteger;
+layout(std140) uniform UtcVertBlock
+{
+ highp mat4 uMvpMatrix;
+ highp vec3 uSize;
+};
+void main()
+{
+  gl_Position = uMvpMatrix * vec4(aPosition * uSize.xy, 0.0, 1.0);
+  vInteger = 3;
+  vTexCoord = aPosition + vec2(0.5);
+}
