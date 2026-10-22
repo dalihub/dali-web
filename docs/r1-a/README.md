@@ -9,3 +9,5 @@
 - 원문 README·STATE·PLAN 및 상위 AGENTS: 기존 작업 공간의 문서입니다.
 
 기록 기준은 R2-b 완료 전까지 기존 `webassembly-probe/docs`입니다.
+
+R1-a 릴리스 기준은 이후 [Tizen 브랜치 기준](../TIZEN-BASELINE.md)으로 대체됐습니다. 스냅샷 원문은 수정하지 않습니다.

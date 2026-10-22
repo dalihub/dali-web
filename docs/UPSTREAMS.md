@@ -1,10 +1,10 @@
 # Upstream 관리
 
-세 라이브러리는 `upstreams.lock.json`의 공개 URL·full SHA에서 전체 tracked tree를 `libs/<name>`으로 가져옵니다. 최초와 후속 모두 `--squash`입니다. 원본 상세 이력은 upstream에서 조회합니다. 기준 ref는 참고용이며 자동으로 branch tip을 import하지 않습니다.
+세 라이브러리는 `upstreams.lock.json`의 Tizen 원본 URL·full SHA에서 전체 tracked tree를 `libs/<name>`으로 가져옵니다. 최초와 후속 모두 `--squash`입니다. 원본 상세 이력은 upstream에서 조회합니다. 기준 ref는 참고용이며 자동으로 branch tip을 import하지 않습니다.
 
 ## 개발자 remote
 
-`scripts/setup-upstream-remotes.sh`는 lock을 읽고 없는 remote만 추가합니다. 같은 URL이면 유지하고 다른 URL이나 별도 push URL이 있으면 변경 전에 실패합니다. 자동 네트워크 작업은 하지 않습니다. 원본 관찰 branch는 Core·Adaptor master, UI devel입니다.
+`scripts/setup-upstream-remotes.sh`는 lock을 읽고 없는 remote만 추가합니다. 같은 URL이면 유지하고 다른 URL이나 별도 push URL이 있으면 변경 전에 실패합니다. 자동 네트워크 작업은 하지 않습니다. 세 원본의 기준 branch는 `refs/heads/tizen`입니다. SSH 접근 설정과 기존 remote의 명시적 전환은 [Tizen 기준](TIZEN-BASELINE.md)을 참고합니다.
 
 ## 후속 갱신
 
@@ -18,4 +18,4 @@
 
 루트 `.gitignore`는 tools·build·logs·profiles·browser-profiles·dist만 제외합니다. `libs/*/build/`의 tracked 빌드 소스와 tracked autogen 파일은 원본 tree의 일부입니다. 중첩 `.git`, SDK, P0 생성 헤더와 산출물을 파일 복사로 섞지 않습니다.
 
-Core·Adaptor는 P0와 tree가 같지만 UI는 P0 검증 대상이 아니며 결합 빌드는 P6에서 검증합니다. 상세 선택 근거는 [R1-a 결정 스냅샷](r1-a/R1-a-UPSTREAMS.md)에 있습니다.
+현재 Tizen 기준의 P0 tree 비교는 [Tizen 기준](TIZEN-BASELINE.md)과 lock을 참고합니다. 새 SHA의 빌드·런타임은 미검증이며 UI 결합 빌드는 P6 대상입니다. [R1-a 결정 스냅샷](r1-a/R1-a-UPSTREAMS.md)은 대체된 과거 기준입니다.

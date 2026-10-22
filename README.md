@@ -13,7 +13,7 @@ cd dali-web
 
 ## Upstream 관리
 
-고정 URL·full commit SHA·tree·ref는 [upstreams.lock.json](upstreams.lock.json), 갱신 정책과 라이선스는 [UPSTREAMS](docs/UPSTREAMS.md)에 있습니다. 개발자 remote가 필요하면 Git과 Python 3 환경에서 실행합니다.
+현재 기준은 세 원본의 [Tizen tizen 브랜치](docs/TIZEN-BASELINE.md)입니다. 고정 URL·full commit SHA·tree·ref는 [upstreams.lock.json](upstreams.lock.json), 갱신 정책과 라이선스는 [UPSTREAMS](docs/UPSTREAMS.md)에 있습니다. 개발자 remote가 필요하면 Git과 Python 3 환경에서 실행합니다.
 
 ```sh
 ./scripts/setup-upstream-remotes.sh
