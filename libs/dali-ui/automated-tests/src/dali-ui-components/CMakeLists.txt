@@ -1,0 +1,231 @@
+SET(PKG_NAME "dali-ui-components")
+
+SET(EXEC_NAME "tct-${PKG_NAME}-core")
+SET(RPM_NAME "core-${PKG_NAME}-tests")
+
+SET(CAPI_LIB "dali-ui-components")
+
+SET(TC_SOURCES
+    utc-Dali-Components.cpp
+    utc-Dali-DummyComponent.cpp
+    utc-Dali-TextButton.cpp
+    utc-Dali-IconButton.cpp
+    utc-Dali-CheckBox.cpp
+    utc-Dali-RadioButton.cpp
+    utc-Dali-Switch.cpp
+    utc-Dali-ProgressBar.cpp
+    utc-Dali-Toast.cpp
+    utc-Dali-ChartView.cpp
+    utc-Dali-ChartSeries.cpp
+    utc-Dali-PieSeries.cpp
+    utc-Dali-ChartAxis.cpp
+    utc-Dali-ChartSection.cpp
+    utc-Dali-Navigator.cpp
+    utc-Dali-Dialog.cpp
+    utc-Dali-DialogPresentation.cpp
+    utc-Dali-DialogTransitionSample.cpp
+    utc-Dali-DialogContainer.cpp
+    utc-Dali-AlertDialog.cpp
+    utc-Dali-MarkdownView.cpp
+    utc-Dali-WindowFrame.cpp
+    window/utc-Dali-WindowFrameDecorationValidator.cpp
+    window/utc-Dali-WindowFrameStyleResolver.cpp
+    window/utc-Dali-WindowFrameGeometryPolicy.cpp
+    window/utc-Dali-WindowFrameInitialStateResolver.cpp
+    window/utc-Dali-WindowFrameInteractionController.cpp
+    window/utc-Dali-WindowFrameOperationAdapter.cpp
+    window/utc-Dali-WindowFrameOverlayController.cpp
+    window/utc-Dali-WindowFrameStateController.cpp
+)
+
+SET(TC_SOURCE_LIST ${TC_SOURCES})
+
+SET(TC_GENERATED_HEADER
+    ${CMAKE_CURRENT_SOURCE_DIR}/${EXEC_NAME}.h
+)
+
+# Chart and WindowFrame cases exercise internal units directly, so those units
+# are compiled into the test executable. They are hidden in the shared library.
+SET(COMPONENT_INTERNAL_TEST_SOURCES
+    ../../../dali-ui-components/integration-api/chart/chart-axis-impl.cpp
+    ../../../dali-ui-components/integration-api/chart/chart-series-impl.cpp
+    ../../../dali-ui-components/integration-api/chart/chart-color-palette.cpp
+    ../../../dali-ui-components/integration-api/chart/chart-hit-tester.cpp
+    ../../../dali-ui-components/internal/window/window-frame-layout-engine.cpp
+    ../../../dali-ui-components/internal/window/window-frame-decoration-validator.cpp
+    ../../../dali-ui-components/internal/window/window-frame-style-resolver.cpp
+    ../../../dali-ui-components/internal/window/window-frame-interaction-controller.cpp
+    ../../../dali-ui-components/internal/window/window-frame-overlay-controller.cpp
+    ../../../dali-ui-components/internal/window/window-frame-state-controller.cpp
+    ../../../dali-ui-components/internal/window/initial-window-state-resolver.cpp
+    ../../../dali-ui-components/internal/window/window-operation-adapter.cpp
+    # WindowFrameGeometry's laying-out constructor is DALI_INTERNAL, so the
+    # library does not export it to the geometry cases.
+    ../../../dali-ui-components/public-api/window/window-frame-geometry.cpp
+    # The command and interaction snapshots are created by internal units.
+    # Compile their value implementations with those unit cases because the
+    # construction entry points are intentionally not exported.
+    ../../../dali-ui-components/public-api/window/window-frame-command.cpp
+    ../../../dali-ui-components/public-api/window/window-frame-interaction.cpp
+    ../../../dali-ui-components/internal/markdown/markdown-parser.cpp
+    ../../../dali-ui-components/internal/markdown/markdown-render-model.cpp
+)
+
+LIST(APPEND TC_SOURCES
+    ${COMPONENT_INTERNAL_TEST_SOURCES}
+    ../dali-test-suite-utils/mesh-builder.cpp
+    ../dali-test-suite-utils/dali-test-suite-utils.cpp
+    ../dali-test-suite-utils/test-actor-utils.cpp
+    ../dali-test-suite-utils/test-custom-actor.cpp
+    ../dali-test-suite-utils/test-harness.cpp
+    ../dali-test-suite-utils/test-application.cpp
+    ../dali-test-suite-utils/test-gesture-generator.cpp
+    ../dali-test-suite-utils/test-gl-abstraction.cpp
+    ../dali-test-suite-utils/test-graphics-buffer.cpp
+    ../dali-test-suite-utils/test-graphics-command-buffer.cpp
+    ../dali-test-suite-utils/test-graphics-controller.cpp
+    ../dali-test-suite-utils/test-graphics-framebuffer.cpp
+    ../dali-test-suite-utils/test-graphics-pipeline.cpp
+    ../dali-test-suite-utils/test-graphics-program.cpp
+    ../dali-test-suite-utils/test-graphics-reflection.cpp
+    ../dali-test-suite-utils/test-graphics-shader.cpp
+    ../dali-test-suite-utils/test-graphics-texture.cpp
+    ../dali-test-suite-utils/test-graphics-sampler.cpp
+    ../dali-test-suite-utils/test-graphics-sync-impl.cpp
+    ../dali-test-suite-utils/test-graphics-sync-object.cpp
+    ../dali-test-suite-utils/test-native-image.cpp
+    ../dali-test-suite-utils/test-platform-abstraction.cpp
+    ../dali-test-suite-utils/test-render-controller.cpp
+    ../dali-test-suite-utils/test-render-surface.cpp
+    ../dali-test-suite-utils/test-trace-call-stack.cpp
+    ../dali-test-suite-utils/test-addon-manager.cpp
+    ../dali-test-suite-utils/test-render-surface-if.cpp
+    ../dali-test-suite-utils/dali-ui/ui-adaptor.cpp
+    ../dali-test-suite-utils/dali-ui/ui-async-task-manager.cpp
+    ../dali-test-suite-utils/dali-ui/ui-canvas-renderer.cpp
+    ../dali-test-suite-utils/dali-ui/ui-environment-variable.cpp
+    ../dali-test-suite-utils/dali-ui/ui-event-thread-callback.cpp
+    ../dali-test-suite-utils/dali-ui/ui-lifecycle-controller.cpp
+    ../dali-test-suite-utils/dali-ui/ui-native-image-queue.cpp
+    ../dali-test-suite-utils/dali-ui/ui-native-image-surface.cpp
+    ../dali-test-suite-utils/dali-ui/ui-scene-holder.cpp
+    ../dali-test-suite-utils/dali-ui/ui-test-application.cpp
+    ../dali-test-suite-utils/dali-ui/ui-text-abstraction.cpp
+    ../dali-test-suite-utils/dali-ui/ui-timer.cpp
+    ../dali-test-suite-utils/dali-ui/ui-vector-animation-renderer.cpp
+    ../dali-test-suite-utils/dali-ui/ui-vector-image-renderer.cpp
+    ../dali-test-suite-utils/dali-ui/ui-window.cpp
+)
+
+IF(DALI_TEST_SOURCE_LIST_ONLY)
+    RETURN()
+ENDIF()
+
+ADD_CUSTOM_COMMAND(
+    COMMAND ../../scripts/tcheadgen.sh ${EXEC_NAME}.h
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT ${TC_GENERATED_HEADER}
+    DEPENDS
+        ${TC_SOURCE_LIST}
+        ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/tcheadgen.sh
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/retriever.sh
+    COMMENT "Generating test tables for ${EXEC_NAME}"
+    VERBATIM
+)
+
+ADD_LIBRARY(dali-ui-components-test-md4c STATIC
+    ../../../third-party/md4c/entity.c
+    ../../../third-party/md4c/md4c.c
+)
+SET_TARGET_PROPERTIES(dali-ui-components-test-md4c
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    C_STANDARD 99
+    C_STANDARD_REQUIRED ON
+)
+TARGET_INCLUDE_DIRECTORIES(dali-ui-components-test-md4c
+    PRIVATE
+    ../../../third-party/md4c
+)
+TARGET_COMPILE_OPTIONS(dali-ui-components-test-md4c
+    PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:-fvisibility=hidden>
+)
+
+PKG_CHECK_MODULES(${CAPI_LIB} REQUIRED
+     dali2-core
+     dali2-adaptor
+     dali2-ui-foundation
+     dali2-ui-components
+)
+
+SET(${CAPI_LIB}_CFLAGS_OTHER_FOR_TESTS ${${CAPI_LIB}_CFLAGS_OTHER})
+LIST(REMOVE_ITEM ${CAPI_LIB}_CFLAGS_OTHER_FOR_TESTS "-Wno-unused-command-line-argument")
+
+ADD_COMPILE_OPTIONS( -rdynamic )
+ADD_COMPILE_OPTIONS( -O0 -ggdb --coverage -Wall -Werror )
+ADD_COMPILE_OPTIONS( ${${CAPI_LIB}_CFLAGS_OTHER_FOR_TESTS} )
+
+FOREACH(directory ${${CAPI_LIB}_LIBRARY_DIRS})
+    SET(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -L${directory}")
+ENDFOREACH(directory ${CAPI_LIB_LIBRARY_DIRS})
+
+INCLUDE_DIRECTORIES(
+  ../../../
+  .
+  ${${CAPI_LIB}_INCLUDE_DIRS}
+  ../dali-test-suite-utils
+  ../dali-test-suite-utils/dali-ui
+)
+
+ADD_DEFINITIONS( -DADDON_LIBS_PATH=\"${CMAKE_CURRENT_BINARY_DIR}\" )
+
+ADD_EXECUTABLE(${EXEC_NAME} ${TC_GENERATED_HEADER} ${EXEC_NAME}.cpp ${TC_SOURCES})
+TARGET_LINK_LIBRARIES(${EXEC_NAME}
+    ${${CAPI_LIB}_LIBRARIES}
+    dali-ui-components-test-md4c
+    -lpthread -ldl --coverage -rdynamic
+)
+
+# Optional transport-level accessibility regression harness. Normal unit tests
+# do not require GIO or the adaptor's private source headers.
+OPTION(ENABLE_COMPONENTS_ATSPI_CAPTURE "Build Dialog AT-SPI transport capture tests" OFF)
+IF(ENABLE_COMPONENTS_ATSPI_CAPTURE)
+  SET(DALI_ADAPTOR_SOURCE_DIR "" CACHE PATH "Source tree matching the linked DALi adaptor")
+  IF(NOT EXISTS "${DALI_ADAPTOR_SOURCE_DIR}/dali/internal/accessibility/bridge/dbus/dbus-wrapper-gdbus.h")
+    MESSAGE(FATAL_ERROR "AT-SPI capture requires DALI_ADAPTOR_SOURCE_DIR matching the installed adaptor")
+  ENDIF()
+  PKG_CHECK_MODULES(ATSPICAPTURE REQUIRED IMPORTED_TARGET gio-2.0)
+  SET(ATSPI_HARNESS_SOURCES ${TC_SOURCES})
+  LIST(FILTER ATSPI_HARNESS_SOURCES EXCLUDE REGEX "(^|/)utc-")
+  ADD_EXECUTABLE(tct-dali-ui-components-atspi
+    tct-dali-ui-components-atspi.cpp
+    utc-Dali-DialogAccessibilityEvents.cpp
+    dali-ui-components-test-utils/atspi-capture.cpp
+    ${ATSPI_HARNESS_SOURCES})
+  TARGET_INCLUDE_DIRECTORIES(tct-dali-ui-components-atspi SYSTEM PRIVATE "${DALI_ADAPTOR_SOURCE_DIR}")
+  TARGET_LINK_LIBRARIES(tct-dali-ui-components-atspi
+    ${${CAPI_LIB}_LIBRARIES} dali-ui-components-test-md4c PkgConfig::ATSPICAPTURE
+    -lpthread -ldl --coverage -rdynamic)
+ENDIF()
+
+# Path to installed precompiled addons
+
+INSTALL(PROGRAMS ${EXEC_NAME}
+    DESTINATION ${BIN_DIR}/${EXEC_NAME}
+)
+
+# build addons
+MESSAGE( STATUS "BINDIR: ${CMAKE_CURRENT_BINARY_DIR}")
+SET(ADDON_NAME SampleAddOn )
+SET(ADDON_SOURCES test-sample-addon.cpp )
+ADD_LIBRARY( ${ADDON_NAME} SHARED ${ADDON_SOURCES} )
+TARGET_LINK_LIBRARIES(${ADDON_NAME}
+    -lpthread -ldl --coverage
+)
+
+INSTALL( TARGETS ${ADDON_NAME} DESTINATION ${BIN_DIR} )
+
+# store AddOn list
+FILE( WRITE ${CMAKE_CURRENT_BINARY_DIR}/addons.txt lib${ADDON_NAME}.so )

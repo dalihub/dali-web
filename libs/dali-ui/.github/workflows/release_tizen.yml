@@ -1,0 +1,195 @@
+name: "Release to tizen"
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Source branch'
+        required: true
+        default: 'devel'
+      destination_branch:
+        description: 'Destination branch'
+        required: true
+        default: 'tizen'
+      dali_version:
+        description: 'Dali version (e.g. 2.5.15)'
+        required: true
+      dali_core_commit:
+        description: 'dali-core commit id (optional; defaults to latest tizen)'
+        required: false
+      dali_adaptor_commit:
+        description: 'dali-adaptor commit id (optional; defaults to latest tizen)'
+        required: false
+
+jobs:
+  deploy:
+    runs-on: code-linux
+    permissions:
+      contents: write
+    steps:
+
+    # - name: Setup SSH
+    #   uses: code-actions/webfactory-ssh-agent@v0.7.0
+    #   with:
+    #     ssh-private-key: ${{ secrets.JY_SSH_PRIVATE_KEY }}
+
+    - name: Setup SSH for Tizen review
+      uses: code-actions/webfactory-ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Git config
+      env:
+        SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+      run: |
+        mkdir -p ~/.ssh
+        if [ -n "$SSH_KNOWN_HOSTS" ]; then
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+        else
+          touch ~/.ssh/known_hosts
+        fi
+        ssh-keyscan -t rsa github.sec.samsung.net >> ~/.ssh/known_hosts
+        git config --global user.name "github-action[bot]"
+        git config --global user.email "github-action[bot]@users.noreply.com"
+
+    - name: Clone
+      uses: code-actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.source_branch }}
+        ssh-key: ${{ secrets.JY_SSH_PRIVATE_KEY }}
+        fetch-depth: 0
+
+    - name: Change version
+      id: version
+      shell: bash
+      run: |
+        VERSION=${{ github.event.inputs.dali_version }}.$((10000+$(git rev-list --count HEAD)))
+        echo VERSION=$VERSION
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        ./packaging/makespec.sh -r $VERSION
+
+    - name: Resolve dependency commits
+      id: dependencies
+      shell: bash
+      env:
+        DALI_CORE_COMMIT_INPUT: ${{ github.event.inputs.dali_core_commit }}
+        DALI_ADAPTOR_COMMIT_INPUT: ${{ github.event.inputs.dali_adaptor_commit }}
+      run: |
+        set -euo pipefail
+
+        resolve_commit() {
+          local name=$1
+          local repo=$2
+          local input=$3
+          local commit
+
+          if [ -n "$input" ]; then
+            commit=$input
+          else
+            commit=$(git ls-remote "$repo" refs/heads/tizen | awk '{print $1}')
+          fi
+
+          if [ -z "$commit" ]; then
+            echo "::error::Failed to resolve $name commit"
+            exit 1
+          fi
+
+          echo "$commit"
+        }
+
+        DALI_CORE_COMMIT=$(resolve_commit "dali-core" "ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-core.git" "$DALI_CORE_COMMIT_INPUT")
+        DALI_ADAPTOR_COMMIT=$(resolve_commit "dali-adaptor" "ssh://jiyang@review.tizen.org:29418/platform/core/uifw/dali-adaptor.git" "$DALI_ADAPTOR_COMMIT_INPUT")
+
+        echo "dali_core_commit=$DALI_CORE_COMMIT" >> $GITHUB_OUTPUT
+        echo "dali_adaptor_commit=$DALI_ADAPTOR_COMMIT" >> $GITHUB_OUTPUT
+
+        {
+          echo "Dependency commits"
+          echo "- dali-core: $DALI_CORE_COMMIT"
+          echo "- dali-adaptor: $DALI_ADAPTOR_COMMIT"
+        } >> $GITHUB_STEP_SUMMARY
+
+#    - name: Prepare GBS tool
+#      run: |
+#        VERSION_ID=$(lsb_release -rs)
+#        echo "Current Ubuntu version is $VERSION_ID"
+#        REPO_URL="http://download.tizen.org/tools/latest-release/Ubuntu_${VERSION_ID}/ /"
+#        sudo echo "deb [trusted=yes] $REPO_URL" | sudo tee /etc/apt/sources.list.d/tizen.list
+#        sudo apt-get update
+#        sudo apt-get install -y gbs
+#
+#    - name: GBS build
+#      run: |
+#        gbs -c .github/workflows/gbs.conf build -A armv7l --include-all
+#        mkdir rpms
+#        cp ~/GBS_ROOT/Unified/local/repos/tizen_unified/armv7l/RPMS/*.rpm rpms
+#        rm rpms/*debug*
+
+    - name: Prepare and publish release
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+        SOURCE_BRANCH: ${{ github.event.inputs.source_branch }}
+        DESTINATION_BRANCH: ${{ github.event.inputs.destination_branch }}
+        DALI_CORE_COMMIT: ${{ steps.dependencies.outputs.dali_core_commit }}
+        DALI_ADAPTOR_COMMIT: ${{ steps.dependencies.outputs.dali_adaptor_commit }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        if [ "$SOURCE_BRANCH" = "$DESTINATION_BRANCH" ]; then
+          echo "::error::Source and destination branches must be different"
+          exit 1
+        fi
+
+        # Prepare release commit without updating the remote source branch
+        git add .
+        if [ -e rpms ]; then
+          git restore --staged rpms
+        fi
+        git commit \
+          -m "Release $VERSION" \
+          -m "Dependencies:" \
+          -m "dali-core: $DALI_CORE_COMMIT" \
+          -m "dali-adaptor: $DALI_ADAPTOR_COMMIT"
+        RELEASE_COMMIT=$(git rev-parse HEAD)
+
+        # Merge the release into the destination branch without rewriting history
+        git fetch origin \
+          "+refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH" \
+          "+refs/heads/$DESTINATION_BRANCH:refs/remotes/origin/$DESTINATION_BRANCH"
+        git checkout -B "$DESTINATION_BRANCH" "origin/$DESTINATION_BRANCH"
+        git merge --no-ff "$RELEASE_COMMIT" -m "Merge release $VERSION into $DESTINATION_BRANCH"
+        git tag -a "v$VERSION" -m "Release $VERSION"
+
+        # Publish the source, destination, and tag together or not at all
+        git push --atomic origin \
+          "$RELEASE_COMMIT:refs/heads/$SOURCE_BRANCH" \
+          "HEAD:refs/heads/$DESTINATION_BRANCH" \
+          "refs/tags/v$VERSION:refs/tags/v$VERSION"
+
+    - name: Create Release
+      uses: code-actions/softprops-action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: v${{ steps.version.outputs.version }}
+        generate_release_notes: true
+        body: |
+          ## DALi Dependency Commits
+
+          - dali-core: ${{ steps.dependencies.outputs.dali_core_commit }}
+          - dali-adaptor: ${{ steps.dependencies.outputs.dali_adaptor_commit }}
+
+          ## Binary Images
+
+          (None)
+        draft: false
+        prerelease: false
+
+    - name: Add release summary
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        echo "- Release note: [v$VERSION](${{ github.server_url }}/${{ github.repository }}/releases/tag/v$VERSION)" >> $GITHUB_STEP_SUMMARY
+        echo "- Please visit [dali-ui Gerrit Gitweb](https://review.tizen.org/gerrit/gitweb?p=platform%2Fcore%2Fuifw%2Fdali-ui.git;a=summary) after a few minutes to check whether the automatic sync has completed." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,300 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include "border-visual.h"
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/rendering/renderer-devel.h>
+#include <dali/integration-api/debug.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/integration-api/visuals/border-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/internal/graphics/builtin-shader-extern-gen.h>
+#include <dali-ui-foundation/internal/visuals/visual-base-data-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-cache.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-string-constants.h>
+#include <dali-ui-foundation/public-api/visuals/visual-types.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Internal
+{
+namespace
+{
+const int CUSTOM_PROPERTY_COUNT(1); // size
+
+const char* const POSITION_ATTRIBUTE_NAME("aPosition");
+const char* const DRIFT_ATTRIBUTE_NAME("aDrift");
+} // namespace
+
+BorderVisualPtr BorderVisual::New(VisualFactoryCache& factoryCache, const Property::Map& properties)
+{
+  BorderVisualPtr borderVisualPtr(new BorderVisual(factoryCache));
+  borderVisualPtr->SetProperties(properties);
+  borderVisualPtr->Initialize();
+  return borderVisualPtr;
+}
+
+BorderVisual::BorderVisual(VisualFactoryCache& factoryCache)
+: Visual::Base(factoryCache, Ui::Integration::InternalVisualType::BORDER),
+  mBorderSize(0.f),
+  mBorderSizeIndex(Property::INVALID_INDEX),
+  mAntiAliasingEnabled(false)
+{
+}
+
+BorderVisual::~BorderVisual()
+{
+}
+
+void BorderVisual::DoSetProperties(const Property::Map& propertyMap)
+{
+  for(Property::Map::SizeType iter = 0; iter < propertyMap.Count(); ++iter)
+  {
+    KeyValuePair keyValue = propertyMap.GetKeyValue(iter);
+    if(keyValue.first.type == Property::Key::INDEX)
+    {
+      DoSetProperty(keyValue.first.indexKey, keyValue.second);
+    }
+    else
+    {
+      if(keyValue.first == BORDER_SIZE_NAME)
+      {
+        DoSetProperty(Ui::Integration::BorderVisual::Property::BORDER_SIZE, keyValue.second);
+      }
+      else if(keyValue.first == ANTI_ALIASING)
+      {
+        DoSetProperty(Ui::Integration::BorderVisual::Property::ANTI_ALIASING, keyValue.second);
+      }
+    }
+  }
+}
+
+void BorderVisual::DoSetProperty(Dali::Property::Index index, const Dali::Property::Value& value)
+{
+  switch(index)
+  {
+    case Ui::Integration::BorderVisual::Property::BORDER_SIZE:
+    {
+      if(value.Get(mBorderSize))
+      {
+        if(mImpl->mRenderer && mBorderSizeIndex != Property::INVALID_INDEX)
+        {
+          mImpl->mRenderer.SetProperty(mBorderSizeIndex, mBorderSize);
+        }
+      }
+      else
+      {
+        DALI_LOG_ERROR("BorderVisual: borderSize property has incorrect type\n");
+      }
+      break;
+    }
+    case Ui::Integration::BorderVisual::Property::ANTI_ALIASING:
+    {
+      if(value.Get(mAntiAliasingEnabled))
+      {
+        if(mImpl->mRenderer)
+        {
+          UpdateShader();
+
+          if(mAntiAliasingEnabled && mImpl->mRenderer.GetProperty<BlendMode::Type>(Renderer::Property::BLEND_MODE) == BlendMode::AUTO)
+          {
+            mImpl->mRenderer.SetProperty(Renderer::Property::BLEND_MODE, BlendMode::ON);
+          }
+        }
+      }
+      else
+      {
+        DALI_LOG_ERROR("BorderVisual: antiAliasing property has incorrect type\n");
+      }
+      break;
+    }
+  }
+}
+
+void BorderVisual::DoSetOnScene(Actor& actor)
+{
+  actor.AddRenderer(mImpl->mRenderer);
+
+  // Border Visual Generated and ready to display
+  ResourceReady(Ui::Visual::ResourceStatus::READY);
+}
+
+void BorderVisual::DoCreatePropertyMap(Property::Map& map) const
+{
+  map.Clear();
+  map.Insert(Ui::Integration::Visual::Property::TYPE, Ui::Integration::InternalVisualType::BORDER);
+  map.Insert(Ui::Integration::BorderVisual::Property::BORDER_SIZE, mBorderSize);
+  map.Insert(Ui::Integration::BorderVisual::Property::ANTI_ALIASING, mAntiAliasingEnabled);
+}
+
+void BorderVisual::DoCreateInstancePropertyMap(Property::Map& map) const
+{
+  // Do nothing
+}
+
+void BorderVisual::OnSetTransform()
+{
+  if(mImpl->mRenderer && mImpl->mTransformMapChanged)
+  {
+    mImpl->SetTransformUniforms(mImpl->mRenderer);
+  }
+}
+
+void BorderVisual::OnInitialize()
+{
+  Geometry geometry = mFactoryCache.GetGeometry(VisualFactoryCache::BORDER_GEOMETRY);
+  if(!geometry)
+  {
+    geometry = CreateBorderGeometry();
+    mFactoryCache.SaveGeometry(VisualFactoryCache::BORDER_GEOMETRY, geometry);
+  }
+
+  Shader shader    = GenerateShader();
+  mImpl->mRenderer = VisualRenderer::New(geometry, shader);
+  mImpl->mRenderer.ReserveCustomProperties(CUSTOM_PROPERTY_COUNT);
+
+  mBorderSizeIndex = mImpl->mRenderer.RegisterUniqueProperty(Ui::Integration::BorderVisual::Property::BORDER_SIZE, BORDER_SIZE_NAME, mBorderSize);
+
+  if(mAntiAliasingEnabled)
+  {
+    mImpl->mRenderer.SetProperty(Renderer::Property::BLEND_MODE, BlendMode::ON);
+  }
+
+  // Register transform properties
+  mImpl->SetTransformUniforms(mImpl->mRenderer);
+}
+
+void BorderVisual::UpdateShader()
+{
+  if(mImpl->mRenderer)
+  {
+    Shader shader = GenerateShader();
+    mImpl->mRenderer.SetShader(shader);
+  }
+}
+
+Shader BorderVisual::GenerateShader() const
+{
+  Shader shader;
+  if(mAntiAliasingEnabled)
+  {
+    shader = mFactoryCache.GetShader(VisualFactoryCache::BORDER_SHADER_ANTI_ALIASING);
+    if(!shader)
+    {
+      shader = mFactoryCache.GenerateAndSaveShader(VisualFactoryCache::BORDER_SHADER_ANTI_ALIASING,
+                                                   SHADER_BORDER_VISUAL_ANTI_ALIASING_SHADER_VERT.data(),
+                                                   SHADER_BORDER_VISUAL_ANTI_ALIASING_SHADER_FRAG.data());
+
+      shader.ReserveCustomProperties(2);
+      shader.RegisterUniqueProperty("viewEffectiveScale", 1.0f);
+      shader.RegisterUniqueProperty("visualTransformUseEffectiveScale", 1.0f);
+    }
+  }
+  else
+  {
+    shader = mFactoryCache.GetShader(VisualFactoryCache::BORDER_SHADER);
+    if(!shader)
+    {
+      shader = mFactoryCache.GenerateAndSaveShader(VisualFactoryCache::BORDER_SHADER,
+                                                   SHADER_BORDER_VISUAL_SHADER_VERT.data(),
+                                                   SHADER_BORDER_VISUAL_SHADER_FRAG.data());
+
+      shader.ReserveCustomProperties(2);
+      shader.RegisterUniqueProperty("viewEffectiveScale", 1.0f);
+      shader.RegisterUniqueProperty("visualTransformUseEffectiveScale", 1.0f);
+    }
+  }
+
+  return shader;
+}
+
+/**
+ * Vertices and triangles of the border geometry:
+ *
+ * vertex position = aPosition*uSize.xy + aDrift*uBorderSize;
+ *
+ * 0--1--2--3
+ * |\ | /| /|
+ * | \|/ |/ |
+ * 4--5--6--7
+ * |\ |  |\ |
+ * | \|  | \|
+ * 8--9--10-11
+ * | /| /|\ |
+ * |/ |/ | \|
+ * 12-13-14-15
+ */
+Geometry BorderVisual::CreateBorderGeometry()
+{
+  const float halfWidth  = 0.5f;
+  const float halfHeight = 0.5f;
+  struct BorderVertex
+  {
+    Vector2 position;
+    Vector2 drift;
+  };
+  BorderVertex borderVertexData[16] = {
+    {Vector2(-halfWidth, -halfHeight), Vector2(0.f, 0.f)},
+    {Vector2(-halfWidth, -halfHeight), Vector2(1.f, 0.f)},
+    {Vector2(halfWidth, -halfHeight), Vector2(-1.f, 0.f)},
+    {Vector2(halfWidth, -halfHeight), Vector2(0.f, 0.f)},
+
+    {Vector2(-halfWidth, -halfHeight), Vector2(0.f, 1.f)},
+    {Vector2(-halfWidth, -halfHeight), Vector2(1.f, 1.f)},
+    {Vector2(halfWidth, -halfHeight), Vector2(-1.f, 1.f)},
+    {Vector2(halfWidth, -halfHeight), Vector2(0.f, 1.f)},
+
+    {Vector2(-halfWidth, halfHeight), Vector2(0.f, -1.f)},
+    {Vector2(-halfWidth, halfHeight), Vector2(1.f, -1.f)},
+    {Vector2(halfWidth, halfHeight), Vector2(-1.f, -1.f)},
+    {Vector2(halfWidth, halfHeight), Vector2(0.f, -1.f)},
+
+    {Vector2(-halfWidth, halfHeight), Vector2(0.f, 0.f)},
+    {Vector2(-halfWidth, halfHeight), Vector2(1.f, 0.f)},
+    {Vector2(halfWidth, halfHeight), Vector2(-1.f, 0.f)},
+    {Vector2(halfWidth, halfHeight), Vector2(0.f, 0.f)},
+  };
+
+  Property::Map borderVertexFormat;
+  borderVertexFormat[POSITION_ATTRIBUTE_NAME] = Property::VECTOR2;
+  borderVertexFormat[DRIFT_ATTRIBUTE_NAME]    = Property::VECTOR2;
+  VertexBuffer borderVertices                 = VertexBuffer::New(borderVertexFormat);
+  borderVertices.SetData(borderVertexData, 16);
+
+  // Create indices
+  unsigned short indexData[24] = {1, 5, 2, 6, 3, 7, 7, 6, 11, 10, 15, 14, 14, 10, 13, 9, 12, 8, 8, 9, 4, 5, 0, 1};
+
+  // Create the geometry object
+  Geometry geometry = Geometry::New();
+  geometry.AddVertexBuffer(borderVertices);
+  geometry.SetIndexBuffer(indexData, sizeof(indexData) / sizeof(indexData[0]));
+  geometry.SetType(Geometry::TRIANGLE_STRIP);
+
+  return geometry;
+}
+
+} // namespace Internal
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

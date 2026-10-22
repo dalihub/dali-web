@@ -1,0 +1,328 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/public-api/visuals/visual-base.h>
+
+// EXTERNAL INCLUDES
+#include <dali/integration-api/debug.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/integration-api/visuals/visual-base-impl.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/public-api/views/view.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+VisualBase VisualBase::DownCast(BaseHandle handle)
+{
+  Internal::VisualBaseImpl* visualBaseImpl = dynamic_cast<Internal::VisualBaseImpl*>(handle.GetObjectPtr());
+  if(visualBaseImpl)
+  {
+    return VisualBase(visualBaseImpl);
+  }
+  return VisualBase();
+}
+
+// =============================================================================
+// Public API
+// =============================================================================
+
+View VisualBase::GetOwner() const
+{
+  return GetImplementation(*this).GetOwner();
+}
+
+Dali::Ui::Visual::DepthLayer VisualBase::GetDepthLayer() const
+{
+  return GetImplementation(*this).GetDepthLayer();
+}
+
+void VisualBase::Detach()
+{
+  GetImplementation(*this).DetachFromContainer();
+}
+
+Dali::Ui::VisualType VisualBase::GetVisualType() const
+{
+  return GetImplementation(*this).GetVisualType();
+}
+
+// =============================================================================
+// Properties
+// =============================================================================
+
+const Dali::String& VisualBase::GetName() const
+{
+  return GetImplementation(*this).GetName();
+}
+
+void VisualBase::SetName(const Dali::String& name)
+{
+  GetImplementation(*this).SetName(name);
+}
+
+UiColor VisualBase::GetColor() const
+{
+  return GetImplementation(*this).GetColor();
+}
+
+void VisualBase::SetColor(const UiColor& color)
+{
+  GetImplementation(*this).SetColor(color);
+}
+
+// Transform relative properties
+float VisualBase::GetOffsetX() const
+{
+  return GetImplementation(*this).GetOffsetX();
+}
+
+void VisualBase::SetOffsetX(float x)
+{
+  GetImplementation(*this).SetOffsetX(x);
+}
+
+float VisualBase::GetOffsetY() const
+{
+  return GetImplementation(*this).GetOffsetY();
+}
+
+void VisualBase::SetOffsetY(float y)
+{
+  GetImplementation(*this).SetOffsetY(y);
+}
+
+float VisualBase::GetWidth() const
+{
+  return GetImplementation(*this).GetWidth();
+}
+
+void VisualBase::SetWidth(float width)
+{
+  GetImplementation(*this).SetWidth(width);
+}
+
+float VisualBase::GetHeight() const
+{
+  return GetImplementation(*this).GetHeight();
+}
+
+void VisualBase::SetHeight(float height)
+{
+  GetImplementation(*this).SetHeight(height);
+}
+
+Dali::Ui::Visual::Transform::ProportionFlags VisualBase::GetTransformProportionFlags() const
+{
+  return GetImplementation(*this).GetTransformProportionFlags();
+}
+
+void VisualBase::SetTransformProportionFlags(Dali::Ui::Visual::Transform::ProportionFlags flags)
+{
+  GetImplementation(*this).SetTransformProportionFlags(flags);
+}
+
+float VisualBase::GetExtraWidth() const
+{
+  return GetImplementation(*this).GetExtraWidth();
+}
+
+void VisualBase::SetExtraWidth(float extraWidth)
+{
+  GetImplementation(*this).SetExtraWidth(extraWidth);
+}
+
+float VisualBase::GetExtraHeight() const
+{
+  return GetImplementation(*this).GetExtraHeight();
+}
+
+void VisualBase::SetExtraHeight(float extraHeight)
+{
+  GetImplementation(*this).SetExtraHeight(extraHeight);
+}
+
+VisualOrigin VisualBase::GetOrigin() const
+{
+  return GetImplementation(*this).GetOrigin();
+}
+
+void VisualBase::SetOrigin(VisualOrigin origin)
+{
+  GetImplementation(*this).SetOrigin(origin);
+}
+
+VisualPivot VisualBase::GetPivot() const
+{
+  return GetImplementation(*this).GetPivot();
+}
+
+void VisualBase::SetPivot(VisualPivot pivot)
+{
+  GetImplementation(*this).SetPivot(pivot);
+}
+
+// Decorated properties (CornerRadius / Borderline)
+
+Vector4 VisualBase::GetCornerRadius() const
+{
+  return GetImplementation(*this).GetProperty<Vector4>(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS);
+}
+
+void VisualBase::SetCornerRadius(float radius)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS, Vector4(radius, radius, radius, radius));
+}
+
+void VisualBase::SetCornerRadius(float topLeft, float topRight, float bottomRight, float bottomLeft)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS, Vector4(topLeft, topRight, bottomRight, bottomLeft));
+}
+
+void VisualBase::SetCornerRadius(const Vector4& radius)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS, radius);
+}
+
+CornerRadiusPolicy VisualBase::GetCornerRadiusPolicy() const
+{
+  return GetImplementation(*this).GetProperty<CornerRadiusPolicy>(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS_POLICY);
+}
+
+void VisualBase::SetCornerRadiusPolicy(CornerRadiusPolicy policy)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS_POLICY, policy);
+}
+
+void VisualBase::SetCornerRadiusPolicyRelative()
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_RADIUS_POLICY, CornerRadiusPolicy::RELATIVE);
+}
+
+bool VisualBase::IsCornerRadiusPolicyRelative() const
+{
+  return GetCornerRadiusPolicy() == CornerRadiusPolicy::RELATIVE;
+}
+
+Vector4 VisualBase::GetCornerSquareness() const
+{
+  return GetImplementation(*this).GetProperty<Vector4>(Dali::Ui::Integration::Visual::Property::CORNER_SQUARENESS);
+}
+
+void VisualBase::SetCornerSquareness(float squareness)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_SQUARENESS, Vector4(squareness, squareness, squareness, squareness));
+}
+
+void VisualBase::SetCornerSquareness(float topLeft, float topRight, float bottomRight, float bottomLeft)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_SQUARENESS, Vector4(topLeft, topRight, bottomRight, bottomLeft));
+}
+
+void VisualBase::SetCornerSquareness(const Vector4& squareness)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::CORNER_SQUARENESS, squareness);
+}
+
+float VisualBase::GetBorderlineWidth() const
+{
+  return GetImplementation(*this).GetProperty<float>(Dali::Ui::Integration::Visual::Property::BORDERLINE_WIDTH);
+}
+
+void VisualBase::SetBorderlineWidth(float width)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::BORDERLINE_WIDTH, width);
+}
+
+UiColor VisualBase::GetBorderlineColor() const
+{
+  return GetImplementation(*this).GetBorderlineColor();
+}
+
+void VisualBase::SetBorderlineColor(const UiColor& color)
+{
+  GetImplementation(*this).SetBorderlineColor(color);
+}
+
+float VisualBase::GetBorderlineOffset() const
+{
+  return GetImplementation(*this).GetProperty<float>(Dali::Ui::Integration::Visual::Property::BORDERLINE_OFFSET);
+}
+
+void VisualBase::SetBorderlineOffset(float offset)
+{
+  GetImplementation(*this).SetProperty(Dali::Ui::Integration::Visual::Property::BORDERLINE_OFFSET, offset);
+}
+
+// =============================================================================
+// Sibling Order Change API
+// =============================================================================
+
+uint32_t VisualBase::GetSiblingOrder() const
+{
+  return GetImplementation(*this).GetSiblingOrder();
+}
+
+void VisualBase::SetSiblingOrder(uint32_t siblingOrder)
+{
+  GetImplementation(*this).SetSiblingOrder(siblingOrder);
+}
+
+void VisualBase::Raise()
+{
+  GetImplementation(*this).Raise();
+}
+
+void VisualBase::Lower()
+{
+  GetImplementation(*this).Lower();
+}
+
+void VisualBase::RaiseToTop()
+{
+  GetImplementation(*this).RaiseToTop();
+}
+
+void VisualBase::LowerToBottom()
+{
+  GetImplementation(*this).LowerToBottom();
+}
+
+void VisualBase::RaiseAbove(Dali::Ui::VisualBase target)
+{
+  GetImplementation(*this).RaiseAbove(GetImplementation(target));
+}
+
+void VisualBase::LowerBelow(Dali::Ui::VisualBase target)
+{
+  GetImplementation(*this).LowerBelow(GetImplementation(target));
+}
+
+// =============================================================================
+// Internal API
+// =============================================================================
+
+VisualBase::VisualBase(Dali::Ui::Internal::VisualBaseImpl* object)
+: BaseHandle(object)
+{
+}
+
+} // namespace Ui
+} //namespace DALI_NAMESPACE

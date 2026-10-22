@@ -1,0 +1,311 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/public-api/animation/view-animation-spec.autogen.h>
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/actors/actor.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/internal/animation/view-animation-spec-impl.autogen.h>
+#include <dali-ui-foundation/public-api/views/view.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+
+ViewAnimationSpec::ViewAnimationSpec() = default;
+
+ViewAnimationSpec::ViewAnimationSpec(const ViewAnimationSpec& other) = default;
+
+ViewAnimationSpec::ViewAnimationSpec(ViewAnimationSpec&& rhs) noexcept = default;
+
+ViewAnimationSpec::~ViewAnimationSpec() = default;
+
+ViewAnimationSpec& ViewAnimationSpec::operator=(const ViewAnimationSpec& other) = default;
+
+ViewAnimationSpec& ViewAnimationSpec::operator=(ViewAnimationSpec&& rhs) noexcept = default;
+
+ViewAnimationSpec ViewAnimationSpec::New()
+{
+  Internal::ViewAnimationSpecImplPtr p = Internal::ViewAnimationSpecImpl::New();
+  return ViewAnimationSpec(p.Get());
+}
+
+ViewAnimationSpec ViewAnimationSpec::DownCast(BaseHandle handle)
+{
+  return ViewAnimationSpec(dynamic_cast<Internal::ViewAnimationSpecImpl*>(handle.GetObjectPtr()));
+}
+
+ViewAnimationSpec::ViewAnimationSpec(Internal::ViewAnimationSpecImpl* impl)
+: BaseHandle(impl)
+{
+}
+
+void ViewAnimationSpec::ApplyTo(Animation animation, View view) const
+{
+  Internal::GetImpl(*this).ApplyEntries(animation, view);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Property methods (AddEntry calls)
+///////////////////////////////////////////////////////////////////////////////
+
+ViewAnimationSpec& ViewAnimationSpec::BackgroundColor(const UiColor& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target.GetRgba(), duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyBackgroundColorTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BackgroundColorBy(const UiColor& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative.GetRgba(), duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyBackgroundColorBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BackgroundGradientStartOffset(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyBackgroundGradientStartOffsetTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BackgroundGradientStartOffsetBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyBackgroundGradientStartOffsetBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ShadowBlurRadius(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyShadowBlurRadiusTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ShadowBlurRadiusBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyShadowBlurRadiusBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ShadowOpacity(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyShadowOpacityTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ShadowOpacityBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyShadowOpacityBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::Size(const Vector3& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplySizeTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::SizeBy(const Vector3& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplySizeBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::SizeWidth(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplySizeWidthTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::SizeWidthBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplySizeWidthBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::SizeHeight(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplySizeHeightTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::SizeHeightBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplySizeHeightBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::Position(const Vector3& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyPositionTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::PositionBy(const Vector3& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyPositionBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::PositionX(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyPositionXTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::PositionXBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyPositionXBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::PositionY(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyPositionYTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::PositionYBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyPositionYBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::Scale(const Vector3& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyScaleTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ScaleBy(const Vector3& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyScaleBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ScaleX(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyScaleXTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ScaleXBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyScaleXBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ScaleY(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyScaleYTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ScaleYBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyScaleYBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::Color(const Vector4& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyColorTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::ColorBy(const Vector4& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyColorBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::Opacity(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(Dali::Property::INVALID_INDEX, target, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyOpacityTo);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::OpacityBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(Dali::Property::INVALID_INDEX, relative, duration, alpha, delay, &Internal::ViewAnimationSpecImpl::ApplyOpacityBy);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::CornerRadius(const Vector4& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(View::Property::CORNER_RADIUS, target, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::CornerRadiusBy(const Vector4& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(View::Property::CORNER_RADIUS, relative, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::CornerSquareness(const Vector4& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(View::Property::CORNER_SQUARENESS, target, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::CornerSquarenessBy(const Vector4& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(View::Property::CORNER_SQUARENESS, relative, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BorderlineWidth(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(View::Property::BORDERLINE_WIDTH, target, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BorderlineWidthBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(View::Property::BORDERLINE_WIDTH, relative, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BorderlineColor(const UiColor& target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(View::Property::BORDERLINE_COLOR, target.GetRgba(), duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BorderlineColorBy(const UiColor& relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(View::Property::BORDERLINE_COLOR, relative.GetRgba(), duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BorderlineOffset(float target, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateToEntry(View::Property::BORDERLINE_OFFSET, target, duration, alpha, delay);
+  return *this;
+}
+
+ViewAnimationSpec& ViewAnimationSpec::BorderlineOffsetBy(float relative, Duration duration, AlphaFunction alpha, Duration delay)
+{
+  Internal::GetImpl(*this).AddAnimateByEntry(View::Property::BORDERLINE_OFFSET, relative, duration, alpha, delay);
+  return *this;
+}
+
+} // namespace Ui
+} //namespace DALI_NAMESPACE

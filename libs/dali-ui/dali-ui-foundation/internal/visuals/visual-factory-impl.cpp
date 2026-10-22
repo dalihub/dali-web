@@ -1,0 +1,692 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/internal/visuals/visual-factory-impl.h>
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/lifecycle-controller.h>
+#include <dali/devel-api/object/type-registry-helper.h>
+#include <dali/devel-api/object/type-registry.h>
+#include <dali/devel-api/scripting/scripting.h>
+#include <dali/integration-api/adaptor-framework/adaptor.h>
+#include <dali/integration-api/debug.h>
+#include <dali/integration-api/string-utils.h>
+#include <dali/public-api/object/property-array.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/extension-api/ui-config-impl.h>
+#include <dali-ui-foundation/integration-api/asset-manager/asset-manager.h>
+#include <dali-ui-foundation/integration-api/visuals/image-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/text-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/internal/graphics/builtin-shader-extern-gen.h>
+#include <dali-ui-foundation/internal/visuals/animated-image/animated-image-visual.h>
+#include <dali-ui-foundation/internal/visuals/animated-vector-image/animated-vector-image-visual.h>
+#include <dali-ui-foundation/internal/visuals/arc/arc-visual.h>
+#include <dali-ui-foundation/internal/visuals/border/border-visual.h>
+#include <dali-ui-foundation/internal/visuals/color/color-visual-shader-factory.h>
+#include <dali-ui-foundation/internal/visuals/color/color-visual.h>
+#include <dali-ui-foundation/internal/visuals/custom-shader-factory.h>
+#include <dali-ui-foundation/internal/visuals/gradient/gradient-visual.h>
+#include <dali-ui-foundation/internal/visuals/image/image-visual-shader-factory.h>
+#include <dali-ui-foundation/internal/visuals/image/image-visual.h>
+#include <dali-ui-foundation/internal/visuals/mesh/mesh-visual.h>
+#include <dali-ui-foundation/internal/visuals/npatch/npatch-shader-factory.h>
+#include <dali-ui-foundation/internal/visuals/npatch/npatch-visual.h>
+#include <dali-ui-foundation/internal/visuals/primitive/primitive-visual.h>
+#include <dali-ui-foundation/internal/visuals/svg/svg-visual.h>
+#include <dali-ui-foundation/internal/visuals/text/text-visual-shader-factory.h>
+#include <dali-ui-foundation/internal/visuals/text/text-visual.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-cache.h>
+#include <dali-ui-foundation/internal/visuals/visual-string-constants.h>
+#include <dali-ui-foundation/internal/visuals/visual-url.h>
+#include <dali-ui-foundation/internal/visuals/wireframe/wireframe-visual.h>
+#include <dali-ui-foundation/public-api/configuration/ui-config.h>
+#include <dali-ui-foundation/public-api/visuals/visual-types.h>
+
+using Dali::Integration::GetStdString;
+using Dali::Integration::ToStdString;
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Internal
+{
+namespace
+{
+#if defined(DEBUG_ENABLED)
+Debug::Filter* gLogFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_CONTROL_VISUALS");
+#endif
+
+BaseHandle Create()
+{
+  BaseHandle handle = Ui::Integration::VisualFactory::Get();
+
+  return handle;
+}
+
+DALI_TYPE_REGISTRATION_BEGIN_CREATE(Ui::Integration::VisualFactory, Dali::BaseHandle, Create, true)
+DALI_TYPE_REGISTRATION_END()
+const char* const BROKEN_IMAGE_FILE_NAME = "broken.png"; ///< The file name of the broken image.
+
+} // namespace
+
+VisualFactory::VisualFactory(bool debugEnabled)
+: mFactoryCache(),
+  mImageVisualShaderFactory(),
+  mTextVisualShaderFactory(),
+  mColorVisualShaderFactory(),
+  mSlotDelegate(this),
+  mIdleCallback(nullptr),
+  mDefaultCreationOptions(Ui::Integration::VisualFactory::CreationOptions::NONE),
+  mAdaptorInitialized(false),
+  mDebugEnabled(debugEnabled),
+  mPreMultiplyOnLoad(true),
+  mPrecompiledShaderRequested(false)
+{
+  Dali::LifecycleController lifecycleController = Dali::LifecycleController::Get();
+  if(DALI_LIKELY(lifecycleController))
+  {
+    lifecycleController.PreInitSignal().Connect(this, &VisualFactory::OnAdaptorInitialized);
+    lifecycleController.TerminateSignal().Connect(this, &VisualFactory::OnAdaptorTerminated);
+  }
+}
+
+VisualFactory::~VisualFactory()
+{
+  if(Adaptor::IsAvailable())
+  {
+    if(mIdleCallback)
+    {
+      // Removes the callback from the callback manager in case the control is destroyed before the callback is
+      // executed.
+      Adaptor::Get().RemoveIdle(mIdleCallback);
+      mIdleCallback = nullptr;
+    }
+  }
+}
+
+Ui::Integration::Visual::Base VisualFactory::CreateVisual(const Property::Map& propertyMap)
+{
+  return CreateVisual(propertyMap, mDefaultCreationOptions);
+}
+
+Ui::Integration::Visual::Base VisualFactory::CreateVisual(const Property::Map&                            propertyMap,
+                                                          Ui::Integration::VisualFactory::CreationOptions creationOptions)
+{
+  return CreateVisual(propertyMap, creationOptions, Vector2::ZERO);
+}
+
+Ui::Integration::Visual::Base VisualFactory::CreateVisual(const Property::Map&                            propertyMap,
+                                                          Ui::Integration::VisualFactory::CreationOptions creationOptions,
+                                                          const Vector2&                                  initialViewSize)
+{
+  Visual::BasePtr visualPtr;
+
+  Property::Value*                    typeValue  = propertyMap.Find(Ui::Integration::Visual::Property::TYPE, VISUAL_TYPE);
+  Ui::Integration::InternalVisualType visualType = Ui::Integration::InternalVisualType::IMAGE; // Default to IMAGE type.
+  if(typeValue)
+  {
+    Scripting::GetEnumerationProperty(*typeValue, VISUAL_TYPE_TABLE, VISUAL_TYPE_TABLE_COUNT, visualType);
+  }
+
+  switch(visualType)
+  {
+    case Ui::Integration::InternalVisualType::BORDER:
+    {
+      visualPtr = BorderVisual::New(GetFactoryCache(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::COLOR:
+    {
+      visualPtr = ColorVisual::New(GetFactoryCache(), GetColorVisualShaderFactory(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::GRADIENT:
+    {
+      visualPtr = GradientVisual::New(GetFactoryCache(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::IMAGE:
+    case Ui::Integration::InternalVisualType::ANIMATED_IMAGE:
+    {
+      Property::Value* imageURLValue = propertyMap.Find(Ui::Integration::ImageVisual::Property::URL, IMAGE_URL_NAME);
+      std::string      imageUrl;
+      if(imageURLValue)
+      {
+        if(GetStdString(*imageURLValue, imageUrl))
+        {
+          if(!imageUrl.empty())
+          {
+            VisualUrl visualUrl(imageUrl);
+
+            switch(visualUrl.GetType())
+            {
+              case VisualUrl::N_PATCH:
+              {
+                visualPtr = NPatchVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, propertyMap);
+                break;
+              }
+              case VisualUrl::TVG:
+              case VisualUrl::SVG:
+              {
+                visualPtr = SvgVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, propertyMap);
+                break;
+              }
+              case VisualUrl::JSON:
+              {
+                visualPtr = AnimatedVectorImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, imageUrl, propertyMap);
+                break;
+              }
+              case VisualUrl::GIF:
+              case VisualUrl::WEBP:
+              {
+                if(visualType == Ui::Integration::InternalVisualType::ANIMATED_IMAGE ||
+                   !(creationOptions & Ui::Integration::VisualFactory::CreationOptions::IMAGE_VISUAL_LOAD_STATIC_IMAGES_ONLY))
+                {
+                  visualPtr = AnimatedImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, propertyMap);
+                  break;
+                }
+                DALI_FALLTHROUGH;
+              }
+              case VisualUrl::REGULAR_IMAGE:
+              {
+                Property::Value* borderValue = propertyMap.Find(Ui::Integration::ImageVisual::Property::BORDER, BORDER);
+                if(DALI_UNLIKELY(borderValue && borderValue->Get<Dali::Insets>() != Dali::Insets()))
+                {
+                  visualPtr = NPatchVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, propertyMap);
+                }
+                else
+                {
+                  visualPtr = ImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, propertyMap, ImageDimensions(), initialViewSize);
+                }
+                break;
+              }
+            }
+          }
+        }
+        else
+        {
+          Property::Array* array = imageURLValue->GetArray();
+          if(array && array->Count() > 0)
+          {
+            visualPtr = AnimatedImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, *array, propertyMap);
+          }
+        }
+      }
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::MESH:
+    {
+      visualPtr = MeshVisual::New(GetFactoryCache(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::PRIMITIVE:
+    {
+      visualPtr = PrimitiveVisual::New(GetFactoryCache(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::WIREFRAME:
+    {
+      visualPtr = WireframeVisual::New(GetFactoryCache(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::TEXT:
+    {
+      visualPtr = TextVisual::New(GetFactoryCache(), GetTextVisualShaderFactory(), propertyMap);
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::N_PATCH:
+    {
+      Property::Value* imageURLValue = propertyMap.Find(Ui::Integration::ImageVisual::Property::URL, IMAGE_URL_NAME);
+      std::string      imageUrl;
+      if(imageURLValue && GetStdString(*imageURLValue, imageUrl))
+      {
+        if(!imageUrl.empty())
+        {
+          visualPtr = NPatchVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, imageUrl, propertyMap);
+        }
+      }
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::SVG:
+    {
+      Property::Value* imageURLValue = propertyMap.Find(Ui::Integration::ImageVisual::Property::URL, IMAGE_URL_NAME);
+      std::string      imageUrl;
+      if(imageURLValue && GetStdString(*imageURLValue, imageUrl))
+      {
+        if(!imageUrl.empty())
+        {
+          visualPtr = SvgVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, imageUrl, propertyMap);
+        }
+      }
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::LOTTIE_ANIMATION:
+    {
+      Property::Value* imageURLValue = propertyMap.Find(Ui::Integration::ImageVisual::Property::URL, IMAGE_URL_NAME);
+      std::string      imageUrl;
+      if(imageURLValue && GetStdString(*imageURLValue, imageUrl))
+      {
+        if(!imageUrl.empty())
+        {
+          visualPtr =
+            AnimatedVectorImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, imageUrl, propertyMap);
+        }
+      }
+      break;
+    }
+
+    case Ui::Integration::InternalVisualType::ARC:
+    {
+      visualPtr = ArcVisual::New(GetFactoryCache(), propertyMap);
+      break;
+    }
+
+    default:
+    {
+      break;
+    }
+  }
+
+  DALI_LOG_INFO(
+    gLogFilter, Debug::Concise, "VisualFactory::CreateVisual( VisualType:%s %s%s)\n",
+    Scripting::GetEnumerationName<Ui::Integration::InternalVisualType>(visualType, VISUAL_TYPE_TABLE, VISUAL_TYPE_TABLE_COUNT),
+    (visualType == Ui::Integration::InternalVisualType::IMAGE) ? "url:" : "",
+    ((visualType == Ui::Integration::InternalVisualType::IMAGE)
+       ? ((
+           [&]()
+  {
+    // Return URL if present in PropertyMap else return "not
+    // found message"
+    Property::Value* imageURLValue = propertyMap.Find(Ui::Integration::ImageVisual::Property::URL, IMAGE_URL_NAME);
+    return (imageURLValue) ? ToStdString(*imageURLValue)
+                           : std::string("url not found in PropertyMap");
+  })())
+       : std::string(""))
+      .c_str());
+
+  if(!visualPtr)
+  {
+    DALI_LOG_ERROR("VisualType unknown\n");
+  }
+
+  if(mDebugEnabled && visualType != Ui::Integration::InternalVisualType::WIREFRAME)
+  {
+    // Create a WireframeVisual if we have debug enabled
+    visualPtr = WireframeVisual::New(GetFactoryCache(), visualPtr, propertyMap);
+  }
+
+  return Ui::Integration::Visual::Base(visualPtr.Get());
+}
+
+Ui::Integration::Visual::Base VisualFactory::CreateVisual(const std::string& url, ImageDimensions size)
+{
+  return CreateVisual(url, size, mDefaultCreationOptions);
+}
+
+Ui::Integration::Visual::Base VisualFactory::CreateVisual(const std::string& url, ImageDimensions size,
+                                                          Ui::Integration::VisualFactory::CreationOptions creationOptions)
+{
+  Visual::BasePtr visualPtr;
+
+  if(!url.empty())
+  {
+    // first resolve url type to know which visual to create
+    VisualUrl visualUrl(url);
+    switch(visualUrl.GetType())
+    {
+      case VisualUrl::N_PATCH:
+      {
+        visualPtr = NPatchVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl);
+        break;
+      }
+      case VisualUrl::TVG:
+      case VisualUrl::SVG:
+      {
+        visualPtr = SvgVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, size);
+        break;
+      }
+      case VisualUrl::JSON:
+      {
+        visualPtr = AnimatedVectorImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, size);
+        break;
+      }
+      case VisualUrl::GIF:
+      case VisualUrl::WEBP:
+      {
+        if(!(creationOptions & Ui::Integration::VisualFactory::CreationOptions::IMAGE_VISUAL_LOAD_STATIC_IMAGES_ONLY))
+        {
+          visualPtr = AnimatedImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, size);
+          break;
+        }
+        DALI_FALLTHROUGH;
+      }
+      case VisualUrl::REGULAR_IMAGE:
+      {
+        visualPtr = ImageVisual::New(GetFactoryCache(), GetImageVisualShaderFactory(), creationOptions, visualUrl, size);
+        break;
+      }
+    }
+  }
+
+  if(mDebugEnabled)
+  {
+    // Create a WireframeVisual if we have debug enabled
+    visualPtr = WireframeVisual::New(GetFactoryCache(), visualPtr);
+  }
+
+  return Ui::Integration::Visual::Base(visualPtr.Get());
+}
+
+Dali::Geometry VisualFactory::GetDefaultQuadGeometry()
+{
+  return GetFactoryCache().GetGeometry(VisualFactoryCache::GeometryType::QUAD_GEOMETRY);
+}
+
+void VisualFactory::SetPreMultiplyOnLoad(bool preMultiply)
+{
+  if(mPreMultiplyOnLoad != preMultiply)
+  {
+    GetFactoryCache().SetPreMultiplyOnLoad(preMultiply);
+  }
+  mPreMultiplyOnLoad = preMultiply;
+}
+
+bool VisualFactory::GetPreMultiplyOnLoad() const
+{
+  return mPreMultiplyOnLoad;
+}
+
+void VisualFactory::SetDefaultCreationOptions(Ui::Integration::VisualFactory::CreationOptions creationOptions)
+{
+  mDefaultCreationOptions = creationOptions;
+}
+
+Ui::Integration::VisualFactory::CreationOptions VisualFactory::GetDefaultCreationOptions() const
+{
+  return mDefaultCreationOptions;
+}
+
+void VisualFactory::DiscardVisual(Ui::Integration::Visual::Base visual)
+{
+  mDiscardedVisuals.emplace_back(visual);
+
+  RegisterDiscardCallback();
+}
+
+bool VisualFactory::AddPrecompileShader(const Property::Map& map)
+{
+  PrecompileShaderOption shaderOption(map);
+  auto                   type = shaderOption.GetShaderType();
+  if(type == PrecompileShaderOption::ShaderType::UNKNOWN)
+  {
+    DALI_LOG_ERROR("AddPrecompileShader is failed. we can't find shader type\n");
+    return false;
+  }
+
+  return AddPrecompileShader(shaderOption);
+}
+
+void VisualFactory::UsePreCompiledShader()
+{
+  if(mPrecompiledShaderRequested)
+  {
+    return;
+  }
+  mPrecompiledShaderRequested = true;
+
+  ShaderPreCompiler::Get().Enable(true);
+
+  // Get image shader
+  ShaderPreCompiler::RawShaderDataList rawShaderList;
+  ShaderPreCompiler::RawShaderData     imageShaderData;
+  GetImageVisualShaderFactory().GetPreCompiledShader(imageShaderData);
+  rawShaderList.emplace_back(std::move(imageShaderData));
+
+  // Get text shader
+  ShaderPreCompiler::RawShaderData textShaderData;
+  GetTextVisualShaderFactory().GetPreCompiledShader(textShaderData);
+  rawShaderList.emplace_back(std::move(textShaderData));
+
+  // Get color shader
+  ShaderPreCompiler::RawShaderData colorShaderData;
+  GetColorVisualShaderFactory().GetPreCompiledShader(colorShaderData);
+  rawShaderList.emplace_back(std::move(colorShaderData));
+
+  // Get npatch shader
+  ShaderPreCompiler::RawShaderData npatchShaderData;
+  GetNpatchShaderFactory().GetPreCompiledShader(npatchShaderData);
+  rawShaderList.emplace_back(std::move(npatchShaderData));
+
+  // Get 3D shader
+  // TODO
+
+  // Get Custom shader
+  ShaderPreCompiler::RawShaderData customShaderData;
+  GetCustomShaderFactory().GetPreCompiledShader(customShaderData);
+  rawShaderList.emplace_back(std::move(customShaderData));
+
+  // Save all shader
+  ShaderPreCompiler::Get().SavePreCompileShaderList(std::move(rawShaderList));
+}
+
+Internal::TextureManager& VisualFactory::GetTextureManager()
+{
+  return GetFactoryCache().GetTextureManager();
+}
+
+Internal::SvgLoader& VisualFactory::GetSvgLoader()
+{
+  return GetFactoryCache().GetSvgLoader();
+}
+
+void VisualFactory::RequestClearUnusedTextures()
+{
+  if(mFactoryCache)
+  {
+    mFactoryCache->RequestClearUnusedTextures();
+  }
+}
+
+Internal::VisualFactoryCache& VisualFactory::GetFactoryCache()
+{
+  if(!mFactoryCache)
+  {
+    mFactoryCache = std::unique_ptr<VisualFactoryCache>(new VisualFactoryCache(mPreMultiplyOnLoad));
+
+    // Get broken image urls
+    auto imageDirPath   = Dali::Ui::Integration::AssetManager::GetDaliImagePath();
+    auto brokenImageUrl = imageDirPath + BROKEN_IMAGE_FILE_NAME;
+
+    std::vector<Dali::String> customBrokenImageUrlList{};
+    if(UiConfig::HasCurrent())
+    {
+      const auto  config     = UiConfig::GetCurrent();
+      const auto& configImpl = GetImpl(config);
+
+      customBrokenImageUrlList.reserve(3u);
+      customBrokenImageUrlList.emplace_back(configImpl.GetBrokenImageUrl(UiConfig::BrokenImageType::SMALL));
+      customBrokenImageUrlList.emplace_back(configImpl.GetBrokenImageUrl(UiConfig::BrokenImageType::NORMAL));
+      customBrokenImageUrlList.emplace_back(configImpl.GetBrokenImageUrl(UiConfig::BrokenImageType::LARGE));
+    }
+
+    // Add default image
+    mFactoryCache->SetBrokenImageUrl(brokenImageUrl, customBrokenImageUrlList);
+  }
+
+  return *mFactoryCache;
+}
+
+ImageVisualShaderFactory& VisualFactory::GetImageVisualShaderFactory()
+{
+  if(!mImageVisualShaderFactory)
+  {
+    mImageVisualShaderFactory = std::unique_ptr<ImageVisualShaderFactory>(new ImageVisualShaderFactory());
+  }
+  return *mImageVisualShaderFactory;
+}
+
+TextVisualShaderFactory& VisualFactory::GetTextVisualShaderFactory()
+{
+  if(!mTextVisualShaderFactory)
+  {
+    mTextVisualShaderFactory = std::unique_ptr<TextVisualShaderFactory>(new TextVisualShaderFactory());
+  }
+  return *mTextVisualShaderFactory;
+}
+
+ColorVisualShaderFactory& VisualFactory::GetColorVisualShaderFactory()
+{
+  if(!mColorVisualShaderFactory)
+  {
+    mColorVisualShaderFactory = std::unique_ptr<ColorVisualShaderFactory>(new ColorVisualShaderFactory());
+  }
+  return *mColorVisualShaderFactory;
+}
+
+NpatchShaderFactory& VisualFactory::GetNpatchShaderFactory()
+{
+  if(!mNpatchShaderFactory)
+  {
+    mNpatchShaderFactory = std::unique_ptr<NpatchShaderFactory>(new NpatchShaderFactory());
+  }
+  return *mNpatchShaderFactory;
+}
+
+CustomShaderFactory& VisualFactory::GetCustomShaderFactory()
+{
+  if(!mCustomShaderFactory)
+  {
+    mCustomShaderFactory = std::unique_ptr<CustomShaderFactory>(new CustomShaderFactory());
+  }
+  return *mCustomShaderFactory;
+}
+
+bool VisualFactory::AddPrecompileShader(PrecompileShaderOption& option)
+{
+  auto type = option.GetShaderType();
+  bool ret  = false;
+  switch(type)
+  {
+    case PrecompileShaderOption::ShaderType::COLOR:
+    {
+      ret = GetColorVisualShaderFactory().AddPrecompiledShader(option);
+      break;
+    }
+    case PrecompileShaderOption::ShaderType::IMAGE:
+    {
+      ret = GetImageVisualShaderFactory().AddPrecompiledShader(option);
+      break;
+    }
+    case PrecompileShaderOption::ShaderType::TEXT:
+    {
+      ret = GetTextVisualShaderFactory().AddPrecompiledShader(option);
+      break;
+    }
+    case PrecompileShaderOption::ShaderType::NPATCH:
+    {
+      ret = GetNpatchShaderFactory().AddPrecompiledShader(option);
+      break;
+    }
+    case PrecompileShaderOption::ShaderType::MODEL_3D:
+    {
+      // TODO
+      break;
+    }
+    case PrecompileShaderOption::ShaderType::CUSTOM:
+    {
+      ret = GetCustomShaderFactory().AddPrecompiledShader(option);
+      break;
+    }
+    default:
+    {
+      DALI_LOG_ERROR("AddPrecompileShader is failed. we can't find shader factory type:%d\n", type);
+      break;
+    }
+  }
+
+  return ret;
+}
+
+void VisualFactory::OnDiscardCallback()
+{
+  mIdleCallback = nullptr;
+
+  // Discard visual now.
+  mDiscardedVisuals.clear();
+}
+
+void VisualFactory::OnAdaptorInitialized()
+{
+  mAdaptorInitialized = true;
+}
+
+void VisualFactory::OnAdaptorTerminated()
+{
+  mAdaptorInitialized = false;
+
+  if(DALI_UNLIKELY(mIdleCallback))
+  {
+    OnDiscardCallback();
+  }
+
+  if(mFactoryCache)
+  {
+    mFactoryCache->FinalizeVectorAnimationManager();
+  }
+}
+
+void VisualFactory::RegisterDiscardCallback()
+{
+  if(!mAdaptorInitialized)
+  {
+    // If the adaptor is not initialized, we cannot add idle. Discard visuals immediately.
+    OnDiscardCallback();
+    return;
+  }
+  if(!mIdleCallback && Adaptor::IsAvailable())
+  {
+    // The callback manager takes the ownership of the callback object.
+    mIdleCallback = MakeCallback(this, &VisualFactory::OnDiscardCallback);
+
+    Adaptor& adaptor = Adaptor::Get();
+
+    if(DALI_UNLIKELY(!adaptor.AddIdle(mIdleCallback, false)))
+    {
+      DALI_LOG_ERROR("Fail to add idle callback for visual factory. Call it synchronously.\n");
+      OnDiscardCallback();
+    }
+  }
+}
+
+} // namespace Internal
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

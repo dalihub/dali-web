@@ -1,0 +1,1057 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include "image-view-impl.h"
+
+// EXTERNAL INCLUDES
+#include <dali/devel-api/object/type-registry-helper.h>
+#include <dali/devel-api/object/type-registry.h>
+#include <dali/integration-api/debug.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/extension-api/property-registration-helper.h>
+#include <dali-ui-foundation/integration-api/view-depth-index-ranges.h>
+#include <dali-ui-foundation/integration-api/visual-factory/visual-factory.h>
+#include <dali-ui-foundation/integration-api/visuals/image-visual-actions-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/image-visual-properties-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-actions-integ.h>
+#include <dali-ui-foundation/integration-api/visuals/visual-properties-integ.h>
+#include <dali-ui-foundation/internal/views/view/view-data-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-base-impl.h>
+#include <dali-ui-foundation/internal/visuals/visual-factory-impl.h>
+#include <dali-ui-foundation/public-api/image-loader/image-url.h>
+#include <dali-ui-foundation/public-api/types/ui-color.h>
+#include <dali-ui-foundation/public-api/views/image/image-view.h>
+#include <dali-ui-foundation/public-api/visuals/visual-types.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Integration
+{
+
+namespace
+{
+const AttachmentId IMAGE_URL_ATTACHMENT_ID = AttachmentId::Alloc();
+
+BaseHandle CreateImageView()
+{
+  ImageViewImplPtr impl = ImageViewImpl::New();
+  Ui::View         view(*impl);
+  impl->Initialize();
+  return view;
+}
+// clang-format off
+#define IMAGE_VIEW_PROPERTY_REGISTRATION(text, valueType, enumIndex) \
+  DALI_PROPERTY_REGISTRATION_EXTERNAL(Ui, ImageViewPropertyIndex, Ui::Integration, ImageViewImpl, text, valueType, enumIndex)
+
+DALI_TYPE_REGISTRATION_BEGIN_FULL(Ui::ImageView, Ui::Integration::ImageViewImpl, Ui::View, CreateImageView)
+
+IMAGE_VIEW_PROPERTY_REGISTRATION("image",                 STRING,  IMAGE)
+IMAGE_VIEW_PROPERTY_REGISTRATION("fittingMode",           INTEGER, FITTING_MODE)
+IMAGE_VIEW_PROPERTY_REGISTRATION("samplingMode",          INTEGER, SAMPLING_MODE)
+IMAGE_VIEW_PROPERTY_REGISTRATION("imageColor",            VECTOR4, IMAGE_COLOR)
+IMAGE_VIEW_PROPERTY_REGISTRATION("preMultiplyAlphaOnLoad",    BOOLEAN, PRE_MULTIPLY_ALPHA_ON_LOAD)
+IMAGE_VIEW_PROPERTY_REGISTRATION("placeholderImage",      STRING,  PLACEHOLDER_IMAGE)
+IMAGE_VIEW_PROPERTY_REGISTRATION("alphaMaskUrl",          STRING,  ALPHA_MASK_URL)
+IMAGE_VIEW_PROPERTY_REGISTRATION("cropToMask",            BOOLEAN, CROP_TO_MASK)
+IMAGE_VIEW_PROPERTY_REGISTRATION("maskingPolicy",           INTEGER, MASKING_POLICY)
+IMAGE_VIEW_PROPERTY_REGISTRATION("desiredWidth",          INTEGER, DESIRED_WIDTH)
+IMAGE_VIEW_PROPERTY_REGISTRATION("desiredHeight",         INTEGER, DESIRED_HEIGHT)
+IMAGE_VIEW_PROPERTY_REGISTRATION("loadPolicy",            INTEGER, LOAD_POLICY)
+IMAGE_VIEW_PROPERTY_REGISTRATION("releasePolicy",         INTEGER, RELEASE_POLICY)
+IMAGE_VIEW_PROPERTY_REGISTRATION("synchronousLoading",    BOOLEAN, SYNCHRONOUS_LOADING)
+IMAGE_VIEW_PROPERTY_REGISTRATION("imageLoadWithViewSize", BOOLEAN, IMAGE_LOAD_WITH_VIEW_SIZE)
+IMAGE_VIEW_PROPERTY_REGISTRATION("fastTrackUploading",    BOOLEAN, FAST_TRACK_UPLOADING)
+IMAGE_VIEW_PROPERTY_REGISTRATION("orientationCorrection", BOOLEAN, ORIENTATION_CORRECTION)
+IMAGE_VIEW_PROPERTY_REGISTRATION("nPatchBorder",          VECTOR4, N_PATCH_BORDER)
+IMAGE_VIEW_PROPERTY_REGISTRATION("nPatchBorderOnly",      BOOLEAN, N_PATCH_BORDER_ONLY)
+DALI_ANIMATABLE_PROPERTY_REGISTRATION(Ui::Integration, ImageViewImpl, "pixelArea", VECTOR4, PIXEL_AREA)
+
+DALI_TYPE_REGISTRATION_END()
+#undef IMAGE_VIEW_PROPERTY_REGISTRATION
+// clang-format on
+} // namespace
+
+ImageViewImpl::ImageViewImpl()
+: ViewImpl(),
+  mUrl(),
+  mPlaceholderUrl(),
+  mAlphaMaskUrl(),
+  mPixelArea(0.0f, 0.0f, 1.0f, 1.0f),
+  mNPatchBorder(0.0f, 0.0f, 0.0f, 0.0f),
+  mImageColor(Color::WHITE),
+  mSamplingMode(Ui::Image::SamplingMode::BOX_THEN_LINEAR),
+  mFittingMode(Ui::Image::FittingMode::FILL),
+  mMaskingPolicy(Ui::Image::MaskingPolicy::ON_RENDERING),
+  mLoadPolicy(Ui::Image::LoadPolicy::ATTACHED),
+  mReleasePolicy(Ui::Image::ReleasePolicy::DETACHED),
+  mDesiredWidth(0),
+  mDesiredHeight(0),
+  mPreMultiplyAlphaOnLoad(true), ///< Default as true for ImageView.
+  mImageLoadWithViewSize(false),
+  mCropToMask(false),
+  mSynchronousLoading(false),
+  mFastTrackUploading(false),
+  mOrientationCorrection(true),
+  mNPatchBorderOnly(false),
+  mVisualDirty(false)
+{
+}
+
+ImageViewImpl::~ImageViewImpl() = default;
+
+ImageViewImplPtr ImageViewImpl::New()
+{
+  ImageViewImplPtr impl(new ImageViewImpl());
+
+  return impl;
+}
+
+void ImageViewImpl::SetProperty(Dali::BaseObject* object, Dali::Property::Index index, const Dali::Property::Value& value)
+{
+  Ui::View view = Ui::View::DownCast(Dali::BaseHandle(object));
+  if(view)
+  {
+    ImageViewImpl& impl = static_cast<ImageViewImpl&>(GetImpl(view));
+    switch(index)
+    {
+      case Property::IMAGE:
+      {
+        Dali::String url;
+        if(value.Get(url))
+        {
+          impl.SetResourceUrl(url);
+        }
+        break;
+      }
+      case Property::FITTING_MODE:
+      {
+        int mode;
+        if(value.Get(mode))
+        {
+          impl.SetFittingMode(static_cast<Ui::Image::FittingMode>(mode));
+        }
+        break;
+      }
+      case Property::SAMPLING_MODE:
+      {
+        int mode;
+        if(value.Get(mode))
+        {
+          impl.SetSamplingMode(static_cast<Ui::Image::SamplingMode>(mode));
+        }
+        break;
+      }
+      case Property::DESIRED_WIDTH:
+      {
+        int width;
+        if(value.Get(width))
+        {
+          impl.SetDesiredWidth(width);
+        }
+        break;
+      }
+      case Property::DESIRED_HEIGHT:
+      {
+        int height;
+        if(value.Get(height))
+        {
+          impl.SetDesiredHeight(height);
+        }
+        break;
+      }
+      case Property::IMAGE_COLOR:
+      {
+        Vector4 color;
+        if(value.Get(color))
+        {
+          impl.SetImageColor(UiColor(color));
+        }
+        break;
+      }
+      case Property::PRE_MULTIPLY_ALPHA_ON_LOAD:
+      {
+        bool preMultiplied;
+        if(value.Get(preMultiplied))
+        {
+          impl.SetPreMultiplyAlphaOnLoadEnabled(preMultiplied);
+        }
+        break;
+      }
+      case Property::PLACEHOLDER_IMAGE:
+      {
+        Dali::String url;
+        if(value.Get(url))
+        {
+          impl.SetPlaceholderUrl(url);
+        }
+        break;
+      }
+      case Property::IMAGE_LOAD_WITH_VIEW_SIZE:
+      {
+        bool imageLoadWithViewSize;
+        if(value.Get(imageLoadWithViewSize))
+        {
+          impl.SetImageLoadWithViewSizeEnabled(imageLoadWithViewSize);
+        }
+        break;
+      }
+      case Property::ALPHA_MASK_URL:
+      {
+        Dali::String url;
+        if(value.Get(url))
+        {
+          impl.SetAlphaMaskUrl(url);
+        }
+        break;
+      }
+      case Property::CROP_TO_MASK:
+      {
+        bool cropToMask;
+        if(value.Get(cropToMask))
+        {
+          impl.SetCropToMask(cropToMask);
+        }
+        break;
+      }
+      case Property::MASKING_POLICY:
+      {
+        int maskingPolicy;
+        if(value.Get(maskingPolicy))
+        {
+          impl.SetMaskingPolicy(static_cast<Ui::Image::MaskingPolicy>(maskingPolicy));
+        }
+        break;
+      }
+      case Property::LOAD_POLICY:
+      {
+        int policy;
+        if(value.Get(policy))
+        {
+          impl.SetLoadPolicy(static_cast<Ui::Image::LoadPolicy>(policy));
+        }
+        break;
+      }
+      case Property::RELEASE_POLICY:
+      {
+        int policy;
+        if(value.Get(policy))
+        {
+          impl.SetReleasePolicy(static_cast<Ui::Image::ReleasePolicy>(policy));
+        }
+        break;
+      }
+      case Property::SYNCHRONOUS_LOADING:
+      {
+        bool sync;
+        if(value.Get(sync))
+        {
+          impl.SetSynchronousLoading(sync);
+        }
+        break;
+      }
+      case Property::FAST_TRACK_UPLOADING:
+      {
+        bool fastTrack;
+        if(value.Get(fastTrack))
+        {
+          impl.SetFastTrackUploadEnabled(fastTrack);
+        }
+        break;
+      }
+      case Property::ORIENTATION_CORRECTION:
+      {
+        bool orientationCorrection;
+        if(value.Get(orientationCorrection))
+        {
+          impl.SetOrientationCorrectionEnabled(orientationCorrection);
+        }
+        break;
+      }
+      case Property::N_PATCH_BORDER:
+      {
+        Vector4 border;
+        if(value.Get(border))
+        {
+          impl.SetNPatchBorder(Dali::Insets(border.x, border.y, border.z, border.w));
+        }
+        break;
+      }
+      case Property::N_PATCH_BORDER_ONLY:
+      {
+        bool borderOnly;
+        if(value.Get(borderOnly))
+        {
+          impl.SetNPatchBorderOnly(borderOnly);
+        }
+        break;
+      }
+      case Property::PIXEL_AREA:
+      {
+        Vector4 area;
+        if(value.Get(area))
+        {
+          impl.SetPixelArea(area);
+        }
+        break;
+      }
+    }
+  }
+}
+
+Dali::Property::Value ImageViewImpl::GetProperty(Dali::BaseObject* object, Dali::Property::Index index)
+{
+  Dali::Property::Value value;
+  Ui::View              view = Ui::View::DownCast(Dali::BaseHandle(object));
+  if(view)
+  {
+    ImageViewImpl& impl = static_cast<ImageViewImpl&>(GetImpl(view));
+    switch(index)
+    {
+      case Property::IMAGE:
+        value = impl.GetResourceUrl();
+        break;
+      case Property::FITTING_MODE:
+        value = static_cast<int>(impl.GetFittingMode());
+        break;
+      case Property::SAMPLING_MODE:
+        value = static_cast<int>(impl.GetSamplingMode());
+        break;
+      case Property::DESIRED_WIDTH:
+        value = impl.GetDesiredWidth();
+        break;
+      case Property::DESIRED_HEIGHT:
+        value = impl.GetDesiredHeight();
+        break;
+      case Property::IMAGE_COLOR:
+        value = impl.GetImageColor().GetRgba();
+        break;
+      case Property::PRE_MULTIPLY_ALPHA_ON_LOAD:
+        value = impl.IsPreMultiplyAlphaOnLoadEnabled();
+        break;
+      case Property::PLACEHOLDER_IMAGE:
+        value = impl.GetPlaceholderUrl();
+        break;
+      case Property::IMAGE_LOAD_WITH_VIEW_SIZE:
+        value = impl.IsImageLoadWithViewSizeEnabled();
+        break;
+      case Property::ALPHA_MASK_URL:
+        value = impl.GetAlphaMaskUrl();
+        break;
+      case Property::CROP_TO_MASK:
+        value = impl.IsCropToMask();
+        break;
+      case Property::MASKING_POLICY:
+        value = static_cast<int>(impl.GetMaskingPolicy());
+        break;
+      case Property::LOAD_POLICY:
+        value = static_cast<int>(impl.GetLoadPolicy());
+        break;
+      case Property::RELEASE_POLICY:
+        value = static_cast<int>(impl.GetReleasePolicy());
+        break;
+      case Property::SYNCHRONOUS_LOADING:
+        value = impl.IsSynchronousLoading();
+        break;
+      case Property::FAST_TRACK_UPLOADING:
+        value = impl.IsFastTrackUploadEnabled();
+        break;
+      case Property::ORIENTATION_CORRECTION:
+        value = impl.IsOrientationCorrectionEnabled();
+        break;
+      case Property::N_PATCH_BORDER:
+      {
+        const Dali::Insets border = impl.GetNPatchBorder();
+        value                     = Vector4(border.start, border.end, border.top, border.bottom);
+        break;
+      }
+      case Property::N_PATCH_BORDER_ONLY:
+        value = impl.IsNPatchBorderOnly();
+        break;
+      case Property::PIXEL_AREA:
+        value = impl.GetPixelArea();
+        break;
+    }
+  }
+  return value;
+}
+
+void ImageViewImpl::Reload()
+{
+  auto& viewData = Internal::ViewDataImpl::Get(*this);
+  if(viewData.GetVisual(ImageViewImpl::Property::IMAGE))
+  {
+    viewData.DoAction(ImageViewImpl::Property::IMAGE, Dali::Ui::Integration::ImageVisual::Action::RELOAD, Dali::Property::Map());
+  }
+}
+
+void ImageViewImpl::SetResourceUrl(const Dali::String& url)
+{
+  RemoveAttachment(IMAGE_URL_ATTACHMENT_ID);
+  SetResourceUrlInternal(url);
+}
+
+void ImageViewImpl::SetResourceUrl(const Dali::Ui::ImageUrl& imageUrl)
+{
+  if(imageUrl)
+  {
+    SetAttachment(IMAGE_URL_ATTACHMENT_ID, UniqueAny(Dali::MakeUnique<Dali::Ui::ImageUrl>(imageUrl)));
+  }
+  else
+  {
+    RemoveAttachment(IMAGE_URL_ATTACHMENT_ID);
+  }
+
+  SetResourceUrlInternal(imageUrl ? imageUrl.GetUrl() : Dali::String());
+}
+
+void ImageViewImpl::SetResourceUrlInternal(const Dali::String& url)
+{
+  if(mUrl != url)
+  {
+    mUrl = url;
+    if(!mUrl.Empty())
+    {
+      UpdatePlaceholderVisual();
+    }
+
+    const bool hasExplicitSize = GetRequestedWidth() > 0.0f && GetRequestedHeight() > 0.0f;
+
+    if(mUrl.Empty())
+    {
+      // Clear even deferred loads immediately, and measure using the placeholder.
+      mVisualDirty = false;
+      UpdateVisual();
+      InvalidateMeasure();
+    }
+    else if(mLoadPolicy == Ui::Image::LoadPolicy::IMMEDIATE || hasExplicitSize)
+    {
+      // A fixed size cannot change when the new image's natural size becomes known,
+      // so rebuild the visual without scheduling an otherwise redundant measure.
+      // IMMEDIATE keeps its existing behavior of starting the load right away.
+      mVisualDirty = false;
+      UpdateVisual();
+    }
+    else
+    {
+      mVisualDirty = true;
+      InvalidateMeasure();
+    }
+  }
+}
+
+Dali::String ImageViewImpl::GetResourceUrl() const
+{
+  return mUrl;
+}
+
+void ImageViewImpl::SetPixelArea(const Vector4& pixelArea)
+{
+  if(mPixelArea != pixelArea)
+  {
+    mPixelArea = pixelArea;
+    // Update the pixel area directly on the existing visual without a full rebuild.
+    if(mVisual)
+    {
+      auto& visualImpl = Ui::GetImplementation(mVisual);
+      visualImpl.SetPixelAreaForFittingMode(pixelArea);
+    }
+  }
+}
+
+Vector4 ImageViewImpl::GetPixelArea() const
+{
+  return mPixelArea;
+}
+
+void ImageViewImpl::SetPreMultiplyAlphaOnLoadEnabled(bool preMultiplied)
+{
+  if(mPreMultiplyAlphaOnLoad != preMultiplied)
+  {
+    mPreMultiplyAlphaOnLoad = preMultiplied;
+    mVisualDirty            = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsPreMultiplyAlphaOnLoadEnabled() const
+{
+  return mPreMultiplyAlphaOnLoad;
+}
+
+void ImageViewImpl::SetPlaceholderUrl(const Dali::String& url)
+{
+  if(mPlaceholderUrl != url)
+  {
+    mPlaceholderUrl = url;
+    UpdatePlaceholderVisual();
+    if(mUrl.Empty())
+    {
+      InvalidateMeasure();
+    }
+  }
+}
+
+Dali::String ImageViewImpl::GetPlaceholderUrl() const
+{
+  return mPlaceholderUrl;
+}
+
+void ImageViewImpl::SetSamplingMode(Ui::Image::SamplingMode samplingMode)
+{
+  if(mSamplingMode != samplingMode)
+  {
+    mSamplingMode = samplingMode;
+    mVisualDirty  = true;
+    InvalidateMeasure();
+  }
+}
+
+Ui::Image::SamplingMode ImageViewImpl::GetSamplingMode() const
+{
+  return mSamplingMode;
+}
+
+void ImageViewImpl::SetFittingMode(Ui::Image::FittingMode fittingMode)
+{
+  if(mFittingMode != fittingMode)
+  {
+    mFittingMode = fittingMode;
+    if(mVisual)
+    {
+      Ui::GetImplementation(mVisual).SetFittingMode(fittingMode);
+
+      // FittingMode only changes the visual transform, not the visual itself.
+      // Apply immediately if the actor size is already available; otherwise
+      // defer to the next OnArrange via InvalidateMeasure.
+      Actor self = Self();
+      float w    = self.GetProperty<float>(Actor::Property::SIZE_WIDTH);
+      float h    = self.GetProperty<float>(Actor::Property::SIZE_HEIGHT);
+      if(w > 0.0f && h > 0.0f)
+      {
+        Ui::GetImplementation(mVisual).ApplyFittingMode(Vector2(w, h), GetPadding(), GetEffectiveScale());
+      }
+      else
+      {
+        InvalidateMeasure();
+      }
+    }
+    else
+    {
+      InvalidateMeasure();
+    }
+  }
+}
+
+Ui::Image::FittingMode ImageViewImpl::GetFittingMode() const
+{
+  return mFittingMode;
+}
+
+void ImageViewImpl::SetDesiredWidth(int width)
+{
+  if(mDesiredWidth != width)
+  {
+    mDesiredWidth = width;
+    mVisualDirty  = true;
+    InvalidateMeasure();
+  }
+}
+
+int ImageViewImpl::GetDesiredWidth() const
+{
+  return mDesiredWidth;
+}
+
+void ImageViewImpl::SetDesiredHeight(int height)
+{
+  if(mDesiredHeight != height)
+  {
+    mDesiredHeight = height;
+    mVisualDirty   = true;
+    InvalidateMeasure();
+  }
+}
+
+int ImageViewImpl::GetDesiredHeight() const
+{
+  return mDesiredHeight;
+}
+
+void ImageViewImpl::SetImageLoadWithViewSizeEnabled(bool enabled)
+{
+  if(mImageLoadWithViewSize != enabled)
+  {
+    mImageLoadWithViewSize = enabled;
+    mVisualDirty           = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsImageLoadWithViewSizeEnabled() const
+{
+  return mImageLoadWithViewSize;
+}
+
+void ImageViewImpl::SetAlphaMaskUrl(const Dali::String& maskUrl)
+{
+  if(mAlphaMaskUrl != maskUrl)
+  {
+    mAlphaMaskUrl = maskUrl;
+    mVisualDirty  = true;
+    InvalidateMeasure();
+  }
+}
+
+Dali::String ImageViewImpl::GetAlphaMaskUrl() const
+{
+  return mAlphaMaskUrl;
+}
+
+void ImageViewImpl::SetCropToMask(bool cropToMask)
+{
+  if(mCropToMask != cropToMask)
+  {
+    mCropToMask  = cropToMask;
+    mVisualDirty = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsCropToMask() const
+{
+  return mCropToMask;
+}
+
+void ImageViewImpl::SetMaskingPolicy(Ui::Image::MaskingPolicy maskingPolicy)
+{
+  if(mMaskingPolicy != maskingPolicy)
+  {
+    mMaskingPolicy = maskingPolicy;
+    mVisualDirty   = true;
+    InvalidateMeasure();
+  }
+}
+
+Ui::Image::MaskingPolicy ImageViewImpl::GetMaskingPolicy() const
+{
+  return mMaskingPolicy;
+}
+
+void ImageViewImpl::SetImageColor(const UiColor& color)
+{
+  if(mImageColor != color)
+  {
+    mImageColor = color;
+    SetColorBinding("ImageColor", color, this, &ImageViewImpl::SetImageColorInternal);
+  }
+}
+
+UiColor ImageViewImpl::GetImageColor() const
+{
+  return mImageColor;
+}
+
+void ImageViewImpl::SetLoadPolicy(Ui::Image::LoadPolicy loadPolicy)
+{
+  if(mLoadPolicy != loadPolicy)
+  {
+    mLoadPolicy = loadPolicy;
+    if(mLoadPolicy == Ui::Image::LoadPolicy::IMMEDIATE && !mUrl.Empty())
+    {
+      // URL already set — start loading immediately now that policy switched to IMMEDIATE.
+      mVisualDirty = false;
+      UpdateVisual();
+    }
+    else
+    {
+      mVisualDirty = true;
+      InvalidateMeasure();
+    }
+  }
+}
+
+Ui::Image::LoadPolicy ImageViewImpl::GetLoadPolicy() const
+{
+  return mLoadPolicy;
+}
+
+void ImageViewImpl::SetReleasePolicy(Ui::Image::ReleasePolicy releasePolicy)
+{
+  if(mReleasePolicy != releasePolicy)
+  {
+    mReleasePolicy = releasePolicy;
+    mVisualDirty   = true;
+    InvalidateMeasure();
+  }
+}
+
+Ui::Image::ReleasePolicy ImageViewImpl::GetReleasePolicy() const
+{
+  return mReleasePolicy;
+}
+
+void ImageViewImpl::SetSynchronousLoading(bool synchronous)
+{
+  if(mSynchronousLoading != synchronous)
+  {
+    mSynchronousLoading = synchronous;
+    mVisualDirty        = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsSynchronousLoading() const
+{
+  return mSynchronousLoading;
+}
+
+void ImageViewImpl::SetFastTrackUploadEnabled(bool fastTrack)
+{
+  if(mFastTrackUploading != fastTrack)
+  {
+    mFastTrackUploading = fastTrack;
+    mVisualDirty        = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsFastTrackUploadEnabled() const
+{
+  return mFastTrackUploading;
+}
+
+void ImageViewImpl::SetOrientationCorrectionEnabled(bool orientationCorrection)
+{
+  if(mOrientationCorrection != orientationCorrection)
+  {
+    mOrientationCorrection = orientationCorrection;
+    mVisualDirty           = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsOrientationCorrectionEnabled() const
+{
+  return mOrientationCorrection;
+}
+
+void ImageViewImpl::SetNPatchBorder(const Dali::Insets& border)
+{
+  if(mNPatchBorder != border)
+  {
+    mNPatchBorder = border;
+    mVisualDirty  = true;
+    InvalidateMeasure();
+  }
+}
+
+Dali::Insets ImageViewImpl::GetNPatchBorder() const
+{
+  return mNPatchBorder;
+}
+
+void ImageViewImpl::SetNPatchBorderOnly(bool borderOnly)
+{
+  if(mNPatchBorderOnly != borderOnly)
+  {
+    mNPatchBorderOnly = borderOnly;
+    mVisualDirty      = true;
+    InvalidateMeasure();
+  }
+}
+
+bool ImageViewImpl::IsNPatchBorderOnly() const
+{
+  return mNPatchBorderOnly;
+}
+
+Ui::Visual::ResourceStatus ImageViewImpl::GetLoadingStatus() const
+{
+  return Internal::ViewDataImpl::Get(*this).GetVisualResourceStatus(ImageViewImpl::Property::IMAGE);
+}
+
+void ImageViewImpl::OnInitialize()
+{
+  ViewImpl::OnInitialize();
+
+  // Main-image completion must not wait for the placeholder or background.
+  Internal::ViewDataImpl::Get(*this).VisualResourceReadySignal().Connect(this, &ImageViewImpl::OnImageResourceReady);
+}
+
+void ImageViewImpl::UpdatePlaceholderVisual()
+{
+  auto& viewData = Internal::ViewDataImpl::Get(*this);
+  viewData.UnregisterVisual(ImageViewImpl::Property::PLACEHOLDER_IMAGE);
+
+  if(mPlaceholderUrl.Empty())
+  {
+    return;
+  }
+
+  // An empty URL uses the placeholder as its image. Otherwise keep a ready
+  // image visible, and leave load failures to the broken-image visual.
+  const auto status           = viewData.GetVisualResourceStatus(ImageViewImpl::Property::IMAGE);
+  auto       previousVisual   = viewData.GetPreviousVisual(ImageViewImpl::Property::IMAGE);
+  const bool hasPreviousImage = previousVisual && Ui::GetImplementation(previousVisual).IsResourceReady();
+  if(!mUrl.Empty() && (status == Ui::Visual::ResourceStatus::READY || status == Ui::Visual::ResourceStatus::FAILED || hasPreviousImage))
+  {
+    return;
+  }
+
+  auto visualFactory = Ui::Integration::VisualFactory::Get();
+  if(!visualFactory)
+  {
+    return;
+  }
+
+  Dali::Property::Map map;
+  map.Insert(Ui::Integration::Visual::Property::TYPE, Ui::Integration::InternalVisualType::IMAGE);
+  map.Insert(Ui::Integration::ImageVisual::Property::URL, mPlaceholderUrl);
+
+  auto visual = visualFactory.CreateVisual(map);
+  if(visual)
+  {
+    viewData.RegisterVisual(ImageViewImpl::Property::PLACEHOLDER_IMAGE, visual, Dali::Ui::Integration::DepthIndex::CONTENT + 1);
+    viewData.EnableCornerPropertiesOverridden(visual, true);
+  }
+}
+
+void ImageViewImpl::OnImageResourceReady(Dali::Property::Index index)
+{
+  if(index != ImageViewImpl::Property::IMAGE)
+  {
+    return;
+  }
+  // Keep the placeholder for an empty URL or a pending image, but remove it
+  // on either success or failure so it cannot cover the broken image.
+  auto&      viewData = Internal::ViewDataImpl::Get(*this);
+  const auto status   = viewData.GetVisualResourceStatus(ImageViewImpl::Property::IMAGE);
+  if(mUrl.Empty() || (status != Ui::Visual::ResourceStatus::READY && status != Ui::Visual::ResourceStatus::FAILED))
+  {
+    return;
+  }
+
+  // The main image load has completed: remove the placeholder
+  viewData.UnregisterVisual(ImageViewImpl::Property::PLACEHOLDER_IMAGE);
+}
+
+void ImageViewImpl::SetImageColorInternal(const Vector4& color)
+{
+  // Update the mix color directly on the existing visual without a full rebuild.
+  if(mVisual)
+  {
+    Dali::Property::Map map;
+    map.Insert(Ui::Integration::Visual::Property::MIX_COLOR, color);
+    mVisual.DoAction(Dali::Ui::Integration::Visual::Action::UPDATE_PROPERTY, map);
+  }
+  else
+  {
+    // Visual not yet created: defer to next OnMeasure pass
+    mVisualDirty = true;
+    InvalidateMeasure();
+  }
+}
+
+MeasuredSize ImageViewImpl::OnMeasure(float widthConstraint, float heightConstraint)
+{
+  // widthConstraint/heightConstraint are visual sizes; convert to natural for image measurement.
+  float s    = GetEffectiveScale();
+  float natW = (widthConstraint >= 0.f && s > 0.f) ? widthConstraint / s : widthConstraint;
+  float natH = (heightConstraint >= 0.f && s > 0.f) ? heightConstraint / s : heightConstraint;
+
+  float layoutW = GetRequestedWidth();
+  float layoutH = GetRequestedHeight();
+
+  // Both dimensions are already resolved, so measuring the image cannot affect
+  // the view size. Still create the visual so asynchronous loading can start.
+  if(layoutW > 0.0f && layoutH > 0.0f)
+  {
+    EnsureVisualUpdated();
+    return MeasuredSize(layoutW * s, layoutH * s);
+  }
+
+  Vector2 naturalSize = GetNaturalSize().GetVectorXY();
+
+  float w = naturalSize.width;
+  float h = naturalSize.height;
+
+  if(layoutW == MATCH_PARENT)
+  {
+    w = natW;
+  }
+  else if(layoutW > 0)
+  {
+    w = layoutW;
+  }
+
+  if(layoutH == MATCH_PARENT)
+  {
+    h = natH;
+  }
+  else if(layoutH > 0)
+  {
+    h = layoutH;
+  }
+
+  if(naturalSize.width > 0.0f && naturalSize.height > 0.0f)
+  {
+    const float aspectRatio = naturalSize.height / naturalSize.width;
+    const bool  widthFixed  = (layoutW == MATCH_PARENT || layoutW > 0);
+    const bool  heightFixed = (layoutH == MATCH_PARENT || layoutH > 0);
+    if(widthFixed && !heightFixed)
+    {
+      h = w * aspectRatio;
+    }
+    else if(!widthFixed && heightFixed)
+    {
+      w = h / aspectRatio;
+    }
+  }
+
+  DALI_LOG_DEBUG_INFO("[ImageViewImpl] OnMeasure: constraint=(%.0f,%.0f) layoutW=%.0f layoutH=%.0f natural=(%.0f,%.0f) -> result=(%.0f,%.0f) hasVisual=%d\n",
+                      widthConstraint, heightConstraint, layoutW, layoutH,
+                      naturalSize.width, naturalSize.height, w, h, mVisual ? 1 : 0);
+
+  return MeasuredSize(w * s, h * s);
+}
+
+LayoutRect ImageViewImpl::OnArrange(const LayoutRect& bounds)
+{
+  DALI_LOG_DEBUG_INFO("[ImageViewImpl] OnArrange: bounds=(x=%.0f,y=%.0f,w=%.0f,h=%.0f) hasVisual=%d\n",
+                      bounds.x, bounds.y, bounds.width, bounds.height, mVisual ? 1 : 0);
+  return ViewImpl::OnArrange(bounds);
+}
+
+Vector3 ImageViewImpl::GetNaturalSize() const
+{
+  ImageViewImpl& self = *const_cast<ImageViewImpl*>(this);
+  self.EnsureVisualUpdated();
+
+  Vector2 naturalSize;
+  if(self.mVisual)
+  {
+    self.mVisual.GetNaturalSize(naturalSize);
+  }
+  else if(self.mUrl.Empty())
+  {
+    auto placeholder = Internal::ViewDataImpl::Get(self).GetVisual(ImageViewImpl::Property::PLACEHOLDER_IMAGE);
+    if(placeholder)
+    {
+      placeholder.GetNaturalSize(naturalSize);
+    }
+  }
+  return Vector3(naturalSize);
+}
+
+void ImageViewImpl::EnsureVisualUpdated()
+{
+  if(mVisualDirty)
+  {
+    mVisualDirty = false;
+    UpdateVisual();
+  }
+}
+
+void ImageViewImpl::UpdateVisual()
+{
+  DALI_LOG_DEBUG_INFO("[ImageViewImpl] UpdateVisual: url=%s\n", mUrl.CStr());
+
+  auto&            viewData       = Internal::ViewDataImpl::Get(*this);
+  const LayoutRect arrangedBounds = GetArrangedBounds();
+
+  if(mUrl.Empty())
+  {
+    viewData.UnregisterVisual(ImageViewImpl::Property::IMAGE);
+    mVisual.Reset();
+    UpdatePlaceholderVisual();
+    DALI_LOG_DEBUG_INFO("[ImageViewImpl] UpdateVisual: url is empty, visual cleared\n");
+    return;
+  }
+
+  // RegisterVisual keeps the previous image on scene until its replacement
+  // finishes loading. Unregistering it here would introduce a blank frame.
+
+  auto visualFactory = Ui::Integration::VisualFactory::Get();
+  if(visualFactory)
+  {
+    Dali::Property::Map map;
+    map.Insert(Ui::Integration::Visual::Property::TYPE, Ui::Integration::InternalVisualType::IMAGE);
+    map.Insert(Ui::Integration::ImageVisual::Property::URL, mUrl);
+    map.Insert(Ui::Integration::ImageVisual::Property::SAMPLING_MODE, static_cast<int>(mSamplingMode));
+    map.Insert(Ui::Integration::Visual::Property::MIX_COLOR, mImageColor.GetRgba());
+    map.Insert(Ui::Integration::ImageVisual::Property::PRE_MULTIPLIED_ALPHA, mPreMultiplyAlphaOnLoad);
+
+    if(mDesiredWidth > 0 || mDesiredHeight > 0)
+    {
+      map.Insert(Ui::Integration::ImageVisual::Property::DESIRED_WIDTH, mDesiredWidth);
+      map.Insert(Ui::Integration::ImageVisual::Property::DESIRED_HEIGHT, mDesiredHeight);
+    }
+
+    map.Insert(Ui::Integration::ImageVisual::Property::LOAD_POLICY, static_cast<int>(mLoadPolicy));
+    map.Insert(Ui::Integration::ImageVisual::Property::RELEASE_POLICY, static_cast<int>(mReleasePolicy));
+    map.Insert(Ui::Integration::ImageVisual::Property::SYNCHRONOUS_LOADING, mSynchronousLoading);
+    map.Insert(Ui::Integration::ImageVisual::Property::FAST_TRACK_UPLOADING, mFastTrackUploading);
+    map.Insert(Ui::Integration::ImageVisual::Property::ORIENTATION_CORRECTION, mOrientationCorrection);
+    map.Insert(Ui::Integration::ImageVisual::Property::IMAGE_LOAD_WITH_VIEW_SIZE, mImageLoadWithViewSize);
+    map.Insert(Ui::Integration::ImageVisual::Property::FITTING_MODE, static_cast<int>(mFittingMode));
+
+    if(!mAlphaMaskUrl.Empty())
+    {
+      map.Insert(Ui::Integration::ImageVisual::Property::ALPHA_MASK_URL, mAlphaMaskUrl);
+      map.Insert(Ui::Integration::ImageVisual::Property::CROP_TO_MASK, mCropToMask);
+      map.Insert(Ui::Integration::ImageVisual::Property::MASKING_POLICY, static_cast<int>(mMaskingPolicy));
+    }
+
+    if(mNPatchBorder != Dali::Insets())
+    {
+      map.Insert(Ui::Integration::ImageVisual::Property::BORDER, mNPatchBorder);
+    }
+    map.Insert(Ui::Integration::ImageVisual::Property::BORDER_ONLY, mNPatchBorderOnly);
+
+    // ImageView is a static image widget: always use ImageVisual (or NPatchVisual)
+    // even when the URL points to an animated format such as GIF or WebP.
+    // IMAGE_VISUAL_LOAD_STATIC_IMAGES_ONLY tells the factory not to upgrade
+    // a GIF/WebP URL to AnimatedImageVisual. Only the first frame is decoded.
+    // (NPatch detection via BORDER property is unaffected by this flag.)
+    mVisual = Ui::GetImplementation(visualFactory).CreateVisual(map, Ui::Integration::VisualFactory::CreationOptions::IMAGE_VISUAL_LOAD_STATIC_IMAGES_ONLY, Vector2(arrangedBounds.width, arrangedBounds.height));
+    if(mVisual)
+    {
+      DALI_LOG_DEBUG_INFO("[ImageViewImpl] UpdateVisual: RegisterVisual result=ok\n");
+      // ResourceReadySignal can clear or replace mVisual during registration.
+      // Keep the registered handle alive and stop if the callback changed it.
+      auto visual = mVisual;
+      viewData.RegisterVisual(ImageViewImpl::Property::IMAGE, visual, Dali::Ui::Integration::DepthIndex::CONTENT);
+      if(!mVisual || mVisual != visual)
+      {
+        return;
+      }
+      viewData.EnableCornerPropertiesOverridden(visual, true);
+    }
+    else
+    {
+      DALI_LOG_DEBUG_INFO("[ImageViewImpl] UpdateVisual: CreateVisual failed\n");
+    }
+  }
+}
+
+} // namespace Integration
+} // namespace Ui
+} //namespace DALI_NAMESPACE

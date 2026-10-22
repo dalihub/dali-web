@@ -1,0 +1,365 @@
+#pragma once
+
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/adaptor-framework/window.h>
+#include <dali/public-api/common/unique-ptr.h>
+#include <dali/public-api/signals/dali-signal.h>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/public-api/dali-ui-common.h>
+#include <dali-ui-foundation/public-api/layouts/layout-types.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+
+// Forward declarations
+class ViewImpl;
+namespace Integration
+{
+class LayoutControllerImpl;
+} // namespace Integration
+
+/**
+ * @brief Layout controller manages layout invalidation and processing.
+ *
+ * The layout controller is responsible for scheduling layout passes when
+ * layouts become invalid and processing them during the render loop.
+ * It integrates with the DALi adaptor system as a processor.
+ *
+ * Each Window has its own LayoutController instance. The controller
+ * batches layout requests and processes them once per frame to optimize
+ * performance.
+ */
+class DALI_UI_API LayoutController
+{
+public:
+  /**
+   * @brief Gets the layout controller instance for a window.
+   *
+   * Creates the controller if it doesn't exist for the given window.
+   *
+   * @param[in] window The window to get the controller for
+   * @return Reference to the layout controller
+   */
+  static LayoutController& Get(Window window);
+
+  /**
+   * @brief Destructor.
+   */
+  ~LayoutController();
+
+  /**
+   * @brief Schedules a view with layout capability for layout processing.
+   *
+   * Layout roots are views that have a LayoutManager and are at the top
+   * of the layout hierarchy (e.g. directly under the window).
+   * Outside layout processing, the controller batches these requests and arms one
+   * coalesced outstanding ProcessEvents wake so they are processed during the next
+   * frame.
+   *
+   * @note Calling this DURING layout processing -- from inside any Measure/Arrange
+   * implementation, or from a LayoutFinishedSignal slot (either this controller's or a
+   * View's) -- is a contract violation and is logged once for the view. The request is
+   * retained in the pending set, but it does not request an idle ProcessEvents wake. A
+   * not-yet-started turn for that root in the current batch may consume it immediately;
+   * otherwise the request remains PARKED until a later independently triggered
+   * ProcessEvents, an explicit ProcessLayouts(), or an out-of-processing request drains
+   * or wakes it. The latter arms at most one coalesced outstanding wake. On a quiescent
+   * application that can be indefinitely later: in-processing scheduling is prohibited
+   * in principle and honoured only best-effort, mirroring dali-core's relayout policy.
+   * Defer the request to event time when a prompt layout pass is required.
+   *
+   * @param[in] view The view with layout capability to schedule
+   */
+  void RequestLayout(ViewImpl* view);
+
+  /**
+   * @brief Schedules a view for layout processing on the framework's behalf.
+   *
+   * @note For internal framework use only; applications must use RequestLayout().
+   * This is the registration path taken by the invalidation walk itself. "Internal"
+   * describes API visibility only: it is subject to the same processing-window wake
+   * policy as RequestLayout(), so framework routing cannot bypass PARK semantics.
+   *
+   * @param[in] view The view with layout capability to schedule
+   */
+  void RequestLayoutInternal(ViewImpl* view);
+
+  /**
+   * @brief Removes the layout controller for the given window.
+   *
+   * Should be called when a window is being closed to release the
+   * associated LayoutController and prevent stale entries.
+   *
+   * @param[in] window The window whose controller should be removed
+   */
+  static void Remove(Window window);
+
+  /**
+   * @brief Unregisters a view from the layout controller.
+   *
+   * Should be called when a layout root is being destroyed to prevent
+   * dangling pointer access.
+   *
+   * @param[in] view The view to unregister
+   */
+  void UnregisterView(ViewImpl* view);
+
+  /**
+   * @brief Unregisters a view from all known layout controllers.
+   *
+   * Used when a view is being destroyed but its window cannot be
+   * determined (e.g. the view is already off-scene).
+   *
+   * @param[in] view The view to unregister
+   */
+  static void UnregisterFromAll(ViewImpl* view);
+
+  /**
+   * @brief Called when the window is resized.
+   *
+   * This invalidates all layout roots and triggers a layout pass.
+   *
+   * @param[in] width The new window width
+   * @param[in] height The new window height
+   */
+  void OnWindowResize(int32_t width, int32_t height);
+
+  /**
+   * @brief Processes all pending layout requests immediately.
+   *
+   * This is called automatically by the system once per frame,
+   * but can be called manually if immediate layout is needed.
+   *
+   * A manual call performs Measure and Arrange synchronously, but its pass is reported
+   * through LayoutFinishedSignal() and View::LayoutFinishedSignal() by the post-process
+   * phase that follows the next automatic pre-process phase, never inside this call.
+   * A call made after the automatic pre-process phase of the current ProcessEvents cycle --
+   * from a LayoutFinishedSignal slot or from another window's post-process callback --
+   * requests no ProcessEvents cycle of its own: its pass is delivered by the next
+   * independently triggered cycle (input, a timer, an animation or any other wake), which
+   * on a quiescent application may be indefinitely later. When prompt delivery is
+   * required, invalidate layout at event time, which requests a cycle, or call
+   * ProcessLayouts() from an input event handler, whose cycle then delivers the pass.
+   */
+  void ProcessLayouts();
+
+  /**
+   * @brief Signal type of LayoutFinishedSignal().
+   */
+  using LayoutFinishedSignalType = Signal<void(Dali::Window)>;
+
+  /**
+   * @brief This signal is emitted after layout passes of this window complete.
+   *
+   * A layout pass is one batch of Measure and Arrange that processes at least one live
+   * layout root of this window. Every pass that ends normally is reported at its delivery
+   * point, even when further layout work is still pending: pending work never suppresses
+   * or defers the notification of a completed pass, so this signal does not mean that the
+   * window's layout has settled.
+   *
+   * A slot connects with the signature:
+   * @code
+   *   void OnLayoutFinished(Dali::Window window);
+   * @endcode
+   *
+   * Semantics:
+   * - Delivery point: the post-process phase, i.e. AFTER DALi core size negotiation
+   *   (Relayout). Measure and Arrange still run in the pre-process phase. Passes completed
+   *   up to the end of an automatic pre-process phase are delivered by the post-process
+   *   phase of the same ProcessEvents cycle. A manual ProcessLayouts() performs layout
+   *   synchronously but never emits inside the call; its pass is delivered by the
+   *   post-process phase that follows the next automatic pre-process phase. A call made
+   *   after the automatic pre-process phase of the current cycle -- from a
+   *   LayoutFinishedSignal slot or from another window's post-process callback -- requests
+   *   no ProcessEvents cycle of its own: its pass is delivered by the next independently
+   *   triggered cycle (input, a timer, an animation or any other wake), which on a quiescent
+   *   application may be indefinitely later. When prompt delivery is required, invalidate
+   *   layout at event time, which requests a cycle, or call ProcessLayouts() from an input
+   *   event handler, whose cycle then delivers the pass.
+   * - One delivery emits this signal ONCE, however many passes it covers, after the
+   *   View::LayoutFinishedSignal of every subscribed View arranged in those passes (each
+   *   View once, with its most recent bounds). Nothing is emitted when no pass completed
+   *   since the previous delivery. The signal recurs for every later delivery; it is not a
+   *   one-shot for the application lifetime.
+   * - A pass interrupted by an exception from a Measure/Arrange implementation or a layout
+   *   transition callback earns no Window notification of its own; the View notifications
+   *   of the layout roots it had already completed are still delivered.
+   * - Connections are evaluated at emit time: a slot connected after a pass completed but
+   *   before its delivery is called, and a slot disconnected before the delivery is not.
+   * - Reflects Measure/Arrange completion ONLY. It does NOT wait for layout
+   *   transition animations to finish; use a transition-finished callback if
+   *   post-animation geometry is required.
+   * - A slot may NOT invalidate layout. The emit runs inside the layout processing
+   *   window, so a direct View::InvalidateMeasure() / View::InvalidateArrange() /
+   *   LayoutController::RequestLayout() call is a contract violation and is logged
+   *   once for that view. The work is retained, but it is PARKED and does not request
+   *   an idle ProcessEvents wake. It does not withdraw the notification being delivered;
+   *   it runs in a later pass when an independently triggered ProcessEvents, an explicit
+   *   ProcessLayouts(), or an out-of-processing request drains it, and that pass is
+   *   reported in turn. Defer layout-affecting work to event time when prompt processing
+   *   is required.
+   * - Property changes and tree mutations from a slot (Add / Remove) follow the same
+   *   scheduling rule. A framework-internal invalidation path is not an exemption.
+   * - If a slot throws, the exception propagates. The controller does not repeat a
+   *   notification whose emit had started, and it keeps the notifications it has not
+   *   delivered yet.
+   * - Destroying this controller from within the slot (LayoutController::Remove)
+   *   is supported. The controller is detached immediately - it stops processing
+   *   and emitting at once, including the rest of the current delivery - but the
+   *   object is not freed until the event loop next goes idle, because DALi core
+   *   still holds a processor pointer to it for the remainder of the current
+   *   processing pass.
+   *
+   * @return The layout-finished signal
+   * @note The @c Dali::Window is passed (not the LayoutController) because the
+   * controller is a non-copyable, per-window infrastructure object; the window
+   * identifies which controller completed the passes and the controller can be
+   * re-obtained via Get(). Adding parameters later would require migrating to a struct
+   * argument.
+   */
+  LayoutFinishedSignalType& LayoutFinishedSignal();
+
+public: // Not intended for application developers
+  /// @cond internal
+  /**
+   * @brief Records @p view as arranged for View::LayoutFinishedSignal during the
+   * currently active LayoutController pass. No-op outside a managed root pass.
+   *
+   * @param[in] view The view whose Arrange() has just completed
+   */
+  DALI_INTERNAL static void NotifyViewArranged(ViewImpl* view);
+
+  /**
+   * @brief Schedules an EXIT-slot layout transition for @p child under
+   * @p parent.
+   *
+   * Called by ViewImpl::Remove / RemoveAll when the parent
+   * has a LayoutTransition EXIT slot configured through a visual spec,
+   * animator, or active bounds effect. The dispatcher fires the EXIT
+   * animation and unparents the child only when the animation finishes.
+   *
+   * @param[in] parent          The child's direct (visual) parent (ghost host
+   *                            / unparent target)
+   * @param[in] child           The child view to remove (kept alive by a
+   *                            strong ref inside the dispatcher until EXIT
+   *                            completes)
+   * @param[in] transitionOwner The view whose LayoutTransition drives the EXIT
+   *                            effect; @c nullptr means @p parent (direct EXIT).
+   *                            Differs from @p parent only for SUBTREE-scope
+   *                            inherited EXIT.
+   */
+  DALI_INTERNAL void ScheduleLayoutExit(ViewImpl* parent, Ui::View child, ViewImpl* transitionOwner = nullptr);
+
+  /**
+   * @brief Notifies the layout transition dispatcher that @p child was
+   * just attached to a (new) parent.
+   *
+   * Called by @c ViewImpl::OnChildAdd. When the child has an in-flight
+   * transition under an old parent (reparent during EXIT), the dispatcher
+   * cancels it so the application callback does not keep firing against
+   * the old parent's coordinate system. No-op when there is no in-flight
+   * state for @p child (the common fresh-add case).
+   *
+   * @param[in] child The child view whose actor was just attached
+   */
+  DALI_INTERNAL void NotifyChildReparented(ViewImpl* child);
+
+  /**
+   * @brief Notifies the dispatcher that @p child was added under @p directParent
+   * so the ENTER of this add can be routed to the transition that governs it (the
+   * child's own self transition, the direct parent's, or the closest ancestor
+   * SUBTREE owner's).
+   *
+   * Called by @c ViewImpl::OnChildAdd for every add; a no-op when the direct
+   * parent's own transition claims the child.
+   *
+   * @param[in] directParent The child's direct parent
+   * @param[in] child         The freshly added child
+   */
+  DALI_INTERNAL void NotifyChildAdded(ViewImpl* directParent, Ui::View child);
+
+  /**
+   * @brief Drops inherited-ENTER candidates registered against @p owner in the
+   * dispatcher, called when @p owner detaches its LayoutTransition.
+   *
+   * @param[in] owner The view whose transition was just detached
+   */
+  DALI_INTERNAL void ClearPendingInheritedEnters(ViewImpl* owner);
+
+  /**
+   * @brief Drops the self-role records the dispatcher holds for @p child -- the
+   * add-time pending ENTER candidate and the current pass's snapshot -- called
+   * when @p child detaches its self LayoutTransition or is gated by a non-AUTO
+   * LayoutTransitionMode.
+   *
+   * @param[in] child The view whose self transition was just detached
+   */
+  DALI_INTERNAL void ClearDetachedSelfState(ViewImpl* child);
+  /// @endcond
+
+private:
+  /**
+   * @brief Private constructor.
+   *
+   * Use LayoutController::Get() to obtain an instance.
+   *
+   * @param[in] window The window this controller manages
+   */
+  explicit DALI_INTERNAL LayoutController(Window window);
+
+  // Not copyable or movable
+  LayoutController(const LayoutController&)            = delete;
+  LayoutController(LayoutController&&)                 = delete;
+  LayoutController& operator=(const LayoutController&) = delete;
+  LayoutController& operator=(LayoutController&&)      = delete;
+
+private: // Not be opened for application developer
+  /**
+   * @brief Gets the current window handle managed by this layout controller.
+   *
+   * Retrieves the window that this layout controller instance is associated with.
+   * This is used internally to verify if the window has been replaced.
+   *
+   * @return The current window handle
+   */
+  DALI_INTERNAL Dali::Window GetCurrentWindow() const;
+
+  /**
+   * @brief Replaces the current window with a new one.
+   *
+   * Updates the layout controller to manage a different window instance.
+   * This is called when a window object has been replaced but the same
+   * LayoutController instance should continue managing layouts for the new window.
+   * The method reconnects the window resize signal to ensure layout invalidation
+   * continues to work correctly.
+   *
+   * @param[in] window The new window to manage
+   */
+  DALI_INTERNAL void ReplaceCurrentWindow(Dali::Window window);
+
+private:
+  Dali::UniquePtr<Integration::LayoutControllerImpl> mImpl;
+};
+
+} // namespace Ui
+} //namespace DALI_NAMESPACE

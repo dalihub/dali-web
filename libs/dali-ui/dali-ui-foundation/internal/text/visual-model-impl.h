@@ -1,0 +1,861 @@
+#ifndef DALI_UI_TEXT_VISUAL_MODEL_IMPL_H
+#define DALI_UI_TEXT_VISUAL_MODEL_IMPL_H
+
+/*
+ * Copyright (c) 2025 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDES
+#include <dali/public-api/common/dali-vector.h>
+#include <dali/public-api/common/intrusive-ptr.h>
+#include <dali/public-api/math/vector2.h>
+#include <dali/public-api/math/vector4.h>
+#include <dali/public-api/object/ref-object.h>
+#include <memory>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/internal/text/character-spacing-glyph-run.h>
+#include <dali-ui-foundation/internal/text/color-run.h>
+#include <dali-ui-foundation/internal/text/line-run.h>
+#include <dali-ui-foundation/internal/text/strikethrough-glyph-run.h>
+#include <dali-ui-foundation/internal/text/underlined-glyph-run.h>
+#include <dali-ui-foundation/public-api/text/style/underline.h>
+#include <dali-ui-foundation/public-api/text/text-enumerations.h>
+
+// DEVEL INCLUDES
+#include <dali-ui-foundation/internal/text/text-enumerations.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Text
+{
+struct HyphenInfo
+{
+  Vector<GlyphInfo> glyph;
+  Vector<Vector2>   position;
+  Vector<Length>    index;
+};
+
+struct CutoutData
+{
+  Vector4 backgroundColor;
+  Vector2 offset;
+};
+
+class VisualModel;
+typedef IntrusivePtr<VisualModel> VisualModelPtr;
+
+/**
+ * @brief A visual text model contains layout specific information.
+ *
+ * This includes:
+ * - A series of glyphs in visual order i.e. after the bidirectional reordering.
+ * - The position of each glyph within a 2D bounding box.
+ */
+class VisualModel : public RefObject
+{
+public:
+  /**
+   * @brief Create a new instance of a VisualModel.
+   *
+   * @return A pointer to a new VisualModel.
+   */
+  static VisualModelPtr New();
+
+  // Glyph interface.
+
+  /**
+   * @brief Creates the character to glyph conversion table.
+   *
+   * @pre The glyphs per character table needs to be created first.
+   *
+   * @param[in] startIndex The character from where the conversion table is created.
+   * @param[in] startGlyphIndex The glyph from where the conversion table is created.
+   * @param[in] numberOfCharacters The number of characters.
+   */
+  void CreateCharacterToGlyphTable(CharacterIndex startIndex, GlyphIndex startGlyphIndex, Length numberOfCharacters);
+
+  /**
+   * @brief Creates an array containing the number of glyphs per character.
+   *
+   * @param[in] startIndex The character from where the table is created.
+   * @param[in] startGlyphIndex The glyph from where the conversion table is created.
+   * @param[in] numberOfCharacters The number of characters.
+   */
+  void CreateGlyphsPerCharacterTable(CharacterIndex startIndex, GlyphIndex startGlyphIndex, Length numberOfCharacters);
+
+  /**
+   * @brief Retrieves glyphs in the given buffer.
+   *
+   * The size of the @p glyphs buffer needs to be big enough to copy the @p numberOfGlyphs.
+   * @param[out] glyphs Pointer to a buffer where the glyphs are copied.
+   * @param[in] glyphIndex Index to the first glyph.
+   * @param[in] numberOfGlyphs Number of glyphs to be copied.
+   */
+  void GetGlyphs(GlyphInfo* glyphs, GlyphIndex glyphIndex, Length numberOfGlyphs) const;
+
+  // Position interface
+
+  /**
+   * @brief Retrieves the glyph positions.
+   *
+   * @pre The size of the @p positions buffer needs to be big enough to copy the @p numberOfGlyphs positions.
+   * @param[out] glyphPositions Pointer to a buffer where the glyph positions are copied.
+   * @param[in] glyphIndex Index to the first glyph position.
+   * @param[in] numberOfGlyphs The number of positions to be copied.
+   */
+  void GetGlyphPositions(Vector2* glyphPositions, GlyphIndex glyphIndex, Length numberOfGlyphs) const;
+
+  // Line interface.
+
+  /**
+   * @brief Retrieves the total number of lines.
+   *
+   * @return The number of lines.
+   */
+  Length GetTotalNumberOfLines() const;
+
+  /**
+   * @brief Retrieves the number of lines and the index to the first line where the given range of glyphs is laid out.
+   *
+   * @param[in] glyphIndex Index to the first glyph.
+   * @param[in] numberOfGlyphs The number of glyph.
+   * @param[out] firstLine Index to the line containing the glyph index.
+   * @param[out] numberOfLines The number of lines.
+   */
+  void GetNumberOfLines(GlyphIndex glyphIndex, Length numberOfGlyphs, LineIndex& firstLine,
+                        Length& numberOfLines) const;
+
+  /**
+   * @brief Retrieves the line index where the glyph is laid-out.
+   *
+   * @param[in] glyphIndex The glyph's index.
+   *
+   * @return The line index.
+   */
+  LineIndex GetLineOfGlyph(GlyphIndex glyphIndex);
+
+  /**
+   * @brief Retrieves the lines where the given range of glyphs is laid out.
+   *
+   * The size of the @p lines buffer needs to be big enough to copy the @p numberOfLines.
+   *
+   * @param[out] lines Pointer to a buffer where the lines are copied.
+   * @param[in] glyphIndex Index to the first glyphs of the range.
+   * @param[in] numberOfGlyphs Number of glyphs in the range.
+   */
+  void GetLinesOfGlyphRange(LineRun* lines, GlyphIndex glyphIndex, Length numberOfGlyphs) const;
+
+  /**
+   * @brief Retrieves the line index where the character is laid-out.
+   *
+   * @param[in] characterIndex The character's index.
+   *
+   * @return The line index.
+   */
+  LineIndex GetLineOfCharacter(CharacterIndex characterIndex);
+
+  // Underline runs
+
+  /**
+   * @brief Retrieves the underline runs.
+   *
+   * @param[out] underlineRuns Pointer to a buffer where the underline runs are copied.
+   * @param[in] index Index of the first underline run to be copied.
+   * @param[in] numberOfRuns Number of underline runs to be copied.
+   */
+  void GetUnderlineRuns(UnderlinedGlyphRun* underlineRuns, UnderlineRunIndex index, Length numberOfRuns) const;
+
+  // Size interface
+
+  /**
+   * @brief Sets the natural size.
+   *
+   * @param[in] size The text's natural size.
+   */
+  void SetNaturalSize(const Vector2& size);
+
+  /**
+   * @brief Retrieves the natural size.
+   *
+   * @return The text's natural size.
+   */
+  const Vector2& GetNaturalSize() const;
+
+  /**
+   * @brief Sets the text's layout size.
+   *
+   * @param[in] size The text's size.
+   */
+  void SetLayoutSize(const Vector2& size);
+
+  /**
+   * @brief Retrieves the text's layout size.
+   *
+   * @return The text's size.
+   */
+  const Vector2& GetLayoutSize() const;
+
+  /**
+   * @brief Sets the text's cached layout size.
+   *
+   * @param[in] size The text's size.
+   */
+  void SetCachedLayoutSize(const Vector2& size);
+
+  /**
+   * @brief Retrieves the text's cached layout size.
+   *
+   * @return The text's size.
+   */
+  const Vector2& GetCachedLayoutSize() const;
+
+  /**
+   * @brief Sets the size of height for width.
+   *
+   * @param[in] size The text's height for width size.
+   */
+  void SetHeightForWidth(const Vector2& size);
+
+  /**
+   * @brief Retrieves the height for width size.
+   *
+   * @return The text's height for width size.
+   */
+  const Vector2& GetHeightForWidth() const;
+
+  /**
+   * @brief Set the text's color
+   *
+   * @param[in] textColor The text's color
+   */
+  void SetTextColor(const Vector4& textColor);
+
+  /**
+   * @brief Retrieve the text's color
+   *
+   * @return The text's color
+   */
+  const Vector4& GetTextColor() const;
+
+  /**
+   * @brief Sets the text's shadow offset.
+   *
+   * @param[in] shadowOffset The shadow offset.
+   */
+  void SetShadowOffset(const Vector2& shadowOffset);
+
+  /**
+   * @brief Sets the effective UI scale used to resolve authored decoration geometry.
+   *
+   * FontSizeScale and renderScale are not included. Authored values are preserved.
+   * Non-positive and non-finite scales are ignored.
+   *
+   * @param[in] scale The control's effective UI scale after its UI scale policy.
+   */
+  void SetDecorationUiScale(float scale);
+
+  /**
+   * @brief Retrieves the UI scale used for decoration geometry.
+   *
+   * @return The UI scale, excluding FontSizeScale and renderScale.
+   */
+  float GetDecorationUiScale() const;
+
+  /**
+   * @brief Retrieves the authored shadow offset multiplied by the UI scale.
+   *
+   * @return The effective signed offset used by layout and rendering.
+   */
+  const Vector2& GetEffectiveShadowOffset() const;
+
+  /**
+   * @brief Retrieves the authored outline offset multiplied by the UI scale.
+   *
+   * @return The effective signed offset used by layout and rendering.
+   */
+  const Vector2& GetEffectiveOutlineOffset() const;
+
+  /**
+   * @brief Retrieves the UI-scaled outline width in the existing integer representation.
+   *
+   * @return The nearest integer width, saturated to uint16_t. Zero remains zero.
+   */
+  uint16_t GetEffectiveOutlineWidth() const;
+
+  /**
+   * @brief Retrieves the authored underline thickness multiplied by the UI scale.
+   *
+   * @return The effective thickness, or zero to retain automatic font metrics.
+   */
+  float GetEffectiveUnderlineHeight() const;
+
+  /**
+   * @brief Retrieves the authored underline dash length multiplied by the UI scale.
+   *
+   * @return The effective dash length. An authored zero remains zero.
+   */
+  float GetEffectiveDashedUnderlineWidth() const;
+
+  /**
+   * @brief Retrieves the authored underline dash gap multiplied by the UI scale.
+   *
+   * @return The effective dash gap. An authored zero remains zero.
+   */
+  float GetEffectiveDashedUnderlineGap() const;
+
+  /**
+   * @brief Retrieves the authored line-through thickness multiplied by the UI scale.
+   *
+   * @return The effective thickness, preserving zero for the renderer's default behavior.
+   */
+  float GetEffectiveStrikethroughHeight() const;
+
+  /**
+   * @brief Retrieves the text's shadow offset.
+   *
+   * @return The text's shadow offset.
+   */
+  const Vector2& GetShadowOffset() const;
+
+  /**
+   * @brief Sets the text's shadow enabled flag.
+   *
+   * @param[in] enabled true if shadow is enabled.
+   */
+  void SetShadowEnabled(bool enabled);
+
+  /**
+   * @brief Returns whether the text's shadow is enabled or not.
+   *
+   * @return The shadow state.
+   */
+  bool IsShadowEnabled() const;
+
+  /**
+   * @brief Sets the text's shadow color.
+   *
+   * @param[in] shadowColor The shadow color.
+   */
+  void SetShadowColor(const Vector4& shadowColor);
+
+  /**
+   * @brief Retrieves the text's shadow color.
+   *
+   * @return The text's shadow color.
+   */
+  const Vector4& GetShadowColor() const;
+
+  /**
+   * @brief Set the shadow blur radius.
+   *
+   * @param[in] shadowBlurRadius The shadow blur radius, 0,0 indicates no blur.
+   */
+  void SetShadowBlurRadius(const float& shadowBlurRadius);
+
+  /**
+   * @brief Retrieve the shadow blur radius.
+   *
+   * @return The shadow blur radius.
+   */
+  const float& GetShadowBlurRadius() const;
+
+  /**
+   * @brief Sets the text's underline color.
+   *
+   * @param[in] color The text's underline color.
+   */
+  void SetUnderlineColor(const Vector4& color);
+
+  /**
+   * @brief Retrieves the text's underline color.
+   *
+   * @return The text's underline color.
+   */
+  const Vector4& GetUnderlineColor() const;
+
+  /**
+   * @brief Sets the text underline flag.
+   *
+   * @param[in] enabled true if underlined.
+   */
+  void SetUnderlineEnabled(bool enabled);
+
+  /**
+   * @brief Returns whether the text is underlined or not.
+   *
+   * @return underline state.
+   */
+  bool IsUnderlineEnabled() const;
+
+  /**
+   * @brief Clear the caches.
+   */
+  void ClearCaches();
+
+  /**
+   * @brief Set the override used for underline height, 0 indicates height will be come from font metrics
+   *
+   * @param[in] height The height in pixels of the underline
+   */
+  void SetUnderlineHeight(float height);
+
+  /**
+   * @brief Set the override used for underline type.
+   *
+   * @param[in] underlineType The type of the underline.
+   */
+  void SetUnderlineType(Underline::Type type);
+
+  /**
+   * @brief Set the override used for the width of the dashes of the dashed underline.
+   *
+   * @param[in] width width of the dashes.
+   */
+  void SetDashedUnderlineWidth(float width);
+
+  /**
+   * @brief Set the override used for the gap between the dashes of the dashed underline.
+   *
+   * @param[in] gap gap between the dashes.
+   */
+  void SetDashedUnderlineGap(float gap);
+
+  /**
+   * @brief Retrieves the underline height override
+   *
+   * @return Returns the override height for an underline, 0 indicates that font metrics will determine the height
+   */
+  float GetUnderlineHeight() const;
+
+  /**
+   * @brief Retrieves the underline type override.
+   *
+   * @return Returns the override type for the underline.
+   */
+  Underline::Type GetUnderlineType() const;
+
+  /**
+   * @brief Retrieves the dashed underline width.
+   *
+   * @return Returns the override width for the dashed underline.
+   */
+  float GetDashedUnderlineWidth() const;
+
+  /**
+   * @brief Retrieves the dashed underline gap.
+   *
+   * @return Returns the override gap for the dashed underline.
+   */
+  float GetDashedUnderlineGap() const;
+
+  /**
+   * @brief Retrieves the number of underline runs.
+   *
+   * @return The number of underline runs.
+   */
+  Length GetNumberOfUnderlineRuns() const;
+
+  /**
+   * @brief Sets the text's outline offset.
+   *
+   * @param[in] outlineOffset The outline offset.
+   */
+  void SetOutlineOffset(const Vector2& outlineOffset);
+
+  /**
+   * @brief Set the outline color.
+   *
+   * @param[in] color color of outline.
+   */
+  void SetOutlineColor(const Vector4& color);
+
+  /**
+   * @brief Retrieves the text's outline offset.
+   *
+   * @return The text's outline offset.
+   */
+  const Vector2& GetOutlineOffset() const;
+
+  /**
+   * @brief Retrieve the outline color.
+   *
+   * @return The outline color.
+   */
+  const Vector4& GetOutlineColor() const;
+
+  /**
+   * @brief Set the outline width
+   *
+   * @param[in] width The width in pixels of the outline.
+   */
+  void SetOutlineWidth(uint16_t width);
+
+  /**
+   * @brief Retrieves the width of an outline
+   *
+   * @return The width of the outline.
+   */
+  uint16_t GetOutlineWidth() const;
+
+  /**
+   * @brief Sets the text's outline enabled flag.
+   *
+   * @param[in] enabled true if outline is enabled.
+   */
+  void SetOutlineEnabled(bool enabled);
+
+  /**
+   * @brief Returns whether the text's outline is enabled or not.
+   *
+   * @return The outline state.
+   */
+  bool IsOutlineEnabled() const;
+
+  /**
+   * @brief Set the outline blur radius.
+   *
+   * @param[in] outlineBlurRadius The outline blur radius, 0,0 indicates no blur.
+   */
+  void SetOutlineBlurRadius(const float& outlineBlurRadius);
+
+  /**
+   * @brief Retrieve the outline blur radius.
+   *
+   * @return The outline blur radius.
+   */
+  const float& GetOutlineBlurRadius() const;
+
+  /**
+   * @brief Sets the text's background color.
+   *
+   * @param[in] color The text's background color.
+   */
+  void SetBackgroundColor(const Vector4& color);
+
+  /**
+   * @brief Retrieves the text's background color.
+   *
+   * @return The text's background color.
+   */
+  const Vector4& GetBackgroundColor() const;
+
+  /**
+   * @brief Sets whether the text has a background or not.
+   *
+   * @param[in] enabled true if the text has a background.
+   */
+  void SetBackgroundEnabled(bool enabled);
+
+  /**
+   * @brief Returns whether the text has a background or not.
+   *
+   * @return whether the text has a background or not.
+   */
+  bool IsBackgroundEnabled() const;
+
+  /**
+   * @brief Enable or disable the text elide.
+   *
+   * @param[in] enabled Whether to enable the text elide.
+   */
+  void SetTextElideEnabled(bool enabled);
+
+  /**
+   * @brief Whether the text elide property is enabled.
+   *
+   * @return @e true if the text elide property is enabled, @e false otherwise.
+   */
+  bool IsTextElideEnabled() const;
+
+  /**
+   * @brief Sets the end index of elided glyphs.
+   *
+   * @param[in] endIndexOfElidedGlyphs The end index of elided glyphs.
+   */
+  void SetEndIndexOfElidedGlyphs(GlyphIndex endIndexOfElidedGlyphs);
+
+  /**
+   * @brief Retrieves the end index of laid-out glyphs.
+   *
+   * @return The end index of laid-out glyphs.
+   */
+  GlyphIndex GetEndIndexOfElidedGlyphs() const;
+
+  /**
+   * @brief Sets the text's strikethrough color.
+   *
+   * @param[in] color The text's strikethrough color.
+   */
+  void SetStrikethroughColor(const Vector4& color);
+
+  /**
+   * @brief Retrieves the text's strikethrough color.
+   *
+   * @return The text's strikethrough color.
+   */
+  const Vector4& GetStrikethroughColor() const;
+
+  /**
+   * @brief Sets the text strikethrough flag.
+   *
+   * @param[in] enabled true if strikethrough.
+   */
+  void SetStrikethroughEnabled(bool enabled);
+
+  /**
+   * @brief Returns whether the text is strikethrough or not.
+   *
+   * @return strikethrough state.
+   */
+  bool IsStrikethroughEnabled() const;
+
+  /**
+   * @brief Set the override used for strikethrough height, 0 indicates height will be come from font metrics
+   *
+   * @param[in] height The height in pixels of the strikethrough
+   */
+  void SetStrikethroughHeight(float height);
+
+  /**
+   * @brief Retrieves the strikethrough height override
+   *
+   * @return Returns the override height for a strikethrough, 0 indicates that font metrics will determine the height
+   */
+  float GetStrikethroughHeight() const;
+  /**
+   * @brief Set the override used for character spacing.
+   *
+   * @note A positive value will make the characters far apart (expanded) and a negative value will bring them closer
+   * (condensed).
+   *
+   * @param[in] characterSpacing The character spacing.
+   */
+  void SetCharacterSpacing(float characterSpacing);
+
+  /**
+   * @brief Retrieves the characterSpacing.
+   *
+   * @note A positive value will make the characters far apart (expanded) and a negative value will bring them closer
+   * (condensed).
+   *
+   * @return Returns the characterSpacing.
+   */
+  const float GetCharacterSpacing() const;
+
+  /**
+   * @brief Retrieves the Glyphs to Characters Array.
+   *
+   * @return The GlyphsToCharacters.
+   */
+  const Vector<CharacterIndex>& GetGlyphsToCharacters() const;
+
+  /**
+   * @brief Retrieves the strikethrough runs.
+   *
+   * @param[out] strikethroughRuns Pointer to a buffer where the strikethrough runs are copied.
+   * @param[in] index Index of the first strikethrough run to be copied.
+   * @param[in] numberOfRuns Number of strikethrough runs to be copied.
+   */
+  void GetStrikethroughRuns(StrikethroughGlyphRun* strikethroughRuns, StrikethroughRunIndex index,
+                            Length numberOfRuns) const;
+
+  /**
+   * @brief Retrieves the number of strikethrough runs.
+   *
+   * @return The number of strikethrough runs.
+   */
+  Length GetNumberOfStrikethroughRuns() const;
+
+  /**
+   * @brief Retrieves the number of character-spacing glyph runs.
+   *
+   * @return The number of character-spacing glyph runs.
+   */
+  Length GetNumberOfCharacterSpacingGlyphRuns() const;
+
+  /**
+   * @brief Retrieves the reference for character-spacing glyph runs.
+   *
+   * @return The reference for character-spacing glyph runs.
+   */
+  const Vector<CharacterSpacingGlyphRun>& GetCharacterSpacingGlyphRuns() const;
+
+  /**
+   * @brief Sets the cutout flag.
+   *
+   * @param[in] enable true if cutouted.
+   */
+  void SetCutoutEnabled(bool enable);
+
+  /**
+   * @brief Returns whether the text is cutouted or not.
+   *
+   * @return cutout state.
+   */
+  bool IsCutoutEnabled() const;
+
+  /**
+   * @brief Sets the background with cutout flag.
+   *
+   * @param[in] enable true if background enabled.
+   */
+  void SetBackgroundWithCutoutEnabled(bool enable);
+
+  /**
+   * @brief Returns whether the text is cutouted or not.
+   *
+   * @return True if enabled.
+   */
+  bool IsBackgroundWithCutoutEnabled() const;
+
+  /**
+   * @brief Sets the Color of background with cutout.
+   *
+   * @param[in] color The color to set.
+   */
+  void SetBackgroundColorWithCutout(const Vector4& color);
+
+  /**
+   * @brief Retrieves the Color of background with cutout.
+   *
+   * @return The color.
+   */
+  const Vector4& GetBackgroundColorWithCutout() const;
+
+  /**
+   * @brief Sets the left and top offset with cutout.
+   *
+   * @param[in] offset The offset to set.
+   */
+  void SetOffsetWithCutout(const Vector2& offset);
+
+  /**
+   * @brief Retrieves the left and top offset with cutout.
+   *
+   * @return The offset.
+   */
+  const Vector2& GetOffsetWithCutout() const;
+
+  /**
+   * @brief Sets the vertical line alignment for glyph positioning within LineHeight.
+   *
+   * @param[in] alignment The vertical line alignment.
+   */
+  void SetVerticalLineAlignment(Alignment alignment);
+
+  /**
+   * @brief Gets the vertical line alignment.
+   *
+   * @return The vertical line alignment.
+   */
+  Alignment GetVerticalLineAlignment() const;
+
+protected:
+  /**
+   * @brief A reference counted object may only be deleted by calling Unreference().
+   */
+  virtual ~VisualModel();
+
+private:
+  /**
+   * @brief Private constructor.
+   */
+  VisualModel();
+
+  // Undefined
+  VisualModel(const VisualModel& handle);
+
+  // Undefined
+  VisualModel& operator=(const VisualModel& handle);
+
+  struct ShadowData;
+  ShadowData& GetOrCreateShadowData();
+
+  struct OutlineData;
+  OutlineData& GetOrCreateOutlineData();
+
+public:
+  Vector<GlyphInfo>                mGlyphs;                 ///< For each glyph, the font's id, glyph's index within the font and glyph's metrics.
+  Vector<CharacterIndex>           mGlyphsToCharacters;     ///< For each glyph, the index of the first character.
+  Vector<GlyphIndex>               mCharactersToGlyph;      ///< For each character, the index of the first glyph.
+  Vector<Length>                   mCharactersPerGlyph;     ///< For each glyph, the number of characters that form the glyph.
+  Vector<Length>                   mGlyphsPerCharacter;     ///< For each character, the number of glyphs that are shaped.
+  Vector<Vector2>                  mGlyphPositions;         ///< For each glyph, the position.
+  Vector<LineRun>                  mLines;                  ///< The laid out lines.
+  Vector<UnderlinedGlyphRun>       mUnderlineRuns;          ///< Runs of glyphs that are underlined.
+  Vector<Vector4>                  mColors;                 ///< Colors of the glyphs.
+  Vector<ColorIndex>               mColorIndices;           ///< Indices to the vector of colors for each glyphs.
+  Vector<Vector4>                  mBackgroundColors;       ///< Background colors of the glyphs.
+  Vector<ColorIndex>               mBackgroundColorIndices; ///< Indices to the vector of background colors for each glyphs.
+  Vector4                          mTextColor;              ///< The text color
+  Vector4                          mUnderlineColor;         ///< Color of underline
+  Vector4                          mBackgroundColor;        ///< Color of text background
+  Vector4                          mStrikethroughColor;     ///< Color of text background
+  Size                             mControlSize;            ///< The size of the UI control.
+  float                            mUnderlineHeight;        ///< Fixed height for underline to override font metrics.
+  float                            mStrikethroughHeight;    ///< Fixed height for strikethrough to override font metrics.
+  Underline::Type                  mUnderlineType;          ///< The type of the underline.
+  float                            mDashedUnderlineWidth;   ///< The width of the dashes of the dashed underline.
+  float                            mDashedUnderlineGap;     ///< The gap between the dashes of the dashed underline.
+  Vector<StrikethroughGlyphRun>    mStrikethroughRuns;      ///< Runs of glyphs that have strikethrough.
+  Vector<CharacterSpacingGlyphRun> mCharacterSpacingRuns;   ///< Runs of glyphs that have character-spacing.
+  CutoutData*                      mCutoutData;             ///< Cutout values allocated on demand.
+  HyphenInfo                       mHyphen;                 ///< Contains hyphen glyph info & the character index to draw hyphen after.
+
+private:
+  std::unique_ptr<ShadowData>  mShadowData;  ///< Shadow values allocated on first non-default write, retained on disable.
+  std::unique_ptr<OutlineData> mOutlineData; ///< Outline values allocated on first non-default write, retained on disable.
+
+  float mDecorationUiScale; ///< UI scale for text decorations.
+
+  Size mNaturalSize;      ///< Size of the text with no line wrapping.
+  Size mLayoutSize;       ///< Size of the laid-out text considering the layout properties set.
+  Size mCachedLayoutSize; ///< Size of the cached laid-out text for controller's get layout size.
+  Size mHeightForWidth;   ///< Size of the text last calculated using GetHeightForWidth.
+
+  // Caches to increase performance in some consecutive operations.
+  LineIndex mCachedLineIndex; ///< Used to increase performance in consecutive calls to GetLineOfGlyph() or
+                              ///< GetLineOfCharacter() with consecutive glyphs or characters.
+
+  Alignment mVerticalLineAlignment; ///< Vertical line alignment for glyph positioning within LineHeight.
+
+  GlyphIndex mEndIndexOfElidedGlyphs; ///< The end index of elided glyphs.
+
+  bool mTextElideEnabled : 1; ///< Whether the text's elide is enabled.
+
+public:
+  bool  mUnderlineEnabled : 1;            ///< Underline enabled flag
+  bool  mShadowEnabled : 1;               ///< Shadow enabled flag.
+  bool  mOutlineEnabled : 1;              ///< Outline enabled flag.
+  bool  mUnderlineColorSet : 1;           ///< Has the underline color been explicitly set?
+  bool  mBackgroundEnabled : 1;           ///< Background enabled flag
+  bool  mStrikethroughEnabled : 1;        ///< Strikethrough enabled flag
+  bool  mStrikethroughColorSet : 1;       ///< Has the strikethrough color been explicitly set?
+  float mCharacterSpacing;                ///< Contains the value of the character spacing.
+  bool  mCutoutEnabled : 1;               ///< Cutout enabled flag
+  bool  mBackgroundWithCutoutEnabled : 1; ///< Background with cutout enabled flag.
+};
+
+} // namespace Text
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_UI_TEXT_VISUAL_MODEL_IMPL_H

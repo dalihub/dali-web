@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="360" viewBox="0 0 620 360" role="img" aria-labelledby="title desc">
+  <title id="title">View box model</title>
+  <desc id="desc">A layered illustration of the View box model showing margin, border, padding, and content.</desc>
+
+  <defs>
+    <filter id="contentShadow" x="-15%" y="-25%" width="130%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#142f3a" flood-opacity=".13"/>
+    </filter>
+  </defs>
+
+  <g font-family="Inter, Pretendard, 'Noto Sans KR', 'Segoe UI', Arial, sans-serif" text-rendering="geometricPrecision">
+    <rect x="24" y="18" width="572" height="324" rx="6" fill="#f7f9f8" stroke="#88a7a1" stroke-width="1.5" stroke-dasharray="7 6"/>
+    <text x="44" y="45" fill="#62757a" font-size="12" font-weight="800" letter-spacing="1.4">MARGIN</text>
+
+    <rect x="70" y="60" width="480" height="250" rx="4" fill="#f5e1dc" stroke="#df725d" stroke-width="2"/>
+    <text x="89" y="85" fill="#a84f3f" font-size="12" font-weight="850" letter-spacing="1.4">BORDER</text>
+
+    <rect x="94" y="99" width="432" height="176" rx="2" fill="#e5efeb" stroke="#a9c8bf" stroke-width="1.5"/>
+    <text x="113" y="124" fill="#416963" font-size="12" font-weight="850" letter-spacing="1.4">PADDING</text>
+
+    <rect x="138" y="140" width="344" height="96" rx="1" fill="#194a52" filter="url(#contentShadow)"/>
+    <text x="310" y="193" fill="#bde9d9" font-size="13" font-weight="850" text-anchor="middle" letter-spacing="1.8">CONTENT</text>
+  </g>
+</svg>

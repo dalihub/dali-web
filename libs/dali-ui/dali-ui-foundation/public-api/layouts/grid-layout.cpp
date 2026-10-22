@@ -1,0 +1,154 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+#include <dali-ui-foundation/integration-api/layouts/grid-layout-impl.h>
+#include <dali-ui-foundation/public-api/layouts/grid-layout.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+
+GridLayout::GridLayout()
+{
+}
+
+GridLayout::GridLayout(const GridLayout& layout)
+: Layout(layout)
+{
+}
+
+GridLayout::GridLayout(GridLayout&& rhs) noexcept
+: Layout(std::move(rhs))
+{
+}
+
+GridLayout::~GridLayout()
+{
+}
+
+GridLayout& GridLayout::operator=(const GridLayout& handle)
+{
+  if(&handle != this)
+  {
+    Layout::operator=(handle);
+  }
+  return *this;
+}
+
+GridLayout& GridLayout::operator=(GridLayout&& rhs) noexcept
+{
+  Layout::operator=(std::move(rhs));
+  return *this;
+}
+
+GridLayout GridLayout::New()
+{
+  Integration::GridLayoutImplPtr impl = Integration::GridLayoutImpl::New();
+  GridLayout                     handle(*impl);
+  impl->Initialize();
+
+  return handle;
+}
+
+GridLayout GridLayout::DownCast(BaseHandle handle)
+{
+  return Ui::View::DownCast<GridLayout, Integration::GridLayoutImpl>(handle);
+}
+
+GridLayout::GridLayout(Integration::GridLayoutImpl& implementation)
+: Layout(implementation)
+{
+}
+
+GridLayout::GridLayout(Dali::Internal::CustomActor* internal)
+: Layout(internal)
+{
+  VerifyCustomActorPointer<Integration::GridLayoutImpl>(internal);
+}
+
+void GridLayout::AddRowDefinition(GridLength height)
+{
+  GetImpl(*this).AddRowDefinition(height);
+}
+
+void GridLayout::AddColumnDefinition(GridLength width)
+{
+  GetImpl(*this).AddColumnDefinition(width);
+}
+
+void GridLayout::SetRowDefinitions(const Dali::Vector<GridLength>& rows)
+{
+  GetImpl(*this).SetRowDefinitions(rows);
+}
+
+void GridLayout::SetColumnDefinitions(const Dali::Vector<GridLength>& columns)
+{
+  GetImpl(*this).SetColumnDefinitions(columns);
+}
+
+Dali::Vector<GridLength> GridLayout::GetRowDefinitions() const
+{
+  return GetImpl(*this).GetRowDefinitions();
+}
+
+Dali::Vector<GridLength> GridLayout::GetColumnDefinitions() const
+{
+  return GetImpl(*this).GetColumnDefinitions();
+}
+
+uint32_t GridLayout::GetRowCount() const
+{
+  return GetImpl(*this).GetRowCount();
+}
+
+uint32_t GridLayout::GetColumnCount() const
+{
+  return GetImpl(*this).GetColumnCount();
+}
+
+void GridLayout::ClearRowDefinitions()
+{
+  GetImpl(*this).ClearRowDefinitions();
+}
+
+void GridLayout::ClearColumnDefinitions()
+{
+  GetImpl(*this).ClearColumnDefinitions();
+}
+
+void GridLayout::SetRowSpacing(float spacing)
+{
+  GetImpl(*this).SetRowSpacing(spacing);
+}
+
+float GridLayout::GetRowSpacing() const
+{
+  return GetImpl(*this).GetRowSpacing();
+}
+
+void GridLayout::SetColumnSpacing(float spacing)
+{
+  GetImpl(*this).SetColumnSpacing(spacing);
+}
+
+float GridLayout::GetColumnSpacing() const
+{
+  return GetImpl(*this).GetColumnSpacing();
+}
+
+} // namespace Ui
+} //namespace DALI_NAMESPACE

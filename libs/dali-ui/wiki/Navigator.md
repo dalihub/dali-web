@@ -1,0 +1,287 @@
+# Navigator
+
+[한국어](Navigator-(kr).md)
+
+For Dialog content, prefer `dialog.Post(navigator)` and `dialog.Dismiss()`;
+see [managed Dialog presentation](Dialog.md#managed-presentation-recommended).
+Navigator remains the modal-stack owner. Use `NavigateBack()` for user Back
+requests so Dialog policy/vetoes are respected; explicit PopModal/Remove/Clear
+bypass those vetoes. Manual PushModal assembly remains available, but do not mix
+it with Post/Dismiss on the same active content.
+
+`Navigator` is a page-stack navigation container in `dali-ui-components`.
+It manages two stacks:
+
+- **Navigation stack** for normal application pages.
+- **Modal stack** for temporary content shown above the current page, such as a `DialogContainer`.
+
+Use `Navigator` when an application needs page push/pop, modal presentation,
+back handling, stack queries, and page transition customization in one place.
+
+---
+
+## Basic Setup
+
+```cpp
+#include <dali-ui-components/dali-ui-components.h>
+
+using namespace Dali;
+using namespace Dali::Ui;
+
+// In main(), before running the application:
+Components::UiConfig::New().Apply();
+```
+
+```cpp
+Navigator navigator = Navigator::New();
+navigator.SetLayoutParams(StackLayoutParams::New()
+                            .SetWeight(1.0f)
+                            .SetAlignment(LayoutAlignment::FILL));
+root.Add(navigator);
+```
+
+---
+
+## Navigation Stack
+
+Push a page:
+
+```cpp
+View page = View::New();
+page.SetBackgroundColor(UiColor(0x1565C0u));
+
+Label title = Label::New("Page 1");
+title.SetFontSize(28.0f);
+title.SetTextColor(UiColor(0xFFFFFFu));
+title.SetRequestedX(24.0f);
+title.SetRequestedY(24.0f);
+page.Add(title);
+
+navigator.Push(page);
+```
+
+Pop the top page:
+
+```cpp
+View popped = navigator.Pop();
+```
+
+Other stack APIs:
+
+| API | Description |
+|---|---|
+| `InsertBefore(page, before)` | Inserts a page below an existing page. |
+| `Remove(page)` | Removes a page or modal item. |
+| `Clear()` | Removes all navigation and modal items. |
+
+---
+
+## Modal Stack
+
+For Dialog content, prefer Post/Dismiss. The internal container is managed for
+you, and an action dismisses its own Dialog even if another modal covers it:
+
+```cpp
+AlertDialog alert = AlertDialog::New();
+alert.SetTitle("Delete item?");
+alert.SetMessage("This action cannot be undone.");
+TextButton cancelButton = alert.AddActionButton("Cancel");
+WeakHandle<AlertDialog> weakAlert(alert);
+cancelButton.ConnectClickedSignal(this, [weakAlert](View, InputEvent) {
+  if(auto dialog = weakAlert.GetHandle()) dialog.Dismiss();
+});
+TextButton deleteButton = alert.AddActionButton("Delete");
+deleteButton.ConnectClickedSignal(this, [weakAlert](View, InputEvent) {
+  if(auto dialog = weakAlert.GetHandle()) dialog.Dismiss();
+});
+
+alert.Post(navigator);
+```
+
+Explicitly dismiss the top modal item (bypassing user-request vetoes):
+
+```cpp
+navigator.PopModal();
+```
+
+When a `DialogContainer` is pushed as modal content, tapping the scrim can
+dismiss it through `Navigator`.
+
+For a custom scrim View or complex scrim composition, use the existing manual
+`SetScrim` / `SetModalContent` / `PushModal` path instead; see
+[manual Dialog presentation](Dialog.md#manual-presentation-with-navigator-advanced).
+Simple tint/blur changes and NoScrimPreset remain available through Post options.
+Never mix direct parenting with Post/Dismiss in the same active presentation,
+including closing animations. Finish teardown before switching ownership paths.
+
+---
+
+## Back Navigation
+
+`NavigateBack()` handles common back behavior:
+
+1. Dismiss the top modal item if one exists.
+2. Otherwise pop the navigation stack when it contains more than one page.
+3. Return `false` when no modal exists and the stack has at most one page.
+
+```cpp
+if(!navigator.NavigateBack())
+{
+  Exit(); // tizen_appfw::UiApplication::Exit()
+}
+```
+
+A callback can intercept back navigation for a page. The signal receives the
+current view, and Back is consumed when any callback returns `true`:
+
+```cpp
+navigator.BackRequestedSignal().Connect(this, [editPage](Navigator, View page) {
+  if(page != editPage)
+  {
+    return false;
+  }
+  if(HasUnsavedChanges())
+  {
+    ShowDiscardChangesPrompt();
+    return true;
+  }
+  return false;
+});
+```
+
+---
+
+## Queries
+
+| API | Description |
+|---|---|
+| `GetCurrentView()` | Returns the top modal item, or the top navigation page if no modal exists. |
+| `GetNavigationStackCount()` | Returns the number of navigation pages. |
+| `GetModalStackCount()` | Returns the number of modal items. |
+| `GetNavigationStackItem(index)` | Returns a navigation page by index, where `0` is the bottom item. |
+| `GetModalStackItem(index)` | Returns a modal item by index, where `0` is the bottom item. |
+
+---
+
+## Transition Basics
+
+`Push()`, `Pop()`, `PushModal()`, and `PopModal()` take an `animated` parameter.
+Passing `false` makes that single operation finish immediately.
+
+```cpp
+navigator.Push(page, false);
+navigator.PopModal(false);
+```
+
+Page and modal transition animation can also be enabled or disabled
+independently:
+
+```cpp
+navigator.SetPageTransitionAnimationEnabled(false);   // Affects Push/Pop.
+navigator.SetModalTransitionAnimationEnabled(false);  // Affects PushModal/PopModal.
+```
+
+---
+
+## Transition Specification
+
+Use the reference-counted `NavigationTransitionSpec` handle to customize
+transitions. Connect callbacks to its animator and snap signals:
+
+| Signal | Used for |
+|---|---|
+| `EnterSignal()` | Incoming view for `Push()` or `PushModal()`. |
+| `ExitSignal()` | Outgoing view for `Push()` or `PushModal()`. |
+| `PopEnterSignal()` | Revealed view for `Pop()` or `PopModal()`. |
+| `PopExitSignal()` | Removed view for `Pop()` or `PopModal()`. |
+| `SnapIncomingSignal()` | Restores the incoming view to its final state. |
+| `SnapOutgoingSignal()` | Restores an outgoing view that remains in the stack. |
+
+### Default Page Transition
+
+```cpp
+NavigationTransitionSpec spec = NavigationTransitionSpec::New();
+spec.SetDuration(0.25f);
+spec.EnterSignal().Connect(this, [](Animation& anim, View view) {
+  view.SetProperty(Actor::Property::OPACITY, 0.0f);
+  anim.AnimateTo(Property(view, Actor::Property::OPACITY), 1.0f);
+});
+spec.ExitSignal().Connect(this, [](Animation& anim, View view) {
+  anim.AnimateTo(Property(view, Actor::Property::OPACITY), 0.0f);
+});
+spec.SnapIncomingSignal().Connect(this, [](View view) {
+  view.SetProperty(Actor::Property::OPACITY, 1.0f);
+});
+
+navigator.SetTransitionSpec(spec);
+navigator.ClearTransitionSpec(); // Restore the built-in page transition.
+```
+
+### Per-page Transition
+
+```cpp
+navigator.SetPageTransitionSpec(detailsPage, spec);
+navigator.ClearPageTransitionSpec(detailsPage); // Remove override.
+```
+
+### Modal Transition
+
+Modal transitions are separate from page transitions:
+
+```cpp
+navigator.SetModalTransitionSpec(modalSpec);
+navigator.SetPageModalTransitionSpec(dialogContainer, modalSpec);
+navigator.ClearModalTransitionSpec();
+navigator.ClearPageModalTransitionSpec(dialogContainer);
+```
+
+This lets normal page navigation and modal dialog presentation use different
+motion.
+
+For a DialogContainer, the animator and snap target is its modal content. The
+per-modal spec is still registered against the container, and Navigator's page
+signals still identify that stack item. A separate linear scrim fade is added
+to the same Animation, preserving a stationary input boundary. This also applies
+to Dialog.Post and its transitionSpec option. Ordinary pages and non-container
+modals continue receiving their original View. Existing callbacks must not
+assume every modal target can be downcast to DialogContainer.
+
+Scrim fading uses the resolved transition duration (0.25 seconds by default).
+Longer property animations added by a callback extend the shared timeline;
+completion waits for all of them. No separate ViewAnimationSpec is needed.
+
+---
+
+## Signals
+
+| Signal | Description |
+|---|---|
+| `BackRequestedSignal()` | Emitted before automatic Back handling; any `true` result consumes Back. |
+| `PageWillAppearSignal()` | Emitted before a page or modal item becomes visible. |
+| `PageDidAppearSignal()` | Emitted after a page or modal item becomes visible. |
+| `PageWillDisappearSignal()` | Emitted before a page or modal item is covered or removed. |
+| `PageDidDisappearSignal()` | Emitted after a page or modal item is covered or removed. |
+| `TransitionFinishedSignal()` | Emitted when the current transition finishes. |
+
+```cpp
+navigator.PageDidAppearSignal().Connect(
+  this,
+  [](Navigator navigator, View page, bool byPop) {
+    // Update page state here.
+  });
+```
+
+---
+
+## Notes
+
+- A view cannot be pushed into both the navigation stack and modal stack at the
+  same time.
+- Page transition settings and modal transition settings are independent.
+- Prefer Dialog Post/Dismiss; manually own a DialogContainer for complex scrim composition.
+
+<br/>
+
+---
+
+[Back to Components](Components.md)

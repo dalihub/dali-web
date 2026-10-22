@@ -1,0 +1,23 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.8.2)
+
+PROJECT(visual-base.example)
+
+SET(CMAKE_CXX_STANDARD 17)
+SET(CMAKE_C_STANDARD 99)
+
+IF(NOT COMMAND DALI_ADD_SAMPLE)
+  INCLUDE("${CMAKE_CURRENT_LIST_DIR}/../common.cmake")
+ENDIF()
+
+SET(VISUAL_BASE_SAMPLES
+  color-visual
+  gradient-visual
+  image-visual
+  animated-image-visual
+  text-visual
+)
+
+FOREACH(SAMPLE_NAME ${VISUAL_BASE_SAMPLES})
+  SET(TARGET_NAME ${SAMPLE_NAME}.example)
+  DALI_ADD_SAMPLE(${TARGET_NAME} ${SAMPLE_NAME}-example.cpp)
+ENDFOREACH()

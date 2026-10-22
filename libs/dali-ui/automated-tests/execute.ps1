@@ -1,0 +1,423 @@
+[CmdletBinding()]
+param(
+  [ValidateSet("Debug", "Release")]
+  [string]$Configuration = "Debug",
+  [string[]]$Modules = @(),
+  [string]$VcpkgRoot = "",
+  [string]$TestCase = "",
+  [string]$Prefix = "",
+  [string[]]$Labels = @(),
+  [ValidateRange(1, 3600)]
+  [int]$TimeoutSeconds = 30,
+  [switch]$List,
+  [switch]$Quiet,
+  [string]$ResultsDirectory = ""
+)
+
+$ErrorActionPreference = "Stop"
+
+function ConvertTo-XmlSafeText
+{
+  param([AllowNull()][string]$Text)
+
+  if($null -eq $Text)
+  {
+    return ""
+  }
+
+  $Escape = [regex]::Escape([string][char]0x1B)
+  $WithoutAnsi = $Text -replace ($Escape + '\[[0-?]*[ -/]*[@-~]'), ""
+  return $WithoutAnsi -replace '[\x00-\x08\x0B\x0C\x0E-\x1F]', ""
+}
+$TestRoot = $PSScriptRoot
+$RepoRoot = Split-Path -Parent $TestRoot
+$WorkspaceRoot = Split-Path -Parent $RepoRoot
+$WindowsDependenciesRoot = Join-Path $WorkspaceRoot "windows-dependencies"
+$CommonScript = Join-Path $WindowsDependenciesRoot "vcpkg-script\dali-build-common.ps1"
+$SupportedModules = @("dali-ui-foundation", "dali-ui-foundation-internal", "dali-ui-components")
+
+if($Modules.Count -gt 0)
+{
+  $UnsupportedModules = @($Modules | Where-Object { $SupportedModules -notcontains $_ })
+  if($UnsupportedModules.Count -gt 0)
+  {
+    throw "Unsupported Windows test module: $($UnsupportedModules -join ', '). Supported modules: $($SupportedModules -join ', ')"
+  }
+}
+
+if($Modules.Count -eq 0)
+{
+  $Modules = @("dali-ui-foundation-internal")
+}
+
+if(-not (Test-Path -LiteralPath $CommonScript))
+{
+  throw "windows-dependencies must be beside dali-ui: $WindowsDependenciesRoot"
+}
+. $CommonScript
+
+$Context = New-DaliBuildContext `
+  -WindowsDependenciesRoot $WindowsDependenciesRoot `
+  -VcpkgRoot $VcpkgRoot
+$TestRunners = @(
+  [pscustomobject]@{ Module = "dali-ui-foundation"; Executable = Join-Path $Context.InstallPrefix "bin\tct-dali-ui-foundation-core.exe" }
+  [pscustomobject]@{ Module = "dali-ui-foundation-internal"; Executable = Join-Path $Context.InstallPrefix "bin\tct-dali-ui-foundation-internal-core.exe" }
+  [pscustomobject]@{ Module = "dali-ui-components"; Executable = Join-Path $Context.InstallPrefix "bin\tct-dali-ui-components-core.exe" }
+)
+if($Modules.Count -gt 0)
+{
+  $TestRunners = @($TestRunners | Where-Object { $Modules -contains $_.Module })
+}
+$TestExecutables = @($TestRunners | ForEach-Object { $_.Executable })
+Assert-DaliPaths -Paths $TestExecutables -Description "Windows test executables; run automated-tests\build.ps1 first"
+
+$ConfigurationName = $Configuration.ToLowerInvariant()
+$RuntimePaths = @(
+  (Join-Path $Context.InstallPrefix "bin"),
+  (Join-Path $Context.InstallPrefix "lib"),
+  (Join-Path $Context.InstallPrefix "bin\debug"),
+  (Join-Path $Context.InstallPrefix "lib\debug"),
+  (Join-Path $Context.InstallPrefix "bin\release"),
+  (Join-Path $Context.InstallPrefix "lib\release"),
+  (Join-Path $Context.SdkRoot "bin"),
+  (Join-Path $Context.SdkRoot "lib"),
+  (Join-Path $Context.SdkRoot "${ConfigurationName}\bin"),
+  (Join-Path $Context.SdkRoot "${ConfigurationName}\lib"),
+  (Join-Path $Context.VcpkgRoot "installed\x64-windows\debug\bin"),
+  (Join-Path $Context.VcpkgRoot "installed\x64-windows\bin")
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$ExistingPaths = @($env:PATH -split ";" | Where-Object { $_ })
+$env:PATH = (@($RuntimePaths) + $ExistingPaths | Select-Object -Unique) -join ";"
+$env:DALI_WINDOWS_SDK_ROOT = $Context.SdkRoot
+$env:DALI_PREFIX = $Context.InstallPrefix
+$env:DALI_CONFIGURATION = $Configuration
+$env:DESKTOP_PREFIX = $Context.InstallPrefix
+$env:DALI_DATA_RO_DIR = Join-Path $Context.InstallPrefix "share\dali"
+$env:DALI_DATA_RW_DIR = Join-Path $Context.InstallPrefix "share\dali"
+$env:DALI_DATA_RO_INSTALL_DIR = Join-Path $Context.InstallPrefix "share\dali"
+$env:FONTCONFIG_PATH = Join-Path $Context.SdkRoot "share\dali"
+$env:FONTCONFIG_FILE = Join-Path $env:FONTCONFIG_PATH "fonts.conf"
+
+$Tests = @(
+  foreach($Runner in $TestRunners)
+  {
+    $stderrPath = [IO.Path]::GetTempFileName()
+    $previousNativeCommandUseErrorActionPreference = $PSNativeCommandUseErrorActionPreference
+    try
+    {
+      $PSNativeCommandUseErrorActionPreference = $false
+      $previousErrorActionPreference = $ErrorActionPreference
+      $ErrorActionPreference = "SilentlyContinue"
+      $TestLines = @(& $Runner.Executable --list 2> $stderrPath)
+      $exitCode = $LASTEXITCODE
+      $stderr = Get-Content -LiteralPath $stderrPath -Raw
+    }
+    finally
+    {
+      $ErrorActionPreference = $previousErrorActionPreference
+      $PSNativeCommandUseErrorActionPreference = $previousNativeCommandUseErrorActionPreference
+      Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+    if($exitCode -ne 0)
+    {
+      throw "Failed to list $($Runner.Module) UTCs on Windows (exit code $exitCode).`n$stderr"
+    }
+
+    foreach($Line in $TestLines)
+    {
+      $Fields = $Line -split "\|", 3
+      if($Fields.Count -ne 3)
+      {
+        throw "Unexpected test list entry from $($Runner.Module): $Line"
+      }
+      [pscustomobject]@{
+        Module = $Runner.Module
+        Executable = $Runner.Executable
+        Name = $Fields[0]
+        Labels = @($Fields[1] -split "," | Where-Object { $_ })
+        Description = $Fields[2]
+      }
+    }
+  }
+)
+
+if($TestCase)
+{
+  $Tests = @($Tests | Where-Object { $_.Name -eq $TestCase })
+}
+if($Prefix)
+{
+  $Tests = @($Tests | Where-Object { $_.Name.StartsWith($Prefix, [StringComparison]::OrdinalIgnoreCase) })
+}
+if($Labels.Count -gt 0)
+{
+  $RequestedLabels = @($Labels | ForEach-Object { $_.ToLowerInvariant() })
+  $Tests = @(
+    $Tests | Where-Object {
+      $CurrentLabels = @($_.Labels | ForEach-Object { $_.ToLowerInvariant() })
+      $Matched = $false
+      foreach($RequestedLabel in $RequestedLabels)
+      {
+        if($CurrentLabels -contains $RequestedLabel)
+        {
+          $Matched = $true
+          break
+        }
+      }
+      $Matched
+    }
+  )
+}
+
+if($Tests.Count -eq 0)
+{
+  Write-Host "No tests matched the requested filters." -ForegroundColor Red
+  exit 2
+}
+
+if($List)
+{
+  foreach($Test in $Tests)
+  {
+    Write-Host ("{0,-30} {1,-42} [{2}]`n  {3}" -f $Test.Module, $Test.Name, ($Test.Labels -join ","), $Test.Description)
+  }
+  exit 0
+}
+
+if(-not $ResultsDirectory)
+{
+  $Timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
+  $ResultsDirectory = Join-Path $TestRoot "results\windows\$Timestamp"
+}
+$ResultsDirectory = [IO.Path]::GetFullPath($ResultsDirectory)
+$LogsDirectory = Join-Path $ResultsDirectory "logs"
+New-Item -ItemType Directory -Force -Path $LogsDirectory | Out-Null
+
+$EnvironmentInfo = [pscustomobject]@{
+  Timestamp = (Get-Date).ToString("o")
+  OperatingSystem = [Environment]::OSVersion.VersionString
+  Is64BitOperatingSystem = [Environment]::Is64BitOperatingSystem
+  Is64BitProcess = [Environment]::Is64BitProcess
+  UserInteractive = [Environment]::UserInteractive
+  SessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
+  PowerShellVersion = $PSVersionTable.PSVersion.ToString()
+  Configuration = $Configuration
+  DaliPrefix = $Context.InstallPrefix
+  WindowsDependenciesSdk = $Context.SdkRoot
+  VcpkgRoot = $Context.VcpkgRoot
+}
+$EnvironmentInfo |
+  ConvertTo-Json -Depth 3 |
+  Set-Content -LiteralPath (Join-Path $ResultsDirectory "environment.json") -Encoding UTF8
+
+$Results = @()
+$SuiteStart = Get-Date
+
+foreach($Test in $Tests)
+{
+  $Skipped = $Test.Labels -contains "windows-unsupported"
+  if($Skipped)
+  {
+    if(-not $Quiet)
+    {
+      Write-Host "[  SKIPPED ] [$($Test.Module)] $($Test.Name): $($Test.Description)" -ForegroundColor Yellow
+    }
+    $Results += [pscustomobject]@{
+      Module = $Test.Module
+      Name = $Test.Name
+      Labels = $Test.Labels -join ","
+      Passed = $false
+      Skipped = $true
+      TimedOut = $false
+      ExitCode = 0
+      ElapsedSeconds = 0.0
+      Message = $Test.Description
+      Output = ""
+      Log = ""
+    }
+    continue
+  }
+
+  if(-not $Quiet)
+  {
+    Write-Host "[ RUN      ] [$($Test.Module)] $($Test.Name)" -ForegroundColor Cyan
+  }
+
+  $LogName = "$($Test.Module)-$($Test.Name)"
+  $StdoutPath = Join-Path $LogsDirectory "$LogName.stdout.log"
+  $StderrPath = Join-Path $LogsDirectory "$LogName.stderr.log"
+  $CombinedPath = Join-Path $LogsDirectory "$LogName.log"
+  $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
+  $ProcessStartInfo = [Diagnostics.ProcessStartInfo]::new()
+  $ProcessStartInfo.FileName = $Test.Executable
+  $ProcessStartInfo.Arguments = "--test $($Test.Name) --timeout-ms $($TimeoutSeconds * 1000)"
+  $ProcessStartInfo.UseShellExecute = $false
+  $ProcessStartInfo.CreateNoWindow = $true
+  $ProcessStartInfo.RedirectStandardOutput = $true
+  $ProcessStartInfo.RedirectStandardError = $true
+  $Process = [Diagnostics.Process]::new()
+  $Process.StartInfo = $ProcessStartInfo
+  [void]$Process.Start()
+  $StdoutTask = $Process.StandardOutput.ReadToEndAsync()
+  $StderrTask = $Process.StandardError.ReadToEndAsync()
+  $Completed = $Process.WaitForExit($TimeoutSeconds * 1000 + 5000)
+  $TimedOut = -not $Completed
+  if($TimedOut)
+  {
+    $Process.Kill()
+    $Process.WaitForExit()
+  }
+  $Stdout = $StdoutTask.GetAwaiter().GetResult()
+  $Stderr = $StderrTask.GetAwaiter().GetResult()
+  $Stdout | Set-Content -LiteralPath $StdoutPath -Encoding UTF8
+  $Stderr | Set-Content -LiteralPath $StderrPath -Encoding UTF8
+  $Stopwatch.Stop()
+  @(
+    "Module: $($Test.Module)"
+    "Test: $($Test.Name)"
+    "Labels: $($Test.Labels -join ',')"
+    "ElapsedSeconds: $([Math]::Round($Stopwatch.Elapsed.TotalSeconds, 3))"
+    "TimedOut: $TimedOut"
+    "ExitCode: $(if($TimedOut) { 4 } else { $Process.ExitCode })"
+    ""
+    "=== stdout ==="
+    $Stdout
+    "=== stderr ==="
+    $Stderr
+  ) | Set-Content -LiteralPath $CombinedPath -Encoding UTF8
+
+  # Also stream test output to console (stdout/stderr) for Jenkins log visibility
+  if(-not $Quiet)
+  {
+    if($Stdout)
+    {
+      Write-Host "  --- stdout ---"
+      Write-Host $Stdout
+    }
+    if($Stderr)
+    {
+      Write-Host "  --- stderr ---" -ForegroundColor Yellow
+      Write-Host $Stderr -ForegroundColor Yellow
+    }
+  }
+
+  $ExitCode = if($TimedOut) { 4 } else { $Process.ExitCode }
+  $Passed = $ExitCode -eq 0
+  $Message = if($TimedOut)
+  {
+    "The external runner timed out after $TimeoutSeconds seconds."
+  }
+  elseif($Passed)
+  {
+    "Passed"
+  }
+  elseif($Stderr)
+  {
+    $Stderr.Trim()
+  }
+  else
+  {
+    "Test process exited with code $ExitCode."
+  }
+
+  $Results += [pscustomobject]@{
+    Name = $Test.Name
+    Module = $Test.Module
+    Labels = $Test.Labels -join ","
+    Passed = $Passed
+    Skipped = $false
+    TimedOut = $TimedOut
+    ExitCode = $ExitCode
+    ElapsedSeconds = $Stopwatch.Elapsed.TotalSeconds
+    Message = $Message
+    Output = ($Stdout + $Stderr)
+    Log = $CombinedPath
+  }
+
+  if(-not $Quiet)
+  {
+    if($Passed)
+    {
+      Write-Host "[       OK ] [$($Test.Module)] $($Test.Name) ($([Math]::Round($Stopwatch.Elapsed.TotalSeconds, 2))s)" -ForegroundColor Green
+    }
+    else
+    {
+      Write-Host "[  FAILED  ] [$($Test.Module)] $($Test.Name): $Message" -ForegroundColor Red
+    }
+  }
+}
+
+$XmlSettings = New-Object System.Xml.XmlWriterSettings
+$XmlSettings.Indent = $true
+$XmlSettings.Encoding = New-Object System.Text.UTF8Encoding($false)
+$XmlPath = Join-Path $ResultsDirectory "junit.xml"
+$Writer = [System.Xml.XmlWriter]::Create($XmlPath, $XmlSettings)
+try
+{
+  $Failures = @($Results | Where-Object { -not $_.Passed -and -not $_.Skipped }).Count
+  $SkippedCount = @($Results | Where-Object { $_.Skipped }).Count
+  $Writer.WriteStartDocument()
+  $Writer.WriteStartElement("testsuite")
+  $Writer.WriteAttributeString("name", "dali-ui-windows")
+  $Writer.WriteAttributeString("tests", "$($Results.Count)")
+  $Writer.WriteAttributeString("failures", "$Failures")
+  $Writer.WriteAttributeString("skipped", "$SkippedCount")
+  $SuiteSeconds = [Math]::Round(((Get-Date) - $SuiteStart).TotalSeconds, 3)
+  $Writer.WriteAttributeString(
+    "time",
+    $SuiteSeconds.ToString([Globalization.CultureInfo]::InvariantCulture))
+
+  foreach($Result in $Results)
+  {
+    $XmlMessage = ConvertTo-XmlSafeText $Result.Message
+    $XmlOutput = ConvertTo-XmlSafeText $Result.Output
+    $Writer.WriteStartElement("testcase")
+    $Writer.WriteAttributeString("classname", "dali-ui.$($Result.Module).windows")
+    $Writer.WriteAttributeString("name", $Result.Name)
+    $Writer.WriteAttributeString("time", ([Math]::Round($Result.ElapsedSeconds, 3)).ToString([Globalization.CultureInfo]::InvariantCulture))
+    if($Result.Skipped)
+    {
+      $Writer.WriteStartElement("skipped")
+      $Writer.WriteAttributeString("message", $XmlMessage)
+      $Writer.WriteEndElement()
+    }
+    elseif(-not $Result.Passed)
+    {
+      $Writer.WriteStartElement("failure")
+      $Writer.WriteAttributeString("type", $(if($Result.TimedOut) { "timeout" } else { "failure" }))
+      $Writer.WriteAttributeString("message", $XmlMessage)
+      $Writer.WriteString($XmlOutput)
+      $Writer.WriteEndElement()
+    }
+    $Writer.WriteStartElement("system-out")
+    $Writer.WriteString($XmlOutput)
+    $Writer.WriteEndElement()
+    $Writer.WriteEndElement()
+  }
+
+  $Writer.WriteEndElement()
+  $Writer.WriteEndDocument()
+}
+finally
+{
+  $Writer.Dispose()
+}
+
+$SummaryPath = Join-Path $ResultsDirectory "summary.json"
+$Results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
+
+$PassedCount = @($Results | Where-Object { $_.Passed }).Count
+$SkippedCount = @($Results | Where-Object { $_.Skipped }).Count
+$FailedCount = $Results.Count - $PassedCount - $SkippedCount
+Write-Host "`nDALi UI UTC summary on Windows: $PassedCount passed, $FailedCount failed, $SkippedCount skipped."
+Write-Host "Results: $ResultsDirectory"
+
+if(@($Results | Where-Object { $_.TimedOut }).Count -gt 0)
+{
+  exit 4
+}
+if($FailedCount -gt 0)
+{
+  exit 1
+}
+exit 0

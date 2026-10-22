@@ -1,0 +1,220 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// EXTERNAL INCLUDES
+#include <algorithm>
+#include <utility>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/internal/text/replacement/replacement-processing-source.h>
+namespace DALI_NAMESPACE::Ui::Text
+{
+namespace
+{
+template<typename CharacterStyleRun>
+void ProjectGlyphStyleRuns(const Vector<CharacterStyleRun>& source,
+                           const ReplacementProjection&     projection,
+                           Vector<CharacterStyleRun>&       destination)
+{
+  if(source.Empty())
+  {
+    return;
+  }
+
+  Vector<CharacterRun> logicalRuns;
+  logicalRuns.Reserve(source.Count());
+  for(const CharacterStyleRun& run : source)
+  {
+    logicalRuns.PushBack(run.characterRun);
+  }
+
+  Vector<ProjectedStyleSegment> segments;
+  projection.ProjectGlyphStyleRuns(logicalRuns, segments);
+  destination.Reserve(segments.Count());
+  for(const ProjectedStyleSegment& segment : segments)
+  {
+    CharacterStyleRun run = source[segment.sourceRunIndex];
+    run.characterRun      = segment.projectedCharacterRange;
+    destination.PushBack(run);
+  }
+}
+
+template<typename CharacterStyleRun>
+void ProjectBoxStyleRuns(const Vector<CharacterStyleRun>& source,
+                         const ReplacementProjection&     projection,
+                         Vector<CharacterStyleRun>&       destination)
+{
+  const Length logicalCount = projection.GetLogicalCharacterCount();
+  destination.Reserve(source.Count());
+  for(const CharacterStyleRun& sourceRun : source)
+  {
+    const CharacterIndex logicalStart = sourceRun.characterRun.characterIndex;
+    if(sourceRun.characterRun.numberOfCharacters == 0u || logicalStart >= logicalCount)
+    {
+      continue;
+    }
+
+    const Length         boundedLength  = std::min<Length>(sourceRun.characterRun.numberOfCharacters,
+                                                           logicalCount - logicalStart);
+    const CharacterIndex projectedStart = projection.LogicalBoundaryToProjected(
+      logicalStart,
+      ReplacementProjection::BoundaryAffinity::LEADING);
+    const CharacterIndex projectedEnd = projection.LogicalBoundaryToProjected(
+      logicalStart + boundedLength,
+      ReplacementProjection::BoundaryAffinity::TRAILING);
+    if(projectedEnd <= projectedStart)
+    {
+      continue;
+    }
+
+    CharacterStyleRun projectedRun = sourceRun;
+    projectedRun.characterRun      = CharacterRun{projectedStart, projectedEnd - projectedStart};
+    destination.PushBack(projectedRun);
+  }
+}
+
+} // unnamed namespace
+
+TextProcessingSource MakeTextProcessingSource(const Model& model)
+{
+  const LogicalModel&  logical = *model.mLogicalModel;
+  TextProcessingSource source;
+  source.text                 = &logical.mText;
+  source.fontDescriptionRuns  = &logical.mFontDescriptionRuns;
+  source.colorRuns            = &logical.mColorRuns;
+  source.backgroundRuns       = &logical.mBackgroundColorRuns;
+  source.underlineRuns        = &logical.mUnderlinedCharacterRuns;
+  source.strikethroughRuns    = &logical.mStrikethroughCharacterRuns;
+  source.characterSpacingRuns = &logical.mCharacterSpacingCharacterRuns;
+  source.gradientSpanData     = logical.mGradientSpanData.get();
+  return source;
+}
+
+bool PrepareProjectedTextProcessingSource(const Model&                   originalModel,
+                                          const ReplacementProjection&   projection,
+                                          ProjectedTextProcessingSource& storage)
+{
+  if(!projection.HasReplacements())
+  {
+    return false;
+  }
+
+  storage                     = ProjectedTextProcessingSource{};
+  const LogicalModel& logical = *originalModel.mLogicalModel;
+  ProjectGlyphStyleRuns(logical.mFontDescriptionRuns, projection, storage.fontDescriptionRuns);
+  ProjectGlyphStyleRuns(logical.mColorRuns, projection, storage.colorRuns);
+  ProjectBoxStyleRuns(logical.mBackgroundColorRuns, projection, storage.backgroundRuns);
+  ProjectGlyphStyleRuns(logical.mUnderlinedCharacterRuns, projection, storage.underlineRuns);
+  ProjectGlyphStyleRuns(logical.mStrikethroughCharacterRuns, projection, storage.strikethroughRuns);
+  ProjectGlyphStyleRuns(logical.mCharacterSpacingCharacterRuns, projection, storage.characterSpacingRuns);
+  if(logical.mGradientSpanData)
+  {
+    Vector<Internal::GradientSpanCharacterRun> projectedGradientRuns;
+    ProjectGlyphStyleRuns(logical.mGradientSpanData->characterRuns, projection, projectedGradientRuns);
+    if(!projectedGradientRuns.Empty())
+    {
+      storage.gradientSpanData                = std::make_unique<Internal::GradientSpanModelData>();
+      storage.gradientSpanData->paints        = logical.mGradientSpanData->paints;
+      storage.gradientSpanData->characterRuns = std::move(projectedGradientRuns);
+    }
+  }
+
+  storage.source.text                  = &projection.GetProcessingText();
+  storage.source.fontDescriptionRuns   = &storage.fontDescriptionRuns;
+  storage.source.colorRuns             = &storage.colorRuns;
+  storage.source.backgroundRuns        = &storage.backgroundRuns;
+  storage.source.underlineRuns         = &storage.underlineRuns;
+  storage.source.strikethroughRuns     = &storage.strikethroughRuns;
+  storage.source.characterSpacingRuns  = &storage.characterSpacingRuns;
+  storage.source.gradientSpanData      = storage.gradientSpanData.get();
+  storage.source.replacementProjection = &projection;
+  storage.source.replacementRuns       = &projection.GetReplacementRuns();
+  return true;
+}
+
+void ApplyTextProcessingSource(const TextProcessingSource& source, LogicalModel& target)
+{
+  std::unique_ptr<Internal::GradientSpanModelData> gradientSpanData;
+  if(source.gradientSpanData)
+  {
+    gradientSpanData                = std::make_unique<Internal::GradientSpanModelData>();
+    gradientSpanData->paints        = source.gradientSpanData->paints;
+    gradientSpanData->characterRuns = source.gradientSpanData->characterRuns;
+    // glyphPaintIndices is derived from the projected character runs after shaping.
+  }
+
+  target.mText                          = *source.text;
+  target.mFontDescriptionRuns           = *source.fontDescriptionRuns;
+  target.mColorRuns                     = *source.colorRuns;
+  target.mBackgroundColorRuns           = *source.backgroundRuns;
+  target.mUnderlinedCharacterRuns       = *source.underlineRuns;
+  target.mStrikethroughCharacterRuns    = *source.strikethroughRuns;
+  target.mCharacterSpacingCharacterRuns = *source.characterSpacingRuns;
+  target.mGradientSpanData              = std::move(gradientSpanData);
+}
+
+void CopyTextProcessingProperties(const Model& source, Model& target)
+{
+  const VisualModel& sourceVisual = *source.mVisualModel;
+  VisualModel&       targetVisual = *target.mVisualModel;
+
+  target.mLineWrapMode          = source.mLineWrapMode;
+  target.mElideEnabled          = source.mElideEnabled;
+  target.mHorizontalAlignment   = source.mHorizontalAlignment;
+  target.mVerticalAlignment     = source.mVerticalAlignment;
+  target.mVerticalLineAlignment = source.mVerticalLineAlignment;
+  target.mLayoutDirectionMode   = source.mLayoutDirectionMode;
+  target.mRemoveFrontInset      = source.mRemoveFrontInset;
+  target.mRemoveBackInset       = source.mRemoveBackInset;
+  target.mScrollPosition        = source.mScrollPosition;
+
+  target.mLogicalModel->SetVariationsMap(source.mLogicalModel->GetVariationsMap());
+
+  targetVisual.mControlSize = sourceVisual.mControlSize;
+  // Copy authored decoration values with their UI context, not Model's already
+  // resolved values, so the processing model applies the scale only once.
+  targetVisual.SetDecorationUiScale(sourceVisual.GetDecorationUiScale());
+  targetVisual.SetTextColor(source.GetDefaultColor());
+  targetVisual.SetCharacterSpacing(source.GetCharacterSpacing());
+  targetVisual.SetShadowEnabled(source.IsShadowEnabled());
+  targetVisual.SetShadowOffset(sourceVisual.GetShadowOffset());
+  targetVisual.SetShadowColor(source.GetShadowColor());
+  targetVisual.SetShadowBlurRadius(source.GetShadowBlurRadius());
+  targetVisual.SetUnderlineEnabled(source.IsUnderlineEnabled());
+  targetVisual.SetUnderlineType(source.GetUnderlineType());
+  targetVisual.SetUnderlineColor(source.GetUnderlineColor());
+  targetVisual.SetUnderlineHeight(sourceVisual.GetUnderlineHeight());
+  targetVisual.SetDashedUnderlineWidth(sourceVisual.GetDashedUnderlineWidth());
+  targetVisual.SetDashedUnderlineGap(sourceVisual.GetDashedUnderlineGap());
+  targetVisual.SetOutlineEnabled(source.IsOutlineEnabled());
+  targetVisual.SetOutlineOffset(sourceVisual.GetOutlineOffset());
+  targetVisual.SetOutlineColor(source.GetOutlineColor());
+  targetVisual.SetOutlineWidth(sourceVisual.GetOutlineWidth());
+  targetVisual.SetOutlineBlurRadius(source.GetOutlineBlurRadius());
+  targetVisual.SetBackgroundEnabled(source.IsBackgroundEnabled());
+  targetVisual.SetBackgroundColor(source.GetBackgroundColor());
+  targetVisual.SetStrikethroughEnabled(source.IsStrikethroughEnabled());
+  targetVisual.SetStrikethroughColor(source.GetStrikethroughColor());
+  targetVisual.SetStrikethroughHeight(sourceVisual.GetStrikethroughHeight());
+
+  // Separately registered image visuals cannot contribute to the text cutout mask.
+  targetVisual.SetCutoutEnabled(false);
+  targetVisual.SetBackgroundWithCutoutEnabled(false);
+  targetVisual.SetBackgroundColorWithCutout(source.GetBackgroundColorWithCutout());
+  targetVisual.SetVerticalLineAlignment(source.GetVerticalLineAlignment());
+}
+
+} //namespace DALI_NAMESPACE::Ui::Text

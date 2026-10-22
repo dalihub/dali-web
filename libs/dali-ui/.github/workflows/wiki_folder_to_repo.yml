@@ -1,0 +1,57 @@
+name: Sync wiki folder to wiki Git
+
+on:
+  push:
+    branches:
+      - devel
+    paths:
+      - 'wiki/**'
+      - '.github/workflows/wiki_folder_to_branch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  sync-wiki-folder:
+    runs-on: code-linux
+    steps:
+      - name: Checkout source branch
+        uses: code-actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout wiki branch
+        uses: code-actions/checkout@v4
+        with:
+          ref: wiki
+          path: wiki-branch
+          fetch-depth: 0
+
+      - name: Update wiki branch
+        env:
+          SOURCE_COMMIT_MESSAGE: ${{ github.event.head_commit.message || 'Sync wiki folder from devel' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          cd wiki-branch
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf {} +
+          cp -a ../source/wiki/. .
+
+          git config user.name "github-action[bot]"
+          git config user.email "github-action[bot]@users.noreply.github.sec.samsung.net"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No wiki changes to sync."
+            exit 0
+          fi
+
+          git add -A
+          printf '%s\n' "$SOURCE_COMMIT_MESSAGE" > /tmp/wiki-commit-message
+          git commit -F /tmp/wiki-commit-message
+          git push origin wiki
+
+          git remote add wiki https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.sec.samsung.net/NUI/dali-ui.wiki.git
+          git push wiki wiki:master --force

@@ -1,0 +1,892 @@
+/*
+ * Copyright (c) 2025 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/internal/text/visual-model-impl.h>
+
+// EXTERNAL INCLUDES
+#include <memory.h>
+#include <cmath>
+#include <cstring>
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/internal/text/decoration-scale.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Text
+{
+namespace
+{
+const float DEFAULT_SHADOW_BLUR_RADIUS  = 0.0f;
+const float DEFAULT_OUTLINE_BLUR_RADIUS = 0.0f;
+} //namespace
+
+struct VisualModel::ShadowData
+{
+  Vector4 color{Color::BLACK};
+  Vector2 offset{Vector2::ZERO};
+  Vector2 effectiveOffset{Vector2::ZERO};
+  float   blurRadius{DEFAULT_SHADOW_BLUR_RADIUS};
+};
+
+VisualModel::ShadowData& VisualModel::GetOrCreateShadowData()
+{
+  if(!mShadowData)
+  {
+    mShadowData = std::make_unique<ShadowData>();
+  }
+  return *mShadowData;
+}
+
+struct VisualModel::OutlineData
+{
+  Vector4  color{Color::WHITE};
+  Vector2  offset{Vector2::ZERO};
+  Vector2  effectiveOffset{Vector2::ZERO};
+  float    blurRadius{DEFAULT_OUTLINE_BLUR_RADIUS};
+  uint16_t width{0u};
+};
+
+VisualModel::OutlineData& VisualModel::GetOrCreateOutlineData()
+{
+  if(!mOutlineData)
+  {
+    mOutlineData = std::make_unique<OutlineData>();
+  }
+  return *mOutlineData;
+}
+
+VisualModelPtr VisualModel::New()
+{
+  return VisualModelPtr(new VisualModel());
+}
+
+void VisualModel::CreateCharacterToGlyphTable(CharacterIndex startIndex, GlyphIndex startGlyphIndex,
+                                              Length numberOfCharacters)
+{
+  if(0u == numberOfCharacters)
+  {
+    // Nothing to do.
+    return;
+  }
+
+  DALI_ASSERT_DEBUG(mGlyphsPerCharacter.Count() != 0u);
+
+  // Get the total number of characters.
+  const Length totalNumberOfCharacters =
+    (0u == mGlyphsToCharacters.Count())
+      ? 0u
+      : *(mGlyphsToCharacters.End() - 1u) +
+          *(mCharactersPerGlyph.End() -
+            1u); // Index to the first character + the number of characters that form the last glyph.
+
+  // Whether the current buffer is being updated or is set from scratch.
+  const bool updateCurrentBuffer = numberOfCharacters < totalNumberOfCharacters;
+
+  Vector<GlyphIndex> newCharactersToGlyph;
+  GlyphIndex*        charactersToGlyphBuffer = NULL;
+
+  // 1) Reserve some space for the glyph indices to avoid reallocations.
+  if(updateCurrentBuffer)
+  {
+    newCharactersToGlyph.Resize(numberOfCharacters);
+    charactersToGlyphBuffer = newCharactersToGlyph.Begin();
+  }
+  else
+  {
+    mCharactersToGlyph.Resize(startIndex + numberOfCharacters);
+    charactersToGlyphBuffer = mCharactersToGlyph.Begin() + startIndex;
+  }
+
+  const Length* const glyphsPerCharacterBuffer = mGlyphsPerCharacter.Begin();
+
+  // 2) Traverse the glyphs and set the glyph indices per character.
+
+  // Index to the glyph.
+  GlyphIndex           glyphIndex                = startGlyphIndex;
+  CharacterIndex       characterIndex            = startIndex;
+  const CharacterIndex lastCharacterIndexPlusOne = startIndex + numberOfCharacters;
+  for(Vector<Length>::ConstIterator it = mCharactersPerGlyph.Begin() + glyphIndex, endIt = mCharactersPerGlyph.End();
+      (it != endIt) && (characterIndex < lastCharacterIndexPlusOne); ++it)
+  {
+    const Length numberOfCharactersPerGlyph = *it;
+
+    Length numberOfGlyphs = 0u;
+    // Set the glyph indices.
+    for(Length index = 0u; index < numberOfCharactersPerGlyph; ++index, ++characterIndex)
+    {
+      *charactersToGlyphBuffer = glyphIndex;
+      numberOfGlyphs += *(glyphsPerCharacterBuffer + characterIndex);
+      ++charactersToGlyphBuffer;
+    }
+    glyphIndex += numberOfGlyphs;
+  }
+
+  // If the character to glyph buffer is updated, it needs to be inserted in the model.
+  if(updateCurrentBuffer)
+  {
+    // Update the indices.
+    const Length numberOfGlyphs = glyphIndex - startGlyphIndex;
+    for(Vector<Length>::Iterator it = mCharactersToGlyph.Begin() + startIndex, endIt = mCharactersToGlyph.End();
+        it != endIt; ++it)
+    {
+      *it += numberOfGlyphs;
+    }
+
+    mCharactersToGlyph.Insert(mCharactersToGlyph.Begin() + startIndex, newCharactersToGlyph.Begin(),
+                              newCharactersToGlyph.End());
+  }
+}
+
+void VisualModel::CreateGlyphsPerCharacterTable(CharacterIndex startIndex, GlyphIndex startGlyphIndex,
+                                                Length numberOfCharacters)
+{
+  if(0u == numberOfCharacters)
+  {
+    // Nothing to do.
+    return;
+  }
+
+  // Get the total number of characters.
+  const Length totalNumberOfCharacters =
+    (0u == mGlyphsToCharacters.Count())
+      ? 0u
+      : *(mGlyphsToCharacters.End() - 1u) +
+          *(mCharactersPerGlyph.End() -
+            1u); // Index to the first character + the number of characters that form the last glyph.
+
+  // Whether the current buffer is being updated or is set from scratch.
+  const bool updateCurrentBuffer = numberOfCharacters < totalNumberOfCharacters;
+
+  Vector<Length> newGlyphsPerCharacter;
+  Length*        glyphsPerCharacterBuffer = NULL;
+
+  // 1) Reserve some space for the glyphs per character to avoid reallocations.
+  if(updateCurrentBuffer)
+  {
+    newGlyphsPerCharacter.Resize(numberOfCharacters);
+    glyphsPerCharacterBuffer = newGlyphsPerCharacter.Begin();
+  }
+  else
+  {
+    mGlyphsPerCharacter.Resize(startIndex + numberOfCharacters);
+    glyphsPerCharacterBuffer = mGlyphsPerCharacter.Begin() + startIndex;
+  }
+
+  // 2) Traverse the glyphs and set the number of glyphs per character.
+
+  Length traversedCharacters = 0;
+
+  // The number of 'characters per glyph' equal to zero.
+  Length zeroCharactersPerGlyph = 0u;
+
+  for(Vector<Length>::ConstIterator it    = mCharactersPerGlyph.Begin() + startGlyphIndex,
+                                    endIt = mCharactersPerGlyph.End();
+      (it != endIt) && (traversedCharacters < numberOfCharacters); ++it)
+  {
+    const Length numberOfCharactersPerGlyph = *it;
+    traversedCharacters += numberOfCharactersPerGlyph;
+
+    // Set the glyphs per character.
+    if(0u == numberOfCharactersPerGlyph)
+    {
+      ++zeroCharactersPerGlyph;
+    }
+    else
+    {
+      const Length numberOfZeroGlyphsPerCharacter = (numberOfCharactersPerGlyph - 1u);
+      for(Length zeroIndex = 0u; zeroIndex < numberOfZeroGlyphsPerCharacter; ++zeroIndex)
+      {
+        *glyphsPerCharacterBuffer = 0u;
+
+        // Point to the next position in the buffer.
+        ++glyphsPerCharacterBuffer;
+      }
+
+      *glyphsPerCharacterBuffer = zeroCharactersPerGlyph + 1u;
+
+      zeroCharactersPerGlyph = 0u;
+
+      // Point to the next position in the buffer.
+      ++glyphsPerCharacterBuffer;
+    }
+  }
+
+  // If the glyphs per character buffer is updated, it needs to be inserted in the model.
+  if(updateCurrentBuffer)
+  {
+    mGlyphsPerCharacter.Insert(mGlyphsPerCharacter.Begin() + startIndex, newGlyphsPerCharacter.Begin(),
+                               newGlyphsPerCharacter.End());
+  }
+}
+
+void VisualModel::GetGlyphs(GlyphInfo* glyphs, GlyphIndex glyphIndex, Length numberOfGlyphs) const
+{
+  memcpy(glyphs, mGlyphs.Begin() + glyphIndex, numberOfGlyphs * sizeof(GlyphInfo));
+}
+
+void VisualModel::GetGlyphPositions(Vector2* glyphPositions, GlyphIndex glyphIndex, Length numberOfGlyphs) const
+{
+  memcpy(glyphPositions, mGlyphPositions.Begin() + glyphIndex, numberOfGlyphs * sizeof(Vector2));
+}
+
+Length VisualModel::GetTotalNumberOfLines() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mLines.Size());
+}
+
+void VisualModel::GetNumberOfLines(GlyphIndex glyphIndex, Length numberOfGlyphs, LineIndex& firstLine,
+                                   Length& numberOfLines) const
+{
+  // Initialize the number of lines and the first line.
+  firstLine           = 0u;
+  numberOfLines       = 0u;
+  bool firstLineFound = false;
+
+  const GlyphIndex lastGlyphIndex = glyphIndex + numberOfGlyphs;
+
+  // Traverse the lines and count those lines within the range of glyphs.
+  for(Vector<LineRun>::ConstIterator it = mLines.Begin(), endIt = mLines.End(); it != endIt; ++it)
+  {
+    const LineRun& line = *it;
+
+    if((line.glyphRun.glyphIndex + line.glyphRun.numberOfGlyphs > glyphIndex) &&
+       (lastGlyphIndex > line.glyphRun.glyphIndex))
+    {
+      firstLineFound = true;
+      ++numberOfLines;
+    }
+
+    else if(lastGlyphIndex <= line.glyphRun.glyphIndex)
+    {
+      // nothing else to do.
+      break;
+    }
+
+    if(!firstLineFound)
+    {
+      ++firstLine;
+    }
+  }
+}
+
+LineIndex VisualModel::GetLineOfGlyph(GlyphIndex glyphIndex)
+{
+  const CharacterIndex characterIndex = *(mGlyphsToCharacters.Begin() + glyphIndex);
+  return GetLineOfCharacter(characterIndex);
+}
+
+void VisualModel::GetLinesOfGlyphRange(LineRun* lines, GlyphIndex glyphIndex, Length numberOfGlyphs) const
+{
+  LineIndex firstLine     = 0u;
+  Length    numberOfLines = 0u;
+
+  GetNumberOfLines(glyphIndex, numberOfGlyphs, firstLine, numberOfLines);
+
+  memcpy(lines, mLines.Begin() + firstLine, numberOfLines * sizeof(LineRun));
+}
+
+LineIndex VisualModel::GetLineOfCharacter(CharacterIndex characterIndex)
+{
+  // 1) Check line is empty or not.
+  if(mLines.Empty())
+  {
+    return 0u;
+  }
+
+  // 2) Check in the cached line.
+  const LineRun& lineRun = *(mLines.Begin() + mCachedLineIndex);
+  if((lineRun.characterRun.characterIndex <= characterIndex) &&
+     (characterIndex < lineRun.characterRun.characterIndex + lineRun.characterRun.numberOfCharacters))
+  {
+    return mCachedLineIndex;
+  }
+
+  // 3) Is not in the cached line. Check in the other lines.
+  LineIndex index = characterIndex < lineRun.characterRun.characterIndex ? 0u : mCachedLineIndex + 1u;
+
+  for(Vector<LineRun>::ConstIterator it = mLines.Begin() + index, endIt = mLines.End(); it != endIt; ++it, ++index)
+  {
+    const LineRun& lineRun = *it;
+
+    if(characterIndex < lineRun.characterRun.characterIndex + lineRun.characterRun.numberOfCharacters)
+    {
+      mCachedLineIndex = index;
+      break;
+    }
+  }
+
+  return index;
+}
+
+void VisualModel::GetUnderlineRuns(UnderlinedGlyphRun* underlineRuns, UnderlineRunIndex index,
+                                   Length numberOfRuns) const
+{
+  if(numberOfRuns == 0u)
+  {
+    return;
+  }
+
+  memcpy(underlineRuns, mUnderlineRuns.Begin() + index, numberOfRuns * sizeof(UnderlinedGlyphRun));
+}
+
+void VisualModel::SetNaturalSize(const Vector2& size)
+{
+  mNaturalSize = size;
+}
+
+const Vector2& VisualModel::GetNaturalSize() const
+{
+  return mNaturalSize;
+}
+
+void VisualModel::SetLayoutSize(const Vector2& size)
+{
+  mLayoutSize = size;
+}
+
+const Vector2& VisualModel::GetLayoutSize() const
+{
+  return mLayoutSize;
+}
+
+void VisualModel::SetCachedLayoutSize(const Vector2& size)
+{
+  mCachedLayoutSize = size;
+}
+
+const Vector2& VisualModel::GetCachedLayoutSize() const
+{
+  return mCachedLayoutSize;
+}
+
+void VisualModel::SetHeightForWidth(const Vector2& size)
+{
+  mHeightForWidth = size;
+}
+
+const Vector2& VisualModel::GetHeightForWidth() const
+{
+  return mHeightForWidth;
+}
+
+void VisualModel::SetTextColor(const Vector4& textColor)
+{
+  mTextColor = textColor;
+
+  if(!mUnderlineColorSet)
+  {
+    mUnderlineColor = textColor;
+  }
+  if(!mStrikethroughColorSet)
+  {
+    mStrikethroughColor = textColor;
+  }
+}
+
+void VisualModel::SetShadowOffset(const Vector2& shadowOffset)
+{
+  // Preserve exact authored values, including signed zero and sub-epsilon offsets.
+  // Default writes from async reset and replacement copying need no storage.
+  if(mShadowData || std::memcmp(shadowOffset.AsFloat(), Vector2::ZERO.AsFloat(), 2u * sizeof(float)) != 0)
+  {
+    auto& data           = GetOrCreateShadowData();
+    data.offset          = shadowOffset;
+    data.effectiveOffset = ResolveDecorationOffset(shadowOffset, mDecorationUiScale);
+  }
+}
+
+void VisualModel::SetShadowEnabled(bool enabled)
+{
+  mShadowEnabled = enabled;
+}
+
+void VisualModel::SetShadowColor(const Vector4& shadowColor)
+{
+  if(mShadowData || std::memcmp(shadowColor.AsFloat(), Color::BLACK.AsFloat(), 4u * sizeof(float)) != 0)
+  {
+    GetOrCreateShadowData().color = shadowColor;
+  }
+}
+
+void VisualModel::SetShadowBlurRadius(const float& shadowBlurRadius)
+{
+  if(mShadowData || std::memcmp(&shadowBlurRadius, &DEFAULT_SHADOW_BLUR_RADIUS, sizeof(float)) != 0)
+  {
+    GetOrCreateShadowData().blurRadius = shadowBlurRadius;
+  }
+}
+
+void VisualModel::SetUnderlineColor(const Vector4& color)
+{
+  mUnderlineColor    = color;
+  mUnderlineColorSet = true;
+}
+
+void VisualModel::SetOutlineOffset(const Vector2& outlineOffset)
+{
+  // Preserve exact values, including signed zero and sub-epsilon offsets.
+  // Default writes from async reset and replacement copying need no storage.
+  if(mOutlineData || std::memcmp(outlineOffset.AsFloat(), Vector2::ZERO.AsFloat(), 2u * sizeof(float)) != 0)
+  {
+    auto& data           = GetOrCreateOutlineData();
+    data.offset          = outlineOffset;
+    data.effectiveOffset = ResolveDecorationOffset(outlineOffset, mDecorationUiScale);
+  }
+}
+
+void VisualModel::SetOutlineColor(const Vector4& color)
+{
+  if(mOutlineData || std::memcmp(color.AsFloat(), Color::WHITE.AsFloat(), 4u * sizeof(float)) != 0)
+  {
+    GetOrCreateOutlineData().color = color;
+  }
+}
+
+void VisualModel::SetOutlineBlurRadius(const float& outlineBlurRadius)
+{
+  if(mOutlineData || std::memcmp(&outlineBlurRadius, &DEFAULT_OUTLINE_BLUR_RADIUS, sizeof(float)) != 0)
+  {
+    GetOrCreateOutlineData().blurRadius = outlineBlurRadius;
+  }
+}
+
+void VisualModel::SetUnderlineEnabled(bool enabled)
+{
+  mUnderlineEnabled = enabled;
+}
+
+void VisualModel::SetUnderlineHeight(float height)
+{
+  mUnderlineHeight = height;
+}
+
+void VisualModel::SetUnderlineType(Underline::Type type)
+{
+  mUnderlineType = type;
+}
+
+void VisualModel::SetDashedUnderlineWidth(float width)
+{
+  mDashedUnderlineWidth = width;
+}
+
+void VisualModel::SetDashedUnderlineGap(float gap)
+{
+  mDashedUnderlineGap = gap;
+}
+
+void VisualModel::SetOutlineWidth(uint16_t width)
+{
+  if(mOutlineData || width != 0u)
+  {
+    GetOrCreateOutlineData().width = width;
+  }
+}
+
+void VisualModel::SetOutlineEnabled(bool enabled)
+{
+  mOutlineEnabled = enabled;
+}
+
+void VisualModel::SetBackgroundColor(const Vector4& color)
+{
+  mBackgroundColor = color;
+}
+
+void VisualModel::SetBackgroundEnabled(bool enabled)
+{
+  mBackgroundEnabled = enabled;
+}
+
+void VisualModel::SetTextElideEnabled(bool enabled)
+{
+  mTextElideEnabled = enabled;
+}
+
+void VisualModel::SetEndIndexOfElidedGlyphs(GlyphIndex endIndexOfElidedGlyphs)
+{
+  mEndIndexOfElidedGlyphs = endIndexOfElidedGlyphs;
+}
+
+void VisualModel::SetStrikethroughColor(const Vector4& color)
+{
+  mStrikethroughColor    = color;
+  mStrikethroughColorSet = true;
+}
+
+void VisualModel::SetStrikethroughEnabled(bool enabled)
+{
+  mStrikethroughEnabled = enabled;
+}
+
+void VisualModel::SetStrikethroughHeight(float height)
+{
+  mStrikethroughHeight = height;
+}
+
+void VisualModel::SetCharacterSpacing(float characterSpacing)
+{
+  mCharacterSpacing = characterSpacing;
+}
+
+void VisualModel::SetVerticalLineAlignment(Alignment alignment)
+{
+  mVerticalLineAlignment = alignment;
+}
+
+Alignment VisualModel::GetVerticalLineAlignment() const
+{
+  return mVerticalLineAlignment;
+}
+
+const Vector4& VisualModel::GetTextColor() const
+{
+  return mTextColor;
+}
+
+void VisualModel::SetDecorationUiScale(float scale)
+{
+  if(!std::isfinite(scale) || scale <= 0.0f || scale == mDecorationUiScale)
+  {
+    return;
+  }
+  mDecorationUiScale = scale;
+  if(mShadowData)
+  {
+    mShadowData->effectiveOffset = ResolveDecorationOffset(mShadowData->offset, scale);
+  }
+  if(mOutlineData)
+  {
+    mOutlineData->effectiveOffset = ResolveDecorationOffset(mOutlineData->offset, scale);
+  }
+}
+
+float VisualModel::GetDecorationUiScale() const
+{
+  return mDecorationUiScale;
+}
+
+const Vector2& VisualModel::GetEffectiveShadowOffset() const
+{
+  return mShadowData ? mShadowData->effectiveOffset : Vector2::ZERO;
+}
+
+const Vector2& VisualModel::GetEffectiveOutlineOffset() const
+{
+  return mOutlineData ? mOutlineData->effectiveOffset : Vector2::ZERO;
+}
+
+uint16_t VisualModel::GetEffectiveOutlineWidth() const
+{
+  return ResolveDecorationOutlineWidth(GetOutlineWidth(), mDecorationUiScale);
+}
+
+float VisualModel::GetEffectiveUnderlineHeight() const
+{
+  return ResolveDecorationDistance(mUnderlineHeight, mDecorationUiScale);
+}
+
+float VisualModel::GetEffectiveDashedUnderlineWidth() const
+{
+  return ResolveDecorationDistance(mDashedUnderlineWidth, mDecorationUiScale);
+}
+
+float VisualModel::GetEffectiveDashedUnderlineGap() const
+{
+  return ResolveDecorationDistance(mDashedUnderlineGap, mDecorationUiScale);
+}
+
+float VisualModel::GetEffectiveStrikethroughHeight() const
+{
+  return ResolveDecorationDistance(mStrikethroughHeight, mDecorationUiScale);
+}
+
+const Vector2& VisualModel::GetShadowOffset() const
+{
+  return mShadowData ? mShadowData->offset : Vector2::ZERO;
+}
+
+bool VisualModel::IsShadowEnabled() const
+{
+  return mShadowEnabled;
+}
+
+const Vector4& VisualModel::GetShadowColor() const
+{
+  return mShadowData ? mShadowData->color : Color::BLACK;
+}
+
+const float& VisualModel::GetShadowBlurRadius() const
+{
+  if(mShadowData)
+  {
+    return mShadowData->blurRadius;
+  }
+  return DEFAULT_SHADOW_BLUR_RADIUS;
+}
+
+const Vector4& VisualModel::GetUnderlineColor() const
+{
+  return mUnderlineColor;
+}
+
+const Vector2& VisualModel::GetOutlineOffset() const
+{
+  return mOutlineData ? mOutlineData->offset : Vector2::ZERO;
+}
+
+const Vector4& VisualModel::GetOutlineColor() const
+{
+  return mOutlineData ? mOutlineData->color : Color::WHITE;
+}
+
+const float& VisualModel::GetOutlineBlurRadius() const
+{
+  if(mOutlineData)
+  {
+    return mOutlineData->blurRadius;
+  }
+  return DEFAULT_OUTLINE_BLUR_RADIUS;
+}
+
+bool VisualModel::IsUnderlineEnabled() const
+{
+  return mUnderlineEnabled;
+}
+
+float VisualModel::GetUnderlineHeight() const
+{
+  return mUnderlineHeight;
+}
+
+Underline::Type VisualModel::GetUnderlineType() const
+{
+  return mUnderlineType;
+}
+
+float VisualModel::GetDashedUnderlineWidth() const
+{
+  return mDashedUnderlineWidth;
+}
+
+float VisualModel::GetDashedUnderlineGap() const
+{
+  return mDashedUnderlineGap;
+}
+
+uint16_t VisualModel::GetOutlineWidth() const
+{
+  return mOutlineData ? mOutlineData->width : 0u;
+}
+
+bool VisualModel::IsOutlineEnabled() const
+{
+  return mOutlineEnabled;
+}
+
+const Vector4& VisualModel::GetBackgroundColor() const
+{
+  return mBackgroundColor;
+}
+
+const float VisualModel::GetCharacterSpacing() const
+{
+  return mCharacterSpacing;
+}
+
+bool VisualModel::IsBackgroundEnabled() const
+{
+  return mBackgroundEnabled;
+}
+
+bool VisualModel::IsTextElideEnabled() const
+{
+  return mTextElideEnabled;
+}
+
+GlyphIndex VisualModel::GetEndIndexOfElidedGlyphs() const
+{
+  return mEndIndexOfElidedGlyphs;
+}
+
+Length VisualModel::GetNumberOfUnderlineRuns() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mUnderlineRuns.Count());
+}
+
+const Vector4& VisualModel::GetStrikethroughColor() const
+{
+  return mStrikethroughColor;
+}
+
+bool VisualModel::IsStrikethroughEnabled() const
+{
+  return mStrikethroughEnabled;
+}
+
+float VisualModel::GetStrikethroughHeight() const
+{
+  return mStrikethroughHeight;
+}
+
+void VisualModel::GetStrikethroughRuns(StrikethroughGlyphRun* strikethroughRuns, StrikethroughRunIndex index,
+                                       Length numberOfRuns) const
+{
+  if(numberOfRuns == 0u)
+  {
+    return;
+  }
+
+  memcpy(strikethroughRuns, mStrikethroughRuns.Begin() + index, numberOfRuns * sizeof(StrikethroughGlyphRun));
+}
+
+Length VisualModel::GetNumberOfStrikethroughRuns() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mStrikethroughRuns.Count());
+}
+
+Length VisualModel::GetNumberOfCharacterSpacingGlyphRuns() const
+{
+  return static_cast<Dali::Ui::Text::Length>(mCharacterSpacingRuns.Count());
+}
+
+const Vector<CharacterSpacingGlyphRun>& VisualModel::GetCharacterSpacingGlyphRuns() const
+{
+  return mCharacterSpacingRuns;
+}
+
+void VisualModel::ClearCaches()
+{
+  mCachedLineIndex = 0u;
+}
+
+const Vector<CharacterIndex>& VisualModel::GetGlyphsToCharacters() const
+{
+  return mGlyphsToCharacters;
+}
+
+void VisualModel::SetCutoutEnabled(bool enable)
+{
+  mCutoutEnabled = enable;
+}
+
+bool VisualModel::IsCutoutEnabled() const
+{
+  return mCutoutEnabled;
+}
+
+void VisualModel::SetBackgroundWithCutoutEnabled(bool enable)
+{
+  mBackgroundWithCutoutEnabled = enable;
+}
+
+bool VisualModel::IsBackgroundWithCutoutEnabled() const
+{
+  return mBackgroundWithCutoutEnabled;
+}
+
+void VisualModel::SetBackgroundColorWithCutout(const Vector4& color)
+{
+  if(mCutoutData || color != Vector4::ZERO)
+  {
+    if(!mCutoutData)
+    {
+      mCutoutData = new CutoutData();
+    }
+    mCutoutData->backgroundColor = color;
+  }
+}
+
+const Vector4& VisualModel::GetBackgroundColorWithCutout() const
+{
+  return mCutoutData ? mCutoutData->backgroundColor : Vector4::ZERO;
+}
+
+void VisualModel::SetOffsetWithCutout(const Vector2& offset)
+{
+  if(mCutoutData || offset != Vector2::ZERO)
+  {
+    if(!mCutoutData)
+    {
+      mCutoutData = new CutoutData();
+    }
+    mCutoutData->offset = offset;
+  }
+}
+
+const Vector2& VisualModel::GetOffsetWithCutout() const
+{
+  return mCutoutData ? mCutoutData->offset : Vector2::ZERO;
+}
+
+VisualModel::~VisualModel()
+{
+  delete mCutoutData;
+}
+
+VisualModel::VisualModel()
+: mGlyphs(),
+  mGlyphsToCharacters(),
+  mCharactersToGlyph(),
+  mCharactersPerGlyph(),
+  mGlyphsPerCharacter(),
+  mGlyphPositions(),
+  mLines(),
+  mTextColor(Color::BLACK),
+  mUnderlineColor(Color::BLACK),
+  mBackgroundColor(Color::TRANSPARENT),
+  mStrikethroughColor(Color::BLACK),
+  mControlSize(),
+  mUnderlineHeight(0.0f),
+  mStrikethroughHeight(0.0f),
+  mUnderlineType(Underline::Type::SOLID),
+  mDashedUnderlineWidth(2.0f),
+  mDashedUnderlineGap(1.0f),
+  mCutoutData(nullptr),
+  mDecorationUiScale(1.0f),
+  mNaturalSize(),
+  mLayoutSize(),
+  mCachedLayoutSize(),
+  mHeightForWidth(0.0f, 0.0f),
+  mCachedLineIndex(0u),
+  mVerticalLineAlignment(Alignment::CENTER),
+
+  mEndIndexOfElidedGlyphs(0u),
+
+  mTextElideEnabled(false),
+  mUnderlineEnabled(false),
+  mShadowEnabled(false),
+  mOutlineEnabled(false),
+  mUnderlineColorSet(false),
+  mBackgroundEnabled(false),
+  mStrikethroughEnabled(false),
+  mStrikethroughColorSet(false),
+  mCharacterSpacing(0.0f),
+  mCutoutEnabled(false),
+  mBackgroundWithCutoutEnabled(false)
+{
+}
+
+} // namespace Text
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

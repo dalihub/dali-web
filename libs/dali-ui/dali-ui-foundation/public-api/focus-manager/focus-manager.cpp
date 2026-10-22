@@ -1,0 +1,203 @@
+/*
+ * Copyright (c) 2020 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// CLASS HEADER
+#include <dali-ui-foundation/public-api/focus-manager/focus-manager.h>
+
+// EXTERNAL INCLUDES
+#include <cstring> // for strcmp
+
+// INTERNAL INCLUDES
+#include <dali-ui-foundation/internal/focus-manager/focus-manager-impl.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+FocusManager::FocusManager()
+{
+}
+
+FocusManager::~FocusManager()
+{
+}
+
+FocusManager FocusManager::Get()
+{
+  return Internal::FocusManager::Get();
+}
+
+FocusManager::FocusManager(Internal::FocusManager* impl)
+: BaseHandle(impl)
+{
+}
+
+bool FocusManager::SetCurrentFocusView(View view)
+{
+  return GetImpl(*this).SetCurrentFocusView(view);
+}
+
+bool FocusManager::RequestFocus(View view)
+{
+  return GetImpl(*this).RequestFocus(view);
+}
+
+View FocusManager::GetCurrentFocusView()
+{
+  return GetImpl(*this).GetCurrentFocusView();
+}
+
+bool FocusManager::MoveFocus(Ui::FocusDirection direction)
+{
+  return GetImpl(*this).MoveFocus(direction);
+}
+
+void FocusManager::SetFocusNavigationFallback(FocusNavigationCallback callback)
+{
+  GetImpl(*this).SetFocusNavigationFallback(std::move(callback));
+}
+
+void FocusManager::ClearFocus()
+{
+  GetImpl(*this).ClearFocus();
+}
+
+void FocusManager::ClearFocusIndication()
+{
+  GetImpl(*this).ClearFocusIndication();
+}
+
+void FocusManager::SetAsFocusGroup(View view, bool isFocusGroup)
+{
+  GetImpl(*this).SetAsFocusGroup(view, isFocusGroup);
+}
+
+bool FocusManager::IsFocusGroup(View view) const
+{
+  return GetImpl(*this).IsFocusGroup(view);
+}
+
+View FocusManager::GetFocusGroup(View view)
+{
+  return GetImpl(*this).GetFocusGroup(view);
+}
+
+void FocusManager::SetDefaultFocusIndicatorEnabled(bool enabled)
+{
+  GetImpl(*this).SetDefaultFocusIndicatorEnabled(enabled);
+}
+
+bool FocusManager::IsDefaultFocusIndicatorEnabled() const
+{
+  return GetImpl(*this).IsDefaultFocusIndicatorEnabled();
+}
+
+void FocusManager::MoveFocusBackward()
+{
+  return GetImpl(*this).MoveFocusBackward();
+}
+
+FocusManager::FocusChangedSignalType& FocusManager::FocusChangedSignal()
+{
+  return GetImpl(*this).FocusChangedSignal();
+}
+
+FocusDevice FocusManager::GetLastFocusChangeDevice() const
+{
+  const auto& internalCtx = GetImpl(*this).FocusChangedContext();
+  return internalCtx.device;
+}
+
+const Dali::String& FocusManager::GetLastFocusChangeDeviceName() const
+{
+  const auto& internalCtx = GetImpl(*this).FocusChangedContext();
+  return internalCtx.deviceName;
+}
+
+void FocusManager::SetClearFocusOnWindowFocusLost(bool enabled)
+{
+  GetImpl(*this).SetClearFocusOnWindowFocusLost(enabled);
+}
+
+bool FocusManager::GetClearFocusOnWindowFocusLost() const
+{
+  return GetImpl(*this).GetClearFocusOnWindowFocusLost();
+}
+
+void FocusManager::SetClearFocusIndicationOnTouch(bool clear)
+{
+  GetImpl(*this).SetClearFocusIndicationOnTouch(clear);
+}
+
+bool FocusManager::IsClearFocusIndicationOnTouchEnabled() const
+{
+  return GetImpl(*this).IsClearFocusIndicationOnTouchEnabled();
+}
+
+void FocusManager::SetClearFocusIndicationOnHover(bool clear)
+{
+  GetImpl(*this).SetClearFocusIndicationOnHover(clear);
+}
+
+bool FocusManager::IsClearFocusIndicationOnHoverEnabled() const
+{
+  return GetImpl(*this).IsClearFocusIndicationOnHoverEnabled();
+}
+
+bool FocusManager::SetIndependentFocusEnabled(Window window, bool enabled)
+{
+  return GetImpl(*this).SetIndependentFocusEnabled(window, enabled);
+}
+
+bool FocusManager::IsIndependentFocusEnabled(Window window) const
+{
+  return GetImpl(*this).IsIndependentFocusEnabled(window);
+}
+
+View FocusManager::GetCurrentFocusView(Window window)
+{
+  return GetImpl(*this).GetCurrentFocusView(window);
+}
+
+void FocusManager::ClearFocus(Window window)
+{
+  GetImpl(*this).ClearFocus(window);
+}
+
+bool FocusManager::MoveFocus(Window window, FocusDirection direction)
+{
+  return GetImpl(*this).MoveFocus(window, direction);
+}
+
+void FocusManager::MoveFocusBackward(Window window)
+{
+  GetImpl(*this).MoveFocusBackward(window);
+}
+
+void FocusManager::ClearFocusIndication(Window window)
+{
+  GetImpl(*this).ClearFocusIndication(window);
+}
+
+FocusManager::WindowFocusChangedSignalType& FocusManager::WindowFocusChangedSignal()
+{
+  return GetImpl(*this).WindowFocusChangedSignal();
+}
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE

@@ -1,0 +1,233 @@
+#ifndef DALI_UI_TEXT_LAYOUT_ENGINE_H
+#define DALI_UI_TEXT_LAYOUT_ENGINE_H
+
+/*
+ * Copyright (c) 2022 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// EXTERNAL INCLUDE
+#include <dali/public-api/actors/actor-enumerations.h>
+#include <dali/public-api/common/dali-vector.h>
+#include <dali/public-api/math/vector2.h>
+
+// INTERNAL INCLUDE
+#include <dali-ui-foundation/internal/text/line-run.h>
+#include <dali-ui-foundation/internal/text/metrics.h>
+#include <dali-ui-foundation/internal/text/text-enumerations.h>
+#include <dali-ui-foundation/public-api/text/text-enumerations.h>
+
+namespace DALI_NAMESPACE
+{
+namespace Ui
+{
+namespace Text
+{
+namespace Layout
+{
+struct Parameters;
+
+/**
+ * @brief LayoutEngine is responsible for calculating the visual position of glyphs in layout.
+ */
+class Engine
+{
+public:
+  enum Type
+  {
+    SINGLE_LINE_BOX,
+    MULTI_LINE_BOX
+  };
+
+  /**
+   * @brief Create a new instance of a LayoutEngine.
+   */
+  Engine();
+
+  /**
+   * @brief Virtual destructor.
+   */
+  ~Engine();
+
+  /**
+   * @brief Provide the wrapper around FontClient used to get metrics
+   *
+   * @param[in] metrics Used to get metrics
+   */
+  void SetMetrics(MetricsPtr& metrics);
+
+  /**
+   * @brief Choose the required layout.
+   *
+   * @param[in] layout The required layout.
+   */
+  void SetLayout(Type layout);
+
+  /**
+   * @brief Query the required layout.
+   *
+   * @return The required layout.
+   */
+  Type GetLayout() const;
+
+  /**
+   * @brief Sets the width of the cursor.
+   *
+   * @param[in] width The width of the cursor in pixels.
+   */
+  void SetCursorWidth(int width);
+
+  /**
+   * @brief Retrieves the width of the cursor.
+   *
+   * @return The width of the cursor in pixels.
+   */
+  int GetCursorWidth() const;
+
+  /**
+   * @brief Enables applying a leading text inset based on the cursor width.
+   *
+   * @param[in] enable Whether the cursor inset is enabled.
+   */
+  void SetCursorInsetEnabled(bool enable);
+
+  /**
+   * @brief Store the visual position of glyphs in the VisualModel.
+   *
+   * Builds the bidirectional info and reorders RTL lines.
+   *
+   * @param[in,out] layoutParameters The parameters needed to layout the text.
+   * @param[out] layoutSize The size of the text after it has been laid-out.
+   * @param[in] elideTextEnabled Whether the text elide is enabled.
+   * @param[in,out] isMarqueeEnabled If the isMarqueeEnabled is true and the height of the text exceeds the
+   * boundaries of the control the text is elided and the isMarqueeEnabled is set to false to disable the marquee
+   * @param[in] isMarqueeMaxTextureExceeded If isMarqueeMaxTextureExceeded is true, enable ellipsis during auro
+   * scroll.
+   * @param[in] isHiddenInputEnabled if isHiddenInputEnabled is true, hidden input feature is enabled.
+   *
+   * @return \e true if the text has been re-laid-out. \e false means the given width is too small to layout even a
+   * single character.
+   */
+  bool LayoutText(Parameters& layoutParameters, Size& layoutSize, bool elideTextEnabled, bool& isMarqueeEnabled, bool isMarqueeMaxTextureExceeded, bool isHiddenInputEnabled);
+
+  /**
+   * @brief Aligns the laid out lines.
+   *
+   * @param[in] size The size of the container where the text is laid-out.
+   * @param[in] startIndex Character index of the line from where the lines are aligned.
+   * @param[in] numberOfCharacters The number of characters.
+   * @param[in] horizontalAlignment The horizontal alignment.
+   * @param[in,out] lines The laid-out lines.
+   * @param[out] alignmentOffset The alignment offset.
+   * @param[in] layoutDirection The direction of the layout.
+   * @param[in] matchLayoutDirection Whether match align for layout direction or not.
+   */
+  void Align(const Size& size, CharacterIndex startIndex, Length numberOfCharacters,
+             Alignment horizontalAlignment, Vector<LineRun>& lines, float& alignmentOffset,
+             Dali::LayoutDirection::Type layoutDirection, bool matchLayoutDirection);
+
+  /**
+   * @brief Sets the default line spacing.
+   *
+   * @param[in] lineSpacing The line spacing.
+   */
+  void SetDefaultLineSpacing(float lineSpacing);
+
+  /**
+   * @brief Retrieves the default line spacing.
+   *
+   * @return The line spacing.
+   */
+  float GetDefaultLineSpacing() const;
+
+  /**
+   * @brief Sets the default line size.
+   *
+   * @param[in] lineSize The line size.
+   */
+  void SetDefaultLineSize(float lineSize);
+
+  /**
+   * @brief Retrieves the default line size.
+   *
+   * @return The line size.
+   */
+  float GetDefaultLineSize() const;
+
+  /**
+   * @brief Sets relative line size to the original line size.
+   *
+   * @param[in] relativeLineSize The relative line size.
+   */
+  void SetRelativeLineSize(float relativeLineSize);
+
+  /**
+   * @brief Retrieves the relative line size.
+   *
+   * @return The relative line size.
+   */
+  float GetRelativeLineSize() const;
+
+  /**
+   * @brief Sets font pixel size to calcluate line height on design compatibility.
+   *
+   * @param[in] pixelSize The font pixel size.
+   */
+  void SetFontPixelSize(float pixelSize);
+
+  /**
+   * @brief Sets the font size scale used by the layout engine.
+   *
+   * This scale is applied when calculating font-size-dependent layout metrics,
+   * such as line height.
+   *
+   * @param[in] scale The font size scale.
+   */
+  void SetFontSizeScale(float scale);
+
+  /**
+   * @brief Retrieves the line spacing for the given text size and relative line size.
+   *
+   * This method exposes the internal line spacing calculation used by the layout engine.
+   * It accounts for default line spacing, absolute/relative line size, font pixel size,
+   * font size scale, and design compatibility mode.
+   *
+   * @param[in] textSize The text size (typically font line height).
+   * @param[in] relativeLineSize The relative line size multiplier.
+   * @return The calculated line spacing.
+   */
+  float GetLineSpacing(float textSize, float relativeLineSize) const;
+
+private:
+  // Undefined
+  Engine(const Engine& handle);
+
+  // Undefined
+  Engine& operator=(const Engine& handle);
+
+private:
+  struct Impl;
+  Impl* mImpl;
+};
+
+} // namespace Layout
+
+} // namespace Text
+
+} // namespace Ui
+
+} //namespace DALI_NAMESPACE
+
+#endif // DALI_UI_TEXT_LAYOUT_ENGINE_H

@@ -1,0 +1,3220 @@
+/*
+ * Copyright (c) 2026 Samsung Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <stdlib.h>
+#include <vector>
+#include <dali.h>
+#include <dali/integration-api/events/hover-event-integ.h>
+#include <dali/integration-api/events/key-event-integ.h>
+#include <dali/integration-api/events/touch-event-integ.h>
+#include <dali/integration-api/adaptor-framework/focused-actor-provider.h>
+#include <dali/devel-api/object/type-registry.h>
+#include <dali-ui-foundation/dali-ui-foundation.h>
+#include <dali-ui-foundation/extension-api/focus-manager.h>
+#include <dali-ui-foundation/extension-api/focus-indication-policy.h>
+#include <dali-ui-foundation/extension-api/ui-config-impl.h>
+#include <dali-ui-foundation/internal/focus-manager/focus-finder.h>
+#include <dali-ui-foundation/integration-api/layouts/layout-impl.h>
+#include <dali-ui-test-suite-utils.h>
+#include <dali-ui/ui-adaptor-impl.h>
+#include <test-gesture-generator.h>
+
+using namespace Dali;
+using namespace Dali::Ui;
+
+namespace UiExtension = Dali::Ui::Extension;
+
+namespace
+{
+struct WindowFocusRecorder : ConnectionTracker
+{
+  void OnChanged(View previous, View current)
+  {
+    changes.emplace_back(previous, current);
+  }
+
+  std::vector<std::pair<View, View>> changes;
+};
+
+View AddWindowFocusTarget(Window window)
+{
+  View view = View::New();
+  view.SetFocusable(true);
+  window.Add(view);
+  return view;
+}
+
+void SendWindowFocusRightKey(Window window)
+{
+  auto scene = Dali::Internal::Adaptor::Adaptor::GetScene(window);
+  Dali::Integration::KeyEvent event("Right", "", "", 0, 0, 100u, Dali::Integration::KeyEvent::DOWN, "", "", Device::Class::KEYBOARD, Device::Subclass::NONE);
+  event.windowId = static_cast<uint32_t>(scene.GetNativeId());
+  scene.QueueEvent(event);
+  scene.ProcessEvents();
+}
+
+struct FocusIndicationPolicyCall
+{
+  View previousFocusView;
+  View focusedView;
+  FocusDevice device{FocusDevice::UNKNOWN};
+  InputEventType inputEventType{InputEventType::NONE};
+  bool previousFocusIndicated{false};
+  bool proposedIndicated{false};
+};
+
+FocusIndicationPolicyCall gFocusIndicationPolicyCall;
+int gFocusIndicationPolicyCallCount = 0;
+
+bool RecordFocusIndicationPolicy(const UiExtension::FocusIndicationContext& context)
+{
+  ++gFocusIndicationPolicyCallCount;
+  gFocusIndicationPolicyCall.previousFocusView = context.previousFocusView;
+  gFocusIndicationPolicyCall.focusedView = context.focusedView;
+  gFocusIndicationPolicyCall.device = context.device;
+  gFocusIndicationPolicyCall.inputEventType = context.inputEvent.GetInputEventType();
+  gFocusIndicationPolicyCall.previousFocusIndicated = context.previousFocusIndicated;
+  gFocusIndicationPolicyCall.proposedIndicated = context.proposedIndicated;
+  return context.proposedIndicated;
+}
+
+bool NeverIndicateFocus(const UiExtension::FocusIndicationContext& context)
+{
+  RecordFocusIndicationPolicy(context);
+  return false;
+}
+
+WeakHandle<View> gReentrantIndicationTarget;
+
+bool ReenterFocusFromIndicationPolicy(const UiExtension::FocusIndicationContext& context)
+{
+  View target = gReentrantIndicationTarget.GetHandle();
+  gReentrantIndicationTarget.Reset();
+  if(target)
+  {
+    DALI_TEST_CHECK(FocusManager::Get().SetCurrentFocusView(target));
+  }
+  return context.proposedIndicated;
+}
+
+struct FocusInDuringNavigation
+{
+  FocusNavigationResult Navigate(View current, FocusNavigationContext context)
+  {
+    Window window = context.GetWindow();
+    if(loseFocusFirst)
+    {
+      window.Lower();
+    }
+    // Inject platform notifications; this does not assert Win32 event timing.
+    window.Raise();
+    DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+    DALI_TEST_CHECK(!FocusManager::Get().SetCurrentFocusView(target));
+    DALI_TEST_CHECK(!FocusManager::Get().RequestFocus(target));
+    DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::LEFT));
+    return FocusNavigationResult::MoveTo(target);
+  }
+
+  View target;
+  bool loseFocusFirst{false};
+};
+
+Dali::Integration::TouchEvent GenerateFocusManagerTouch(PointState::Type state, const Vector2& screenPosition)
+{
+  Dali::Integration::TouchEvent touchEvent;
+  Dali::Integration::Point point;
+  point.SetState(state);
+  point.SetDeviceId(1);
+  point.SetScreenPosition(screenPosition);
+  point.SetDeviceClass(Device::Class::TOUCH);
+  point.SetDeviceSubclass(Device::Subclass::NONE);
+  touchEvent.points.push_back(point);
+  touchEvent.time = 100u;
+  return touchEvent;
+}
+
+Dali::Integration::HoverEvent GenerateFocusManagerHover(PointState::Type state, const Vector2& screenPosition)
+{
+  Dali::Integration::HoverEvent hoverEvent(100u);
+  Dali::Integration::Point point;
+  point.SetState(state);
+  point.SetDeviceId(2);
+  point.SetScreenPosition(screenPosition);
+  point.SetDeviceClass(Device::Class::MOUSE);
+  point.SetDeviceSubclass(Device::Subclass::NONE);
+  hoverEvent.points.push_back(point);
+  return hoverEvent;
+}
+} // namespace
+
+int UtcDaliFocusManagerReentrantRestorePreservesCallbackP(void)
+{
+  UiTestApplication application;
+  FocusManager      manager = FocusManager::Get();
+  Window            window  = application.GetWindow();
+  enum class CallbackAction
+  {
+    REDIRECT,
+    CLEAR,
+    REMOVE
+  };
+  for(bool clearOnLoss : {false, true})
+  {
+    for(CallbackAction action : {CallbackAction::REDIRECT, CallbackAction::CLEAR, CallbackAction::REMOVE})
+    {
+      manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+      View previous  = AddWindowFocusTarget(window);
+      View requested = AddWindowFocusTarget(window);
+      View latest    = AddWindowFocusTarget(window);
+      DALI_TEST_CHECK(manager.SetCurrentFocusView(previous));
+      window.Lower();
+      DALI_TEST_CHECK(manager.SetCurrentFocusView(requested));
+
+      WindowFocusRecorder recorder;
+      manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+      bool              reentered       = false;
+      bool              nestedSucceeded = false;
+      ConnectionTracker tracker;
+      requested.FocusChangedSignal().Connect(&tracker, [&](View, bool focused)
+      {
+        if(focused && !reentered)
+        {
+          reentered = true;
+          switch(action)
+          {
+            case CallbackAction::REDIRECT:
+            {
+              nestedSucceeded = manager.SetCurrentFocusView(latest);
+              break;
+            }
+            case CallbackAction::CLEAR:
+            {
+              manager.ClearFocus(window);
+              break;
+            }
+            case CallbackAction::REMOVE:
+            {
+              requested.Unparent();
+              break;
+            }
+          }
+        }
+      });
+
+      window.Raise();
+      DALI_TEST_CHECK(reentered);
+      DALI_TEST_CHECK(!UiExtension::FocusManager::IsKeyInputTarget(requested));
+      DALI_TEST_CHECK(!requested.GetState().Contains(ViewState::FOCUSED));
+      for(const auto& change : recorder.changes)
+      {
+        DALI_TEST_CHECK(change.second != requested);
+      }
+      if(action == CallbackAction::REDIRECT)
+      {
+        DALI_TEST_CHECK(nestedSucceeded);
+        DALI_TEST_CHECK(manager.GetCurrentFocusView() == latest);
+        DALI_TEST_CHECK(manager.GetCurrentFocusView(window) == latest);
+        DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(latest));
+        DALI_TEST_CHECK(latest.GetState().Contains(ViewState::FOCUSED));
+      }
+      else
+      {
+        DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+        DALI_TEST_CHECK(!manager.GetCurrentFocusView(window));
+      }
+    }
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerNavigationDoesNotRetainWindowP(void)
+{
+  UiTestApplication application;
+  FocusManager      manager = FocusManager::Get();
+  for(bool keyboardNavigation : {false, true})
+  {
+    Window window = Window::New(PositionSize(0, 0, 480, 800), "focus-window-lifetime");
+    View   first  = AddWindowFocusTarget(window);
+    View   second = AddWindowFocusTarget(window);
+    first.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, second.GetProperty<int>(Actor::Property::ID));
+    application.GetWindow().Lower();
+    window.Raise();
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(first));
+
+    if(keyboardNavigation)
+    {
+      SendWindowFocusRightKey(window);
+    }
+    else
+    {
+      DALI_TEST_CHECK(manager.MoveFocus(window, FocusDirection::RIGHT));
+    }
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == second);
+    DALI_TEST_CHECK(second.GetState().Contains(ViewState::FOCUSED));
+
+    WindowFocusRecorder recorder;
+    manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+    WeakHandle<Window> weakWindow(window);
+    window.Reset();
+
+    DALI_TEST_CHECK(!weakWindow.GetHandle());
+    DALI_TEST_CHECK(!first.IsConnectedToScene());
+    DALI_TEST_CHECK(!second.IsConnectedToScene());
+    DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+    DALI_TEST_CHECK(!second.GetState().Contains(ViewState::FOCUSED));
+    DALI_TEST_CHECK(!UiExtension::FocusManager::IsKeyInputTarget(second));
+    DALI_TEST_EQUALS(recorder.changes.size(), 1u, TEST_LOCATION);
+    DALI_TEST_CHECK(!recorder.changes.empty() && recorder.changes.back().first == second);
+    DALI_TEST_CHECK(!recorder.changes.empty() && !recorder.changes.back().second);
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInactiveWindowSetStoresWithoutStealingP(void)
+{
+  UiTestApplication application;
+  for(bool clearOnLoss : {true, false})
+  {
+    FocusManager manager = FocusManager::Get();
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    Window main = application.GetWindow();
+    Window background = Window::New(PositionSize(0, 0, 480, 800), "background-focus");
+    View foregroundView = AddWindowFocusTarget(main);
+    View backgroundView = AddWindowFocusTarget(background);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(foregroundView));
+
+    WindowFocusRecorder recorder;
+    manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(backgroundView));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == foregroundView);
+    DALI_TEST_CHECK(Dali::Integration::GetFocusedActorProvider()->GetFocusedActor() == foregroundView);
+    DALI_TEST_CHECK(main.IsFocused());
+    DALI_TEST_CHECK(!background.IsFocused());
+    DALI_TEST_CHECK(!GetImpl(backgroundView).GetState().Contains(ViewState::FOCUSED));
+    DALI_TEST_CHECK(recorder.changes.empty());
+
+    // The test Window's Raise/Lower simulate platform focus-in/focus-out.
+    main.Lower();
+    if(clearOnLoss)
+    {
+      DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+      DALI_TEST_CHECK(recorder.changes.size() == 1u);
+      DALI_TEST_CHECK(recorder.changes.back().first == foregroundView);
+      DALI_TEST_CHECK(!recorder.changes.back().second);
+    }
+    else
+    {
+      DALI_TEST_CHECK(manager.GetCurrentFocusView() == foregroundView);
+      DALI_TEST_CHECK(recorder.changes.empty());
+    }
+    background.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == backgroundView);
+    DALI_TEST_CHECK(recorder.changes.size() == (clearOnLoss ? 2u : 1u));
+    DALI_TEST_CHECK(recorder.changes.back().second == backgroundView);
+    DALI_TEST_CHECK(clearOnLoss ? !recorder.changes.back().first : recorder.changes.back().first == foregroundView);
+
+    background.Lower();
+    main.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == foregroundView);
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInactiveWindowRequestResolvesAndStoresP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  View current = AddWindowFocusTarget(application.GetWindow());
+  Window background = Window::New(PositionSize(0, 0, 480, 800), "background-request");
+  Layout container = Layout::New();
+  View child = View::New();
+  child.SetFocusable(true);
+  container.Add(child);
+  background.Add(container);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(manager.RequestFocus(container));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  application.GetWindow().Lower();
+  background.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == child);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInactiveWindowNavigationUsesStoredCursorP(void)
+{
+  UiTestApplication application;
+  for(bool clearOnLoss : {true, false})
+  {
+    FocusManager manager = FocusManager::Get();
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    Window window = application.GetWindow();
+    View first = AddWindowFocusTarget(window);
+    View second = AddWindowFocusTarget(window);
+    View third = AddWindowFocusTarget(window);
+    first.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, second.GetProperty<int>(Actor::Property::ID));
+    second.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, third.GetProperty<int>(Actor::Property::ID));
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(first));
+    window.Lower();
+
+    WindowFocusRecorder recorder;
+    manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+    SendWindowFocusRightKey(window);
+    DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+    DALI_TEST_CHECK(clearOnLoss ? !manager.GetCurrentFocusView() : manager.GetCurrentFocusView() == first);
+    DALI_TEST_CHECK(!GetImpl(first).GetState().Contains(ViewState::FOCUS_INDICATED));
+    DALI_TEST_CHECK(!GetImpl(second).GetState().Contains(ViewState::FOCUSED));
+    DALI_TEST_CHECK(!GetImpl(third).GetState().Contains(ViewState::FOCUSED));
+    DALI_TEST_CHECK(recorder.changes.empty());
+
+    window.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == third);
+    DALI_TEST_CHECK(recorder.changes.size() == 1u);
+    DALI_TEST_CHECK(recorder.changes.back().second == third);
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInactiveWindowKeysDoNotChangeActualFocusOrIndicationP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window main = application.GetWindow();
+  application.GetScene().SetNativeId(3);
+  View current = AddWindowFocusTarget(main);
+  View mainNext = AddWindowFocusTarget(main);
+  current.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, mainNext.GetProperty<int>(Actor::Property::ID));
+  Window background = Window::New(PositionSize(0, 0, 480, 800), "background-key");
+  auto backgroundScene = Dali::Internal::Adaptor::Adaptor::GetScene(background);
+  backgroundScene.SetNativeId(4);
+  application.AddScene(backgroundScene);
+  View first = AddWindowFocusTarget(background);
+  View second = AddWindowFocusTarget(background);
+  View third = AddWindowFocusTarget(background);
+  first.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, second.GetProperty<int>(Actor::Property::ID));
+  second.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, third.GetProperty<int>(Actor::Property::ID));
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(first));
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+  SendWindowFocusRightKey(background);
+  SendWindowFocusRightKey(background);
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(!GetImpl(current).GetState().Contains(ViewState::FOCUS_INDICATED));
+  DALI_TEST_CHECK(recorder.changes.empty());
+
+  // A background resume request must not cause foreground keys to be skipped.
+  SendWindowFocusRightKey(main);
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == mainNext);
+  main.Lower();
+  background.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == third);
+  application.RemoveScene(backgroundScene);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRetainedFocusUsesLatestDeferredRequestP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window window = application.GetWindow();
+  View first = AddWindowFocusTarget(window);
+  View second = AddWindowFocusTarget(window);
+  View third = AddWindowFocusTarget(window);
+  second.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, third.GetProperty<int>(Actor::Property::ID));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(first));
+  window.Lower();
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(second));
+  DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == first);
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == third);
+
+  // Even a request for the retained actual View replaces the pending target.
+  window.Lower();
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(second));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(third));
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == third);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerWindowWithoutRecordClearsRetainedFocusP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window main = application.GetWindow();
+  View current = AddWindowFocusTarget(main);
+  Window other = Window::New(PositionSize(0, 0, 480, 800), "no-record");
+  AddWindowFocusTarget(other); // No automatic default selection on focus gain.
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+
+  // Exercise focus-in before the old Window's focus-out notification.
+  other.Raise();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  DALI_TEST_CHECK(recorder.changes.size() == 1u);
+  DALI_TEST_CHECK(recorder.changes.back().first == current);
+  DALI_TEST_CHECK(!recorder.changes.back().second);
+  // The old Window still reports focused until its delayed focus-out, but
+  // it must no longer be permitted to commit an actual focus request.
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  main.Lower();
+  other.Lower();
+  main.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerWindowFocusInBeforeFocusOutKeepsNewTargetP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window main = application.GetWindow();
+  Window other = Window::New(PositionSize(0, 0, 480, 800), "focus-in-first");
+  View mainView = AddWindowFocusTarget(main);
+  View otherView = AddWindowFocusTarget(other);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(mainView));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(otherView));
+  other.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == otherView);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(mainView));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == otherView);
+  main.Lower();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == otherView);
+  DALI_TEST_CHECK(GetImpl(otherView).GetState().Contains(ViewState::FOCUSED));
+  END_TEST;
+}
+
+int UtcDaliFocusManagerExplicitClearRemovesDeferredReplacementOnlyInItsWindowP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window main = application.GetWindow();
+  Window other = Window::New(PositionSize(0, 0, 480, 800), "clear-other");
+  View current = AddWindowFocusTarget(main);
+  View replacement = AddWindowFocusTarget(main);
+  View otherTarget = AddWindowFocusTarget(other);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(otherTarget));
+  main.Lower();
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(replacement));
+  manager.ClearFocus();
+  main.Raise();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  main.Lower();
+  other.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == otherTarget);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInvalidStoredTargetsAreNotRestoredP(void)
+{
+  UiTestApplication application;
+  for(int invalidation = 0; invalidation < 6; ++invalidation)
+  {
+    FocusManager manager = FocusManager::Get();
+    Window other = Window::New(PositionSize(0, 0, 480, 800), "invalid-stored");
+    View parent = View::New();
+    View target = View::New();
+    target.SetFocusable(true);
+    parent.Add(target);
+    other.Add(parent);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(target));
+    switch(invalidation)
+    {
+      case 0:
+        target.SetFocusable(false);
+        break;
+      case 1:
+        target.SetEnabled(false);
+        break;
+      case 2:
+        target.SetProperty(Actor::Property::VISIBLE, false);
+        break;
+      case 3:
+        parent.SetAllowDescendantFocusEnabled(false);
+        break;
+      case 4:
+        parent.Remove(target);
+        break;
+      case 5:
+        parent.Remove(target);
+        application.GetWindow().Add(target);
+        break;
+    }
+    application.GetWindow().Lower();
+    other.Raise();
+    DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRemovingRetainedViewPreservesDeferredTargetP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window window = application.GetWindow();
+  View current = AddWindowFocusTarget(window);
+  View replacement = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  window.Lower();
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(replacement));
+  window.Remove(current);
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == replacement);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFocusLossRestoresRecordButExplicitClearRemovesItP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.GetClearFocusOnWindowFocusLost());
+  Window window = application.GetWindow();
+  View view = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(view));
+  window.Lower();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == view);
+  window.Lower();
+  manager.ClearFocus(); // Also forget the stored target when actual focus is empty.
+  window.Raise();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRemovedAndReattachedViewDoesNotRestoreFocusP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+  for(bool clearOnLoss : {true, false})
+  {
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    View view = AddWindowFocusTarget(window);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(view));
+    recorder.changes.clear();
+    window.Remove(view);
+    DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+    DALI_TEST_CHECK(recorder.changes.size() == 1u);
+    DALI_TEST_CHECK(recorder.changes[0].first == view);
+    DALI_TEST_CHECK(!recorder.changes[0].second);
+
+    window.Add(view);
+    window.Lower();
+    window.Raise();
+    DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+    DALI_TEST_CHECK(recorder.changes.size() == 1u);
+    DALI_TEST_CHECK(!view.GetState().Contains(ViewState::FOCUSED));
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerIndicationReentryKeepsStoredCursorWithActualFocusP(void)
+{
+  UiConfig config = UiConfig::New();
+  GetImpl(config).SetFocusIndicationPolicy(&ReenterFocusFromIndicationPolicy);
+  UiTestApplication application(config);
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View first = AddWindowFocusTarget(window);
+  View reentrant = AddWindowFocusTarget(window);
+  View firstNext = AddWindowFocusTarget(window);
+  View reentrantNext = AddWindowFocusTarget(window);
+  first.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, firstNext.GetProperty<int32_t>(Actor::Property::ID));
+  reentrant.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, reentrantNext.GetProperty<int32_t>(Actor::Property::ID));
+
+  for(bool requestFocus : {false, true})
+  {
+    manager.ClearFocus();
+    gReentrantIndicationTarget = reentrant;
+    DALI_TEST_CHECK(requestFocus ? manager.RequestFocus(first) : manager.SetCurrentFocusView(first));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == first);
+    DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == firstNext);
+    window.Lower();
+    window.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == firstNext);
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerSameWindowFocusInDuringNavigationKeepsFocusP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View current = AddWindowFocusTarget(window);
+  FocusInDuringNavigation callback;
+  callback.target = AddWindowFocusTarget(window);
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&callback, &FocusInDuringNavigation::Navigate));
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+
+  for(bool clearOnLoss : {true, false})
+  {
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+    recorder.changes.clear();
+    DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == callback.target);
+    DALI_TEST_CHECK(recorder.changes.size() == 1u);
+    DALI_TEST_CHECK(recorder.changes[0].first == current);
+    DALI_TEST_CHECK(recorder.changes[0].second == callback.target);
+  }
+  manager.SetFocusNavigationFallback({});
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFocusLossAndGainDuringNavigationRestoresFocusP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View current = AddWindowFocusTarget(window);
+  FocusInDuringNavigation callback;
+  callback.target = AddWindowFocusTarget(window);
+  callback.loseFocusFirst = true;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&callback, &FocusInDuringNavigation::Navigate));
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+
+  for(bool clearOnLoss : {true, false})
+  {
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+    recorder.changes.clear();
+    DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == callback.target);
+    DALI_TEST_CHECK(recorder.changes.size() == (clearOnLoss ? 3u : 1u));
+    if(clearOnLoss)
+    {
+      DALI_TEST_CHECK(recorder.changes[0].first == current);
+      DALI_TEST_CHECK(!recorder.changes[0].second);
+      DALI_TEST_CHECK(!recorder.changes[1].first);
+      DALI_TEST_CHECK(recorder.changes[1].second == current);
+    }
+    DALI_TEST_CHECK(recorder.changes.back().first == current);
+    DALI_TEST_CHECK(recorder.changes.back().second == callback.target);
+  }
+  manager.SetFocusNavigationFallback({});
+  END_TEST;
+}
+
+namespace
+{
+struct BackgroundLongPressRecorder : ConnectionTracker
+{
+  void OnDetected(Actor, LongPressGesture)
+  {
+    ++count;
+  }
+
+  int count{0};
+};
+
+template<typename TextInput>
+void CheckBackgroundTextInputFocus(bool longPress)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window background = application.GetWindow();
+  TextInput input = TextInput::New();
+  input.SetFocusable(true);
+  input.SetRequestedWidth(200.0f);
+  input.SetRequestedHeight(100.0f);
+  input.SetPivot(Pivot::TOP_LEFT);
+  input.SetParentOrigin(ParentOrigin::TOP_LEFT);
+  background.Add(input);
+  View savedNavigation = AddWindowFocusTarget(background);
+  BackgroundLongPressRecorder gestureRecorder;
+  LongPressGestureDetector detector = LongPressGestureDetector::New();
+  if(longPress)
+  {
+    detector.Attach(input);
+    detector.DetectedSignal().Connect(&gestureRecorder, &BackgroundLongPressRecorder::OnDetected);
+  }
+  Window foreground = Window::New(PositionSize(0, 0, 480, 800), "foreground-input");
+  View current = AddWindowFocusTarget(foreground);
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+
+  for(bool focusOnTouch : {false, true})
+  {
+    input.SetFocusOnTouchEnabled(focusOnTouch);
+    for(bool clearOnLoss : {true, false})
+    {
+      manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+      DALI_TEST_CHECK(manager.SetCurrentFocusView(savedNavigation));
+      background.Lower();
+      foreground.Raise();
+      DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+      application.SendNotification();
+      application.Render();
+      recorder.changes.clear();
+      if(longPress)
+      {
+        int previousCount = gestureRecorder.count;
+        TestGenerateLongPress(application, 20.0f, 20.0f, 450u);
+        TestEndLongPress(application, 20.0f, 20.0f, 1100u);
+        DALI_TEST_CHECK(gestureRecorder.count > previousCount);
+      }
+      else
+      {
+        TestGenerateTap(application, 20.0f, 20.0f, 100u);
+      }
+      DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+      DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(current));
+      DALI_TEST_CHECK(current.GetState().Contains(ViewState::FOCUSED));
+      DALI_TEST_CHECK(!input.GetState().Contains(ViewState::FOCUSED));
+      DALI_TEST_CHECK(recorder.changes.empty());
+
+      foreground.Lower();
+      background.Raise();
+      // Tap explicitly requests navigation focus regardless of FocusOnTouch.
+      // Long press itself is key-only; with FocusOnTouch enabled, touch release
+      // separately requests navigation. Disable it to isolate the key-only path.
+      View expected = longPress && !focusOnTouch ? savedNavigation : View(input);
+      DALI_TEST_CHECK(manager.GetCurrentFocusView() == expected);
+      DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(expected));
+      DALI_TEST_CHECK(expected.GetState().Contains(ViewState::FOCUSED));
+    }
+  }
+}
+} // namespace
+
+int UtcDaliFocusManagerBackgroundInputFieldTapDefersKeyFocusP(void)
+{
+  CheckBackgroundTextInputFocus<InputField>(false);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackgroundInputEditorTapDefersKeyFocusP(void)
+{
+  CheckBackgroundTextInputFocus<InputEditor>(false);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackgroundInputFieldLongPressRespectsNavigationPolicyP(void)
+{
+  CheckBackgroundTextInputFocus<InputField>(true);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackgroundInputEditorLongPressRespectsNavigationPolicyP(void)
+{
+  CheckBackgroundTextInputFocus<InputEditor>(true);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerActiveDirectKeyFocusKeepsIndependentNavigationFocusP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  View current = AddWindowFocusTarget(application.GetWindow());
+  InputField input = InputField::New();
+  application.GetWindow().Add(input);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(UiExtension::FocusManager::SetKeyInputTarget(input));
+  DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(input));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerDisabledRetainedViewPreservesDeferredTargetP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window window = application.GetWindow();
+  View current = AddWindowFocusTarget(window);
+  View replacement = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  window.Lower();
+  DALI_TEST_CHECK(manager.RequestFocus(replacement));
+  current.SetEnabled(false);
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == replacement);
+  DALI_TEST_CHECK(replacement.GetState().Contains(ViewState::FOCUSED));
+  END_TEST;
+}
+
+int UtcDaliFocusManagerDeferredViewDisconnectionCancelsOnlyItsRecordP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  for(bool clearOnLoss : {true, false})
+  {
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    Window main = application.GetWindow();
+    main.Raise();
+    View current = AddWindowFocusTarget(main);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+    Window background = Window::New(PositionSize(0, 0, 480, 800), "pending-removal");
+    View oldTarget = AddWindowFocusTarget(background);
+    View latestTarget = AddWindowFocusTarget(background);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(oldTarget));
+    DALI_TEST_CHECK(manager.RequestFocus(latestTarget));
+    background.Remove(oldTarget); // Must not cancel a replacement's reservation.
+    background.Add(oldTarget);
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+    background.Remove(latestTarget);
+    background.Add(latestTarget);
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+    main.Lower();
+    background.Raise();
+    DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+    background.Lower();
+    main.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerSavedViewRemovedAfterFocusLossIsNotRestoredP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View view = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(view));
+  window.Lower(); // Actual focus clears, but its saved target must stay observed.
+  window.Remove(view);
+  window.Add(view);
+  window.Raise();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  END_TEST;
+}
+
+int UtcDaliFocusManagerDisabledDeferredViewDoesNotClearRetainedFocusP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window window = application.GetWindow();
+  View current = AddWindowFocusTarget(window);
+  View deferred = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+  window.Lower();
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(deferred));
+  deferred.SetEnabled(false);
+  deferred.SetEnabled(true); // Re-enabling is not a new focus request.
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  window.Raise();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRemovingReplacedReservationKeepsLatestTargetP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View oldTarget = AddWindowFocusTarget(window);
+  View latestTarget = AddWindowFocusTarget(window);
+  window.Lower();
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(oldTarget));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(latestTarget));
+  window.Remove(oldTarget);
+  window.Add(oldTarget);
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == latestTarget);
+  END_TEST;
+}
+
+namespace
+{
+struct ReattachDuringFocusLoss : ConnectionTracker
+{
+  void OnChanged(View previous, View current)
+  {
+    ++count;
+    if(previous && !current && !handled)
+    {
+      handled = true;
+      window.Remove(previous);
+      window.Add(previous);
+    }
+  }
+
+  Window window;
+  int count{0};
+  bool handled{false};
+};
+} // namespace
+
+int UtcDaliFocusManagerRemovalDuringFocusLossCancelsRecordWithoutRecursiveClearP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View view = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(view));
+  ReattachDuringFocusLoss callback;
+  callback.window = window;
+  manager.FocusChangedSignal().Connect(&callback, &ReattachDuringFocusLoss::OnChanged);
+  window.Lower();
+  DALI_TEST_CHECK(callback.handled);
+  DALI_TEST_CHECK(callback.count == 1);
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  window.Raise();
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  DALI_TEST_CHECK(callback.count == 1);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInactiveRepeatedBackwardConsumesOneStepP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  for(bool clearOnLoss : {true, false})
+  {
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    View first = AddWindowFocusTarget(window);
+    View second = AddWindowFocusTarget(window);
+    View third = AddWindowFocusTarget(window);
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(first));
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(second));
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(third));
+    window.Lower();
+    manager.MoveFocusBackward();
+    manager.MoveFocusBackward();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == (clearOnLoss ? View() : third));
+    window.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == first);
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackwardAcrossReactivationDoesNotDuplicateHistoryP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window window = application.GetWindow();
+  View first = AddWindowFocusTarget(window);
+  View second = AddWindowFocusTarget(window);
+  View third = AddWindowFocusTarget(window);
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(first));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(second));
+  DALI_TEST_CHECK(manager.SetCurrentFocusView(third));
+  window.Lower();
+  manager.MoveFocusBackward();
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == second);
+  window.Lower();
+  manager.MoveFocusBackward();
+  window.Raise();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == first);
+  manager.MoveFocusBackward();
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == first);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFocusedActorProviderP(void)
+{
+  UiTestApplication application;
+
+  FocusManager focusManager = FocusManager::Get();
+  auto* provider = Dali::Integration::GetFocusedActorProvider();
+  DALI_TEST_CHECK(provider != nullptr);
+
+  View view = View::New();
+  view.SetFocusable(true);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(view));
+  DALI_TEST_CHECK(provider->GetFocusedActor() == view);
+
+  focusManager.ClearFocus();
+  DALI_TEST_CHECK(!provider->GetFocusedActor());
+
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFocusIndicationPolicyContextP(void)
+{
+  UiConfig config = UiConfig::New();
+  DALI_TEST_CHECK(GetImpl(config).GetFocusIndicationPolicy() == &UiExtension::FocusIndicationPolicy::Default);
+  GetImpl(config).SetFocusIndicationPolicy(nullptr);
+  DALI_TEST_CHECK(GetImpl(config).GetFocusIndicationPolicy() == &UiExtension::FocusIndicationPolicy::Default);
+  GetImpl(config).SetFocusIndicationPolicy(&RecordFocusIndicationPolicy);
+  DALI_TEST_CHECK(GetImpl(config).GetFocusIndicationPolicy() == &RecordFocusIndicationPolicy);
+
+  UiTestApplication application(config);
+
+  View first = View::New();
+  first.SetFocusable(true);
+  View second = View::New();
+  second.SetFocusable(true);
+  application.GetScene().Add(first);
+  application.GetScene().Add(second);
+  application.SendNotification();
+  application.Render();
+
+  gFocusIndicationPolicyCallCount = 0;
+  FocusManager focusManager = FocusManager::Get();
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(first));
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 1);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.previousFocusView);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.focusedView == first);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.device == FocusDevice::PROGRAMMATIC);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.inputEventType == InputEventType::NONE);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.previousFocusIndicated);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.proposedIndicated);
+
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(second));
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 2);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.previousFocusView == first);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.focusedView == second);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.previousFocusIndicated);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.proposedIndicated);
+
+  Dali::Integration::KeyEvent keyDown(
+    "Right", "", "", 0, 0, 100u, Dali::Integration::KeyEvent::DOWN, "", "", Device::Class::KEYBOARD, Device::Subclass::NONE);
+  application.ProcessEvent(keyDown);
+
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 3);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.previousFocusView == second);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.focusedView == second);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.device == FocusDevice::KEYBOARD);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.inputEventType == InputEventType::KEY_EVENT);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.previousFocusIndicated);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.proposedIndicated);
+  DALI_TEST_CHECK(GetImpl(second).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  focusManager.ClearFocusIndication();
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 3);
+  DALI_TEST_CHECK(!GetImpl(second).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  gFocusIndicationPolicyCall.previousFocusView.Reset();
+  gFocusIndicationPolicyCall.focusedView.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliFocusManagerDefaultIndicatorOverridePreservesConfiguredPolicyP(void)
+{
+  UiConfig config = UiConfig::New();
+  GetImpl(config).SetFocusIndicationPolicy(&RecordFocusIndicationPolicy);
+  UiTestApplication application(config);
+
+  FocusManager focusManager = FocusManager::Get();
+  focusManager.SetDefaultFocusIndicatorEnabled(false);
+  DALI_TEST_CHECK(!focusManager.IsDefaultFocusIndicatorEnabled());
+
+  View view = View::New();
+  view.SetFocusable(true);
+  application.GetScene().Add(view);
+
+  gFocusIndicationPolicyCallCount = 0;
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(view));
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 1);
+
+  END_TEST;
+}
+
+int UtcDaliFocusManagerTouchOverridePreservesConfiguredPolicyP(void)
+{
+  UiConfig config = UiConfig::New();
+  GetImpl(config).SetFocusIndicationPolicy(&RecordFocusIndicationPolicy);
+  UiTestApplication application(config);
+
+  FocusManager focusManager = FocusManager::Get();
+  focusManager.SetClearFocusIndicationOnTouch(false);
+  DALI_TEST_CHECK(!focusManager.IsClearFocusIndicationOnTouchEnabled());
+
+  View view = View::New();
+  view.SetFocusable(true);
+  application.GetScene().Add(view);
+
+  gFocusIndicationPolicyCallCount = 0;
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(view));
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 1);
+
+  END_TEST;
+}
+
+int UtcDaliFocusManagerHoverOverridePreservesConfiguredPolicyP(void)
+{
+  UiConfig config = UiConfig::New();
+  GetImpl(config).SetFocusIndicationPolicy(&RecordFocusIndicationPolicy);
+  UiTestApplication application(config);
+
+  FocusManager focusManager = FocusManager::Get();
+  focusManager.SetClearFocusIndicationOnHover(true);
+  DALI_TEST_CHECK(focusManager.IsClearFocusIndicationOnHoverEnabled());
+
+  View view = View::New();
+  view.SetFocusable(true);
+  application.GetScene().Add(view);
+
+  gFocusIndicationPolicyCallCount = 0;
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(view));
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 1);
+
+  END_TEST;
+}
+
+int UtcDaliFocusManagerNavigationIgnoresFocusIndicationP(void)
+{
+  UiConfig config = UiConfig::New();
+  GetImpl(config).SetFocusIndicationPolicy(&NeverIndicateFocus);
+
+  UiTestApplication application(config);
+
+  View current = View::New();
+  current.SetFocusable(true);
+  View next = View::New();
+  next.SetFocusable(true);
+  current.SetRightFocusableView(next);
+  application.GetScene().Add(current);
+  application.GetScene().Add(next);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager focusManager = FocusManager::Get();
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(!GetImpl(current).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  gFocusIndicationPolicyCallCount = 0;
+  gFocusIndicationPolicyCall.previousFocusView.Reset();
+  gFocusIndicationPolicyCall.focusedView.Reset();
+
+  Dali::Integration::KeyEvent keyDown(
+    "Right", "", "", 0, 0, 100u, Dali::Integration::KeyEvent::DOWN, "", "", Device::Class::KEYBOARD, Device::Subclass::NONE);
+  application.ProcessEvent(keyDown);
+
+  DALI_TEST_CHECK(focusManager.GetCurrentFocusView() == next);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCallCount == 1);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.previousFocusView == current);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.focusedView == next);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.device == FocusDevice::KEYBOARD);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.inputEventType == InputEventType::KEY_EVENT);
+  DALI_TEST_CHECK(!gFocusIndicationPolicyCall.previousFocusIndicated);
+  DALI_TEST_CHECK(gFocusIndicationPolicyCall.proposedIndicated);
+  DALI_TEST_CHECK(!GetImpl(next).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  gFocusIndicationPolicyCall.previousFocusView.Reset();
+  gFocusIndicationPolicyCall.focusedView.Reset();
+
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFollowFocusPolicyMovesImmediatelyP(void)
+{
+  UiConfig config = UiConfig::New();
+  config.SetClearFocusIndicationOnHover(true);
+  GetImpl(config).SetFocusIndicationPolicy(&UiExtension::FocusIndicationPolicy::FollowFocus);
+  DALI_TEST_CHECK(GetImpl(config).GetFocusIndicationPolicy() == &UiExtension::FocusIndicationPolicy::FollowFocus);
+
+  UiTestApplication application(config);
+
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetPivot(Pivot::TOP_LEFT);
+  current.SetParentOrigin(ParentOrigin::TOP_LEFT);
+  current.SetRequestedWidth(100.0f);
+  current.SetRequestedHeight(100.0f);
+  current.TouchEventSignal().Connect([](Actor, TouchEvent) { return false; });
+  View next = View::New();
+  next.SetFocusable(true);
+  next.SetPivot(Pivot::TOP_LEFT);
+  next.SetParentOrigin(ParentOrigin::TOP_LEFT);
+  next.SetRequestedX(200.0f);
+  next.SetRequestedY(200.0f);
+  next.SetRequestedWidth(100.0f);
+  next.SetRequestedHeight(100.0f);
+  next.HoverEventSignal().Connect([](Actor, HoverEvent) { return false; });
+  current.SetRightFocusableView(next);
+  application.GetScene().Add(current);
+  application.GetScene().Add(next);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager focusManager = FocusManager::Get();
+  DALI_TEST_CHECK(focusManager.SetCurrentFocusView(current));
+  DALI_TEST_CHECK(GetImpl(current).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  application.ProcessEvent(GenerateFocusManagerTouch(PointState::DOWN, Vector2(50.0f, 50.0f)));
+  DALI_TEST_CHECK(GetImpl(current).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  application.ProcessEvent(GenerateFocusManagerHover(PointState::STARTED, Vector2(250.0f, 250.0f)));
+  DALI_TEST_CHECK(GetImpl(current).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  Dali::Integration::KeyEvent keyDown(
+    "Right", "", "", 0, 0, 100u, Dali::Integration::KeyEvent::DOWN, "", "", Device::Class::KEYBOARD, Device::Subclass::NONE);
+  application.ProcessEvent(keyDown);
+
+  DALI_TEST_CHECK(focusManager.GetCurrentFocusView() == next);
+  DALI_TEST_CHECK(GetImpl(next).GetState().Contains(ViewState::FOCUS_INDICATED));
+
+  END_TEST;
+}
+
+// ============================================================
+// Extension key-input target
+// ============================================================
+
+int UtcDaliFocusManagerExtensionSetAndClearKeyInputTargetP(void)
+{
+  UiTestApplication application;
+
+  View navigationFocus = View::New();
+  navigationFocus.SetFocusable(true);
+  View firstTarget = View::New();
+  View secondTarget = View::New();
+  application.GetScene().Add(navigationFocus);
+  application.GetScene().Add(firstTarget);
+  application.GetScene().Add(secondTarget);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_CHECK(Ui::FocusManager::Get().SetCurrentFocusView(navigationFocus));
+  DALI_TEST_CHECK(Ui::Extension::FocusManager::SetKeyInputTarget(firstTarget));
+  DALI_TEST_CHECK(Ui::Extension::FocusManager::IsKeyInputTarget(firstTarget));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::IsKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(Ui::FocusManager::Get().GetCurrentFocusView() == navigationFocus);
+
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::ClearKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(Ui::Extension::FocusManager::SetKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::IsKeyInputTarget(firstTarget));
+  DALI_TEST_CHECK(Ui::Extension::FocusManager::IsKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(Ui::FocusManager::Get().GetCurrentFocusView() == navigationFocus);
+
+  DALI_TEST_CHECK(Ui::Extension::FocusManager::ClearKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::IsKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::ClearKeyInputTarget(secondTarget));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::ClearKeyInputTarget(firstTarget));
+  END_TEST;
+}
+
+int UtcDaliFocusManagerExtensionSetKeyInputTargetDisconnectedN(void)
+{
+  UiTestApplication application;
+
+  View disconnectedView = View::New();
+
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::SetKeyInputTarget(disconnectedView));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::SetKeyInputTarget(View()));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::ClearKeyInputTarget(View()));
+  DALI_TEST_CHECK(!Ui::Extension::FocusManager::IsKeyInputTarget(View()));
+  END_TEST;
+}
+
+int UtcDaliFocusManagerExtensionBackgroundKeyRequestPreservesNavigationP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  Window foreground = application.GetWindow();
+  Window background = Window::New(PositionSize(0, 0, 480, 800), "key-only");
+  View current = AddWindowFocusTarget(foreground);
+  View saved = AddWindowFocusTarget(background);
+  View keyOnly = AddWindowFocusTarget(background);
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+
+  for(bool clearOnLoss : {true, false})
+  {
+    manager.SetClearFocusOnWindowFocusLost(clearOnLoss);
+    foreground.Lower();
+    background.Raise();
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(saved));
+    background.Lower();
+    foreground.Raise();
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(current));
+    recorder.changes.clear();
+
+    DALI_TEST_CHECK(!UiExtension::FocusManager::SetKeyInputTarget(keyOnly));
+    DALI_TEST_CHECK(!UiExtension::FocusManager::ClearKeyInputTarget(keyOnly));
+    DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(current));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+    DALI_TEST_CHECK(recorder.changes.empty());
+    DALI_TEST_CHECK(current.GetState().Contains(ViewState::FOCUSED));
+    DALI_TEST_CHECK(!keyOnly.GetState().Contains(ViewState::FOCUSED));
+
+    foreground.Lower();
+    background.Raise();
+    // A rejected key-only request must not have silently overwritten this record.
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == saved);
+    DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(saved));
+  }
+  END_TEST;
+}
+
+int UtcDaliFocusManagerExtensionRetainedKeyRequestPreservesDeferredTargetP(void)
+{
+  UiTestApplication application;
+  FocusManager manager = FocusManager::Get();
+  manager.SetClearFocusOnWindowFocusLost(false);
+  Window window = application.GetWindow();
+  View retained = AddWindowFocusTarget(window);
+  View deferred = AddWindowFocusTarget(window);
+  WindowFocusRecorder recorder;
+  manager.FocusChangedSignal().Connect(&recorder, &WindowFocusRecorder::OnChanged);
+
+  for(bool clearKeyTarget : {false, true})
+  {
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(retained));
+    window.Lower();
+    DALI_TEST_CHECK(manager.SetCurrentFocusView(deferred));
+    recorder.changes.clear();
+    // The existing retained target makes this a successful no-op, not a request
+    // to replace the different navigation target reserved while inactive.
+    DALI_TEST_CHECK(UiExtension::FocusManager::SetKeyInputTarget(retained));
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == retained);
+    DALI_TEST_CHECK(recorder.changes.empty());
+    if(clearKeyTarget)
+    {
+      DALI_TEST_CHECK(UiExtension::FocusManager::ClearKeyInputTarget(retained));
+      DALI_TEST_CHECK(!UiExtension::FocusManager::IsKeyInputTarget(retained));
+      DALI_TEST_CHECK(manager.GetCurrentFocusView() == retained);
+      DALI_TEST_CHECK(recorder.changes.empty());
+    }
+    window.Raise();
+    DALI_TEST_CHECK(manager.GetCurrentFocusView() == deferred);
+    DALI_TEST_CHECK(UiExtension::FocusManager::IsKeyInputTarget(deferred));
+  }
+  END_TEST;
+}
+
+// ============================================================
+// RequestFocus — basic
+// ============================================================
+
+int UtcDaliFocusManagerRequestFocusBasicP(void)
+{
+  UiTestApplication application;
+
+  View view = View::New();
+  view.SetFocusable(true);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+
+  bool result = FocusManager::Get().RequestFocus(view);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == view);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRequestFocusNonFocusableN(void)
+{
+  UiTestApplication application;
+
+  View view = View::New(); // focusable=false by default
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+
+  bool result = FocusManager::Get().RequestFocus(view);
+  DALI_TEST_CHECK(!result);
+  END_TEST;
+}
+
+// ============================================================
+// RequestFocus — descendant delegation (Layout)
+// ============================================================
+
+int UtcDaliFocusManagerRequestFocusOnLayoutDelegatesToChildP(void)
+{
+  UiTestApplication application;
+
+  auto layout = Layout::New();
+  View child1 = View::New(); // not focusable
+  View child2 = View::New();
+  child2.SetFocusable(true);
+  layout.Add(child1);
+  layout.Add(child2);
+  application.GetScene().Add(layout);
+  application.SendNotification();
+  application.Render();
+
+  bool result = FocusManager::Get().RequestFocus(layout);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == child2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRequestFocusOnLayoutNoFocusableChildN(void)
+{
+  UiTestApplication application;
+
+  auto layout = Layout::New();
+  View child1 = View::New(); // not focusable
+  View child2 = View::New(); // not focusable
+  layout.Add(child1);
+  layout.Add(child2);
+  application.GetScene().Add(layout);
+  application.SendNotification();
+  application.Render();
+
+  // Layout itself is also not focusable by default
+  bool result = FocusManager::Get().RequestFocus(layout);
+  DALI_TEST_CHECK(!result);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRequestFocusOnLayoutFallbackToSelfP(void)
+{
+  UiTestApplication application;
+
+  // Layout (focusable) with depth-2 tree of 6 descendants.
+  // None qualifies for focus (mix of not-focusable, disabled, invisible).
+  auto layout = Layout::New();
+  layout.SetFocusable(true);
+
+  View child1 = View::New();                                          // not focusable
+  View child2 = View::New();
+  child2.SetFocusable(true);
+  child2.SetEnabled(false); // disabled
+  View child3 = View::New();
+  child3.SetFocusable(true);
+  child3.SetVisible(false); // invisible
+
+  auto nested = Layout::New();                                        // sub-layout, not focusable
+  View grand1 = View::New();
+  grand1.SetFocusable(true);
+  grand1.SetEnabled(false); // disabled
+  View grand2 = View::New();
+  grand2.SetFocusable(true);
+  grand2.SetVisible(false); // invisible
+
+  nested.Add(grand1);
+  nested.Add(grand2);
+  layout.Add(child1);
+  layout.Add(child2);
+  layout.Add(child3);
+  layout.Add(nested);
+  application.GetScene().Add(layout);
+  application.SendNotification();
+  application.Render();
+
+  // No eligible descendant → layout itself should take focus
+  bool result = FocusManager::Get().RequestFocus(layout);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == layout);
+  END_TEST;
+}
+
+// ============================================================
+// DescendantFocusBlocked
+// ============================================================
+
+int UtcDaliFocusManagerDescendantFocusBlockedP(void)
+{
+  UiTestApplication application;
+
+  auto layout = Layout::New();
+  layout.SetAllowDescendantFocusEnabled(false);
+  View child = View::New();
+  child.SetFocusable(true);
+  layout.Add(child);
+  application.GetScene().Add(layout);
+  application.SendNotification();
+  application.Render();
+
+  // Child should not get focus because parent blocks descendants
+  bool result = FocusManager::Get().RequestFocus(child);
+  DALI_TEST_CHECK(!result);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerDescendantFocusBlockedGetterP(void)
+{
+  UiTestApplication application;
+
+  View view = View::New();
+  DALI_TEST_CHECK(view.IsAllowDescendantFocusEnabled());
+  view.SetAllowDescendantFocusEnabled(false);
+  DALI_TEST_CHECK(!view.IsAllowDescendantFocusEnabled());
+  view.SetAllowDescendantFocusEnabled(true);
+  DALI_TEST_CHECK(view.IsAllowDescendantFocusEnabled());
+  END_TEST;
+}
+
+// ============================================================
+// FocusGroup containment
+// ============================================================
+
+int UtcDaliFocusManagerFocusGroupContainmentP(void)
+{
+  UiTestApplication application;
+
+  View group = View::New();
+  group.SetFocusable(false);
+  FocusManager::Get().SetAsFocusGroup(group, true);
+  View insideA = View::New();
+  insideA.SetFocusable(true);
+  insideA.SetRequestedY(0.0f);
+  insideA.SetRequestedWidth(50.0f);
+  insideA.SetRequestedHeight(50.0f);
+  View insideB = View::New();
+  insideB.SetFocusable(true);
+  insideB.SetRequestedY(60.0f);
+  insideB.SetRequestedWidth(50.0f);
+  insideB.SetRequestedHeight(50.0f);
+  group.Add(insideA);
+  group.Add(insideB);
+
+  View outside = View::New();
+  outside.SetFocusable(true);
+  outside.SetRequestedY(120.0f);
+  outside.SetRequestedWidth(50.0f);
+  outside.SetRequestedHeight(50.0f);
+
+  application.GetScene().Add(group);
+  application.GetScene().Add(outside);
+  application.SendNotification();
+  application.Render();
+
+  // Focus inside group first
+  FocusManager::Get().RequestFocus(insideA);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideA);
+
+  // MoveFocus should be scoped to the focus group.
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::DOWN));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideB);
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::DOWN));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideB);
+
+  // Direct RequestFocus to outside should work (programmatic path has no containment)
+  FocusManager::Get().RequestFocus(outside);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == outside);
+
+  FocusManager::Get().RequestFocus(insideA);
+  DALI_TEST_CHECK(FocusManager::Get().SetCurrentFocusView(outside));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == outside);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFocusGroupForwardBackwardContainmentP(void)
+{
+  UiTestApplication application;
+
+  View group = View::New();
+  FocusManager::Get().SetAsFocusGroup(group, true);
+
+  View insideA = View::New();
+  insideA.SetFocusable(true);
+  insideA.SetRequestedX(0.0f);
+  insideA.SetRequestedWidth(50.0f);
+  insideA.SetRequestedHeight(50.0f);
+  View insideB = View::New();
+  insideB.SetFocusable(true);
+  insideB.SetRequestedX(60.0f);
+  insideB.SetRequestedWidth(50.0f);
+  insideB.SetRequestedHeight(50.0f);
+  View outside = View::New();
+  outside.SetFocusable(true);
+  outside.SetRequestedX(120.0f);
+  outside.SetRequestedWidth(50.0f);
+  outside.SetRequestedHeight(50.0f);
+
+  group.Add(insideA);
+  group.Add(insideB);
+  application.GetScene().Add(group);
+  application.GetScene().Add(outside);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(insideA);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideA);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideB);
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideB);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideA);
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == insideA);
+  END_TEST;
+}
+
+namespace
+{
+View gOuterNavigationTarget;
+int  gOuterNavigationCallbackCount = 0;
+View gGroupNavigationTarget;
+int  gGroupNavigationCallbackCount = 0;
+
+FocusNavigationResult OuterNavigationCallbackFunc(View, FocusNavigationContext)
+{
+  ++gOuterNavigationCallbackCount;
+  return FocusNavigationResult::MoveTo(gOuterNavigationTarget);
+}
+
+FocusNavigationResult GroupNavigationCallbackFunc(View, FocusNavigationContext)
+{
+  ++gGroupNavigationCallbackCount;
+  return FocusNavigationResult::MoveTo(gGroupNavigationTarget);
+}
+} // namespace
+
+int UtcDaliFocusManagerFocusGroupStopsParentNavigationP(void)
+{
+  UiTestApplication application;
+
+  View outer   = View::New();
+  View group   = View::New();
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View inside = View::New();
+  inside.SetFocusable(true);
+  inside.SetRequestedX(60.0f);
+  inside.SetRequestedWidth(50.0f);
+  inside.SetRequestedHeight(50.0f);
+  View outside = View::New();
+  outside.SetFocusable(true);
+  outside.SetRequestedX(120.0f);
+  outside.SetRequestedWidth(50.0f);
+  outside.SetRequestedHeight(50.0f);
+
+  FocusManager::Get().SetAsFocusGroup(group, true);
+  group.Add(current);
+  group.Add(inside);
+  outer.Add(group);
+  outer.Add(outside);
+  application.GetScene().Add(outer);
+  application.SendNotification();
+  application.Render();
+
+  gOuterNavigationCallbackCount = 0;
+  gOuterNavigationTarget        = outside;
+  gGroupNavigationCallbackCount = 0;
+  gGroupNavigationTarget        = inside;
+  outer.SetFocusNavigationCallback(
+    FocusNavigationCallback::New(&OuterNavigationCallbackFunc));
+  group.SetFocusNavigationCallback(
+    FocusNavigationCallback::New(&GroupNavigationCallbackFunc));
+
+  FocusManager::Get().RequestFocus(current);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == inside);
+  DALI_TEST_CHECK(gGroupNavigationCallbackCount == 1);
+  DALI_TEST_CHECK(gOuterNavigationCallbackCount == 0);
+
+  gOuterNavigationTarget.Reset();
+  gGroupNavigationTarget.Reset();
+  END_TEST;
+}
+
+// ============================================================
+// SetCurrentFocusView — direct (no delegation)
+// ============================================================
+
+int UtcDaliFocusManagerSetCurrentFocusViewDirectP(void)
+{
+  UiTestApplication application;
+
+  View view = View::New();
+  view.SetFocusable(true);
+  application.GetScene().Add(view);
+  application.SendNotification();
+  application.Render();
+
+  // SetCurrentFocusView directly sets focus without delegation
+  bool result = FocusManager::Get().SetCurrentFocusView(view);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == view);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerSetCurrentFocusViewOnLayoutNoDelegationN(void)
+{
+  UiTestApplication application;
+
+  auto layout = Layout::New(); // not focusable by default
+  View child = View::New();
+  child.SetFocusable(true);
+  layout.Add(child);
+  application.GetScene().Add(layout);
+  application.SendNotification();
+  application.Render();
+
+  // SetCurrentFocusView does NOT delegate to children — layout is not focusable, so it fails
+  bool result = FocusManager::Get().SetCurrentFocusView(layout);
+  DALI_TEST_CHECK(!result);
+  END_TEST;
+}
+
+// ============================================================
+// FocusNavigationCallback
+// ============================================================
+
+namespace
+{
+View gCallbackTarget;
+int gCallbackCallCount = 0;
+FocusDirection gCallbackDirection = FocusDirection::LEFT;
+
+FocusNavigationResult FocusNavigationCallbackFunc(View, FocusNavigationContext context)
+{
+  ++gCallbackCallCount;
+  gCallbackDirection = context.GetDirection();
+  return FocusNavigationResult::MoveTo(gCallbackTarget);
+}
+} // namespace
+
+int UtcDaliFocusManagerFocusNavigationCallbackP(void)
+{
+  UiTestApplication application;
+
+  View parent = View::New();
+  View child1 = View::New();
+  child1.SetFocusable(true);
+  View child2 = View::New();
+  child2.SetFocusable(true);
+  parent.Add(child1);
+  parent.Add(child2);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  gCallbackTarget = child2;
+  gCallbackCallCount = 0;
+  parent.SetFocusNavigationCallback(
+    FocusNavigationCallback::New(&FocusNavigationCallbackFunc));
+
+  FocusManager::Get().RequestFocus(child1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == child1);
+
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::RIGHT);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == child2);
+  DALI_TEST_CHECK(gCallbackCallCount == 1);
+  DALI_TEST_CHECK(gCallbackDirection == FocusDirection::RIGHT);
+
+  gCallbackTarget.Reset();
+  END_TEST;
+}
+
+namespace
+{
+View gFallbackTarget;
+int gFallbackCallCount = 0;
+View gFallbackCurrent;
+FocusDirection gFallbackDirection = FocusDirection::LEFT;
+FocusDevice gFallbackDevice = FocusDevice::UNKNOWN;
+Dali::String gFallbackDeviceName;
+InputEventType gFallbackInputEventType = InputEventType::NONE;
+Window gFallbackWindow;
+View gFallbackFocusGroup;
+
+void RecordFallbackContext(View current, FocusNavigationContext context)
+{
+  ++gFallbackCallCount;
+  gFallbackCurrent = current;
+  gFallbackDirection = context.GetDirection();
+  gFallbackDevice = context.GetDevice();
+  gFallbackDeviceName = context.GetDeviceName();
+  gFallbackInputEventType = context.GetInputEvent().GetInputEventType();
+  gFallbackWindow = context.GetWindow();
+  gFallbackFocusGroup = context.GetFocusGroup();
+}
+
+FocusNavigationResult MoveFallback(View current, FocusNavigationContext context)
+{
+  RecordFallbackContext(current, context);
+  return FocusNavigationResult::MoveTo(gFallbackTarget);
+}
+
+FocusNavigationResult NotHandledFallback(View current, FocusNavigationContext context)
+{
+  RecordFallbackContext(current, context);
+  return FocusNavigationResult::NotHandled();
+}
+
+FocusNavigationResult StayFallback(View current, FocusNavigationContext context)
+{
+  RecordFallbackContext(current, context);
+  return FocusNavigationResult::Stay();
+}
+
+FocusNavigationResult ReentrantFallback(View current, FocusNavigationContext context)
+{
+  RecordFallbackContext(current, context);
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::LEFT));
+  DALI_TEST_CHECK(!FocusManager::Get().RequestFocus(gFallbackTarget));
+  FocusManager::Get().SetFocusNavigationFallback({});
+  return FocusNavigationResult::MoveTo(gFallbackTarget);
+}
+
+View gLocalCallbackTarget;
+int gLocalCallbackCallCount = 0;
+
+FocusNavigationResult ReentrantLocalCallback(View, FocusNavigationContext)
+{
+  ++gLocalCallbackCallCount;
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::LEFT));
+  DALI_TEST_CHECK(!FocusManager::Get().RequestFocus(gLocalCallbackTarget));
+  return FocusNavigationResult::MoveTo(gLocalCallbackTarget);
+}
+
+class ResolvingFocusViewImpl : public ViewImpl
+{
+public:
+  static IntrusivePtr<ResolvingFocusViewImpl> New(View resolvedTarget)
+  {
+    return new ResolvingFocusViewImpl(resolvedTarget);
+  }
+
+  View OnFocusRequested() override
+  {
+    return mResolvedTarget;
+  }
+
+private:
+  explicit ResolvingFocusViewImpl(View resolvedTarget)
+  : mResolvedTarget(resolvedTarget)
+  {
+  }
+
+private:
+  View mResolvedTarget;
+};
+
+Dali::TypeRegistration resolvingFocusViewTypeReg(
+  typeid(ResolvingFocusViewImpl), typeid(Dali::Ui::View), nullptr);
+
+View CreateResolvingFocusView(View resolvedTarget)
+{
+  IntrusivePtr<ResolvingFocusViewImpl> impl = ResolvingFocusViewImpl::New(resolvedTarget);
+  View view(*impl);
+  impl->Initialize();
+  return view;
+}
+
+void ResetFallbackState()
+{
+  gFallbackTarget.Reset();
+  gFallbackCallCount = 0;
+  gFallbackCurrent.Reset();
+  gFallbackDirection = FocusDirection::LEFT;
+  gFallbackDevice = FocusDevice::UNKNOWN;
+  gFallbackDeviceName = "";
+  gFallbackInputEventType = InputEventType::NONE;
+  gFallbackWindow.Reset();
+  gFallbackFocusGroup.Reset();
+}
+} // namespace
+
+int UtcDaliFocusManagerFallbackSelectsInitialFocusP(void)
+{
+  UiTestApplication application;
+
+  View first = View::New();
+  first.SetFocusable(true);
+  View fallbackTarget = View::New();
+  fallbackTarget.SetFocusable(true);
+  application.GetScene().Add(first);
+  application.GetScene().Add(fallbackTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(first));
+  manager.ClearFocus();
+
+  ResetFallbackState();
+  gFallbackTarget = fallbackTarget;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == fallbackTarget);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+  DALI_TEST_CHECK(!gFallbackCurrent);
+  DALI_TEST_CHECK(gFallbackDirection == FocusDirection::RIGHT);
+  DALI_TEST_CHECK(gFallbackDevice == FocusDevice::PROGRAMMATIC);
+  DALI_TEST_CHECK(gFallbackInputEventType == InputEventType::NONE);
+  DALI_TEST_CHECK(gFallbackWindow);
+  DALI_TEST_CHECK(!gFallbackFocusGroup);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerProgrammaticInitialFocusRequiresWindowN(void)
+{
+  UiTestApplication application;
+
+  View fallbackTarget = View::New();
+  fallbackTarget.SetFocusable(true);
+  application.GetScene().Add(fallbackTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  ResetFallbackState();
+  gFallbackTarget = fallbackTarget;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(!manager.GetCurrentFocusView());
+  DALI_TEST_CHECK(gFallbackCallCount == 0);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFallbackNotHandledUsesFinderP(void)
+{
+  UiTestApplication application;
+
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View finderTarget = View::New();
+  finderTarget.SetFocusable(true);
+  finderTarget.SetRequestedX(60.0f);
+  finderTarget.SetRequestedWidth(50.0f);
+  finderTarget.SetRequestedHeight(50.0f);
+  application.GetScene().Add(current);
+  application.GetScene().Add(finderTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&NotHandledFallback));
+
+  DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == finderTarget);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFallbackStayStopsFinderN(void)
+{
+  UiTestApplication application;
+
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View finderTarget = View::New();
+  finderTarget.SetFocusable(true);
+  finderTarget.SetRequestedX(60.0f);
+  finderTarget.SetRequestedWidth(50.0f);
+  finderTarget.SetRequestedHeight(50.0f);
+  application.GetScene().Add(current);
+  application.GetScene().Add(finderTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&StayFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFallbackRejectsOutsideFocusGroupN(void)
+{
+  UiTestApplication application;
+
+  View group = View::New();
+  View current = View::New();
+  current.SetFocusable(true);
+  View insideFinderTarget = View::New();
+  insideFinderTarget.SetFocusable(true);
+  View outside = View::New();
+  outside.SetFocusable(true);
+  group.Add(current);
+  group.Add(insideFinderTarget);
+  application.GetScene().Add(group);
+  application.GetScene().Add(outside);
+  FocusManager manager = FocusManager::Get();
+  manager.SetAsFocusGroup(group, true);
+  application.SendNotification();
+  application.Render();
+
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  gFallbackTarget = outside;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(gFallbackFocusGroup == group);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFallbackRejectsCandidateFromOtherWindowN(void)
+{
+  UiTestApplication application;
+
+  View current = View::New();
+  current.SetFocusable(true);
+  View otherWindowTarget = View::New();
+  otherWindowTarget.SetFocusable(true);
+  Window otherWindow = Window::New(PositionSize(0, 0, 480, 800), "focus-navigation-other-window");
+
+  application.GetScene().Add(current);
+  otherWindow.Add(otherWindowTarget);
+  Dali::Integration::Scene otherScene = Dali::Internal::Adaptor::Adaptor::GetScene(otherWindow);
+  application.AddScene(otherScene);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  gFallbackTarget = otherWindowTarget;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  application.RemoveScene(otherScene);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerRejectsResolvedTargetOutsideFocusGroupN(void)
+{
+  UiTestApplication application;
+
+  View group = View::New();
+  View current = View::New();
+  current.SetFocusable(true);
+  View outside = View::New();
+  outside.SetFocusable(true);
+  View resolvingCandidate = CreateResolvingFocusView(outside);
+  group.Add(current);
+  group.Add(resolvingCandidate);
+  application.GetScene().Add(group);
+  application.GetScene().Add(outside);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  manager.SetAsFocusGroup(group, true);
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  gFallbackTarget = resolvingCandidate;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFallbackRejectsReentrantMutationP(void)
+{
+  UiTestApplication application;
+
+  View current = View::New();
+  current.SetFocusable(true);
+  View fallbackTarget = View::New();
+  fallbackTarget.SetFocusable(true);
+  application.GetScene().Add(current);
+  application.GetScene().Add(fallbackTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  gFallbackTarget = fallbackTarget;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&ReentrantFallback));
+
+  DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == fallbackTarget);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerLocalCallbackRejectsReentrantMutationP(void)
+{
+  UiTestApplication application;
+
+  View parent = View::New();
+  View current = View::New();
+  current.SetFocusable(true);
+  View target = View::New();
+  target.SetFocusable(true);
+  parent.Add(current);
+  parent.Add(target);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  gLocalCallbackTarget = target;
+  gLocalCallbackCallCount = 0;
+  parent.SetFocusNavigationCallback(FocusNavigationCallback::New(&ReentrantLocalCallback));
+
+  DALI_TEST_CHECK(manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == target);
+  DALI_TEST_CHECK(gLocalCallbackCallCount == 1);
+
+  gLocalCallbackTarget.Reset();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerFallbackReceivesKeyContextWithoutCurrentFocusP(void)
+{
+  UiTestApplication application;
+
+  View fallbackTarget = View::New();
+  fallbackTarget.SetFocusable(true);
+  application.GetScene().Add(fallbackTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  ResetFallbackState();
+  gFallbackTarget = fallbackTarget;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  Dali::Integration::KeyEvent keyDown(
+    "Right", "", "", 0, 0, 100u, Dali::Integration::KeyEvent::DOWN, "", "test-keyboard", Device::Class::KEYBOARD, Device::Subclass::NONE);
+  application.ProcessEvent(keyDown);
+
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == fallbackTarget);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+  DALI_TEST_CHECK(!gFallbackCurrent);
+  DALI_TEST_CHECK(gFallbackDirection == FocusDirection::RIGHT);
+  DALI_TEST_CHECK(gFallbackDevice == FocusDevice::KEYBOARD);
+  DALI_TEST_EQUALS(gFallbackDeviceName, Dali::String("test-keyboard"), TEST_LOCATION);
+  DALI_TEST_CHECK(gFallbackInputEventType == InputEventType::KEY_EVENT);
+  DALI_TEST_CHECK(gFallbackWindow == application.GetWindow());
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerInitialKeyFallbackNotHandledUsesSourceWindowFinderP(void)
+{
+  UiTestApplication application;
+
+  View finderTarget = View::New();
+  finderTarget.SetFocusable(true);
+  application.GetScene().Add(finderTarget);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  ResetFallbackState();
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&NotHandledFallback));
+
+  Dali::Integration::KeyEvent keyDown(
+    "Tab", "", "", 0, 0, 100u, Dali::Integration::KeyEvent::DOWN, "", "test-keyboard", Device::Class::KEYBOARD, Device::Subclass::NONE);
+  application.ProcessEvent(keyDown);
+
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == finderTarget);
+  DALI_TEST_CHECK(gFallbackCallCount == 1);
+  DALI_TEST_CHECK(!gFallbackCurrent);
+  DALI_TEST_CHECK(gFallbackDirection == FocusDirection::FORWARD);
+  DALI_TEST_CHECK(gFallbackWindow == application.GetWindow());
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerExplicitTargetOutsideFocusGroupStopsFallbackN(void)
+{
+  UiTestApplication application;
+
+  View group = View::New();
+  View current = View::New();
+  current.SetFocusable(true);
+  View inside = View::New();
+  inside.SetFocusable(true);
+  View outside = View::New();
+  outside.SetFocusable(true);
+  current.SetRightFocusableView(outside);
+  group.Add(current);
+  group.Add(inside);
+  application.GetScene().Add(group);
+  application.GetScene().Add(outside);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager manager = FocusManager::Get();
+  manager.SetAsFocusGroup(group, true);
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  gFallbackTarget = inside;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(gFallbackCallCount == 0);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerStaleExplicitTargetStopsFallbackAndFinderN(void)
+{
+  UiTestApplication application;
+
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View finderTarget = View::New();
+  finderTarget.SetFocusable(true);
+  finderTarget.SetRequestedX(60.0f);
+  finderTarget.SetRequestedWidth(50.0f);
+  finderTarget.SetRequestedHeight(50.0f);
+  View fallbackTarget = View::New();
+  fallbackTarget.SetFocusable(true);
+  application.GetScene().Add(current);
+  application.GetScene().Add(finderTarget);
+  application.GetScene().Add(fallbackTarget);
+  application.SendNotification();
+  application.Render();
+
+  current.SetProperty(View::Property::RIGHT_FOCUSABLE_VIEW_ID, 0x7fffffff);
+
+  FocusManager manager = FocusManager::Get();
+  DALI_TEST_CHECK(manager.RequestFocus(current));
+  ResetFallbackState();
+  gFallbackTarget = fallbackTarget;
+  manager.SetFocusNavigationFallback(FocusNavigationCallback::New(&MoveFallback));
+
+  DALI_TEST_CHECK(!manager.MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(manager.GetCurrentFocusView() == current);
+  DALI_TEST_CHECK(gFallbackCallCount == 0);
+
+  manager.SetFocusNavigationFallback({});
+  ResetFallbackState();
+  END_TEST;
+}
+
+// ============================================================
+// MoveFocus step priority
+// ============================================================
+// MoveFocus resolves the next focus target in this order:
+//   Step 1: Parent chain navigation (FocusNavigationCallback)
+//   Step 2: Directional property (e.g. RIGHT_FOCUSABLE_VIEW_ID)
+//   Step 3: Application fallback
+//   Step 4: FocusFinder (geometry-based or linear ordering)
+//
+// The following tests verify that a higher-priority step always
+// wins over lower ones, and that removing a step falls through
+// to the next.
+
+namespace
+{
+View gPriorityCallbackTarget;
+
+FocusNavigationResult PriorityCallbackFunc(View, FocusNavigationContext)
+{
+  return FocusNavigationResult::MoveTo(gPriorityCallbackTarget);
+}
+} // namespace
+
+int UtcDaliFocusManagerMoveFocusPriorityStep1WinsOverStep2And3P(void)
+{
+  UiTestApplication application;
+
+  // Layout with the focused view and three candidates.
+  //
+  //   [current]  [viewProp]        ← Step 2 target (directional property)
+  //              [viewCallback]    ← Step 1 target (parent callback)
+  //              [viewFinder]      ← Step 4 target (FocusFinder geometry, nearest right)
+  //
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedY(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View viewProp = View::New();
+  viewProp.SetFocusable(true);
+  viewProp.SetRequestedX(200.0f);
+  viewProp.SetRequestedY(0.0f);
+  viewProp.SetRequestedWidth(50.0f);
+  viewProp.SetRequestedHeight(50.0f);
+  View viewCallback = View::New();
+  viewCallback.SetFocusable(true);
+  viewCallback.SetRequestedX(200.0f);
+  viewCallback.SetRequestedY(60.0f);
+  viewCallback.SetRequestedWidth(50.0f);
+  viewCallback.SetRequestedHeight(50.0f);
+  View viewFinder = View::New();
+  viewFinder.SetFocusable(true);
+  viewFinder.SetRequestedX(60.0f);
+  viewFinder.SetRequestedY(0.0f);
+  viewFinder.SetRequestedWidth(50.0f);
+  viewFinder.SetRequestedHeight(50.0f);
+
+  auto layout = Layout::New();
+  layout.Add(current);
+  layout.Add(viewProp);
+  layout.Add(viewCallback);
+  layout.Add(viewFinder);
+  application.GetScene().Add(layout);
+  application.SendNotification();
+  application.Render();
+
+  // Step 1: parent callback → viewCallback
+  gPriorityCallbackTarget = viewCallback;
+  layout.SetFocusNavigationCallback(
+    FocusNavigationCallback::New(&PriorityCallbackFunc));
+
+  // Step 2: directional property — current RIGHT → viewProp
+  current.SetRightFocusableView(viewProp);
+
+  // Step 3: no application fallback
+  // Step 4: FocusFinder would find viewFinder (nearest to the right)
+
+  FocusManager::Get().RequestFocus(current);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+
+  // MoveFocus RIGHT — Step 1 should win
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::RIGHT);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == viewCallback);
+
+  gPriorityCallbackTarget.Reset();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerMoveFocusPriorityStep2WinsOverStep3P(void)
+{
+  UiTestApplication application;
+
+  // Same layout but NO parent callback set.
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedY(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View viewProp = View::New();
+  viewProp.SetFocusable(true);
+  viewProp.SetRequestedX(200.0f);
+  viewProp.SetRequestedY(0.0f);
+  viewProp.SetRequestedWidth(50.0f);
+  viewProp.SetRequestedHeight(50.0f);
+  View viewFinder = View::New();
+  viewFinder.SetFocusable(true);
+  viewFinder.SetRequestedX(60.0f);
+  viewFinder.SetRequestedY(0.0f);
+  viewFinder.SetRequestedWidth(50.0f);
+  viewFinder.SetRequestedHeight(50.0f);
+
+  View parent = View::New();
+  parent.Add(current);
+  parent.Add(viewProp);
+  parent.Add(viewFinder);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  // Step 1: no parent callback
+  // Step 2: directional property — current RIGHT → viewProp
+  current.SetRightFocusableView(viewProp);
+
+  // Step 3: no application fallback
+  // Step 4: FocusFinder would find viewFinder (nearest to the right)
+
+  FocusManager::Get().RequestFocus(current);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+
+  // MoveFocus RIGHT — Step 2 should win (Step 1 absent)
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::RIGHT);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == viewProp);
+
+  gPriorityCallbackTarget.Reset();
+  END_TEST;
+}
+
+int UtcDaliFocusManagerMoveFocusPriorityStep3FallbackP(void)
+{
+  UiTestApplication application;
+
+  // No directional property, no callback — only FocusFinder.
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedY(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+  View viewFinder = View::New();
+  viewFinder.SetFocusable(true);
+  viewFinder.SetRequestedX(60.0f);
+  viewFinder.SetRequestedY(0.0f);
+  viewFinder.SetRequestedWidth(50.0f);
+  viewFinder.SetRequestedHeight(50.0f);
+
+  View parent = View::New();
+  parent.Add(current);
+  parent.Add(viewFinder);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  // Step 1: no parent callback
+  // Step 2: no directional property
+  // Step 3: no application fallback
+  // Step 4: FocusFinder finds viewFinder (only candidate to the right)
+
+  FocusManager::Get().RequestFocus(current);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::RIGHT);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == viewFinder);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerMoveFocusPriorityAllStepsFailN(void)
+{
+  UiTestApplication application;
+
+  // current is the only focusable view — no candidate in any step.
+  View current = View::New();
+  current.SetFocusable(true);
+  current.SetRequestedX(0.0f);
+  current.SetRequestedY(0.0f);
+  current.SetRequestedWidth(50.0f);
+  current.SetRequestedHeight(50.0f);
+
+  View parent = View::New();
+  parent.Add(current);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(current);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::RIGHT);
+  DALI_TEST_CHECK(!result);
+  // Focus should remain on current
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+  END_TEST;
+}
+
+// ============================================================
+// Directional focus properties
+// ============================================================
+
+int UtcDaliFocusManagerDirectionalPropertyP(void)
+{
+  UiTestApplication application;
+
+  View view1 = View::New();
+  view1.SetFocusable(true);
+  View view2 = View::New();
+  view2.SetFocusable(true);
+  view1.SetRightFocusableView(view2);
+  application.GetScene().Add(view1);
+  application.GetScene().Add(view2);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(view1);
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::RIGHT);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == view2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerMoveFocusRejectsBlockedAncestorCandidateN(void)
+{
+  UiTestApplication application;
+
+  View current = View::New();
+  current.SetFocusable(true);
+  View blockedParent  = View::New();
+  View blockedChild = View::New();
+  blockedChild.SetFocusable(true);
+  View fallbackFinder = View::New();
+  fallbackFinder.SetFocusable(true);
+  fallbackFinder.SetRequestedX(60.0f);
+  fallbackFinder.SetRequestedWidth(50.0f);
+  fallbackFinder.SetRequestedHeight(50.0f);
+
+  blockedParent.SetAllowDescendantFocusEnabled(false);
+  blockedParent.Add(blockedChild);
+
+  current.SetRightFocusableView(blockedChild);
+
+  application.GetScene().Add(current);
+  application.GetScene().Add(blockedParent);
+  application.GetScene().Add(fallbackFinder);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(current);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::RIGHT));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == current);
+  END_TEST;
+}
+
+// ============================================================
+// FORWARD / BACKWARD focusable view ID
+// ============================================================
+
+int UtcDaliFocusManagerForwardFocusableViewIdP(void)
+{
+  UiTestApplication application;
+
+  View view1 = View::New();
+  view1.SetFocusable(true);
+  View view2 = View::New();
+  view2.SetFocusable(true);
+  view1.SetForwardFocusableView(view2);
+  application.GetScene().Add(view1);
+  application.GetScene().Add(view2);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(view1);
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::FORWARD);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == view2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackwardFocusableViewIdP(void)
+{
+  UiTestApplication application;
+
+  View view1 = View::New();
+  view1.SetFocusable(true);
+  View view2 = View::New();
+  view2.SetFocusable(true);
+  view2.SetBackwardFocusableView(view1);
+  application.GetScene().Add(view1);
+  application.GetScene().Add(view2);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(view2);
+  bool result = FocusManager::Get().MoveFocus(FocusDirection::BACKWARD);
+  DALI_TEST_CHECK(result);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == view1);
+  END_TEST;
+}
+
+// ============================================================
+// FORWARD / BACKWARD — FocusFinder linear ordering
+// ============================================================
+
+int UtcDaliFocusManagerForwardRootLayerOrderingP(void)
+{
+  UiTestApplication application;
+
+  View parentA = View::New();
+  parentA.SetRequestedX(0.0f);
+  parentA.SetRequestedWidth(120.0f);
+  parentA.SetRequestedHeight(50.0f);
+  View parentB = View::New();
+  parentB.SetRequestedX(140.0f);
+  parentB.SetRequestedWidth(120.0f);
+  parentB.SetRequestedHeight(50.0f);
+  View a1 = View::New();
+  a1.SetFocusable(true);
+  a1.SetRequestedX(0.0f);
+  a1.SetRequestedWidth(50.0f);
+  a1.SetRequestedHeight(50.0f);
+  View a2 = View::New();
+  a2.SetFocusable(true);
+  a2.SetRequestedX(60.0f);
+  a2.SetRequestedWidth(50.0f);
+  a2.SetRequestedHeight(50.0f);
+  View b1 = View::New();
+  b1.SetFocusable(true);
+  b1.SetRequestedX(0.0f);
+  b1.SetRequestedWidth(50.0f);
+  b1.SetRequestedHeight(50.0f);
+
+  parentA.Add(a1);
+  parentA.Add(a2);
+  parentB.Add(b1);
+  application.GetScene().Add(parentA);
+  application.GetScene().Add(parentB);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(a1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == a1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == a2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == b1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == a2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardSiblingsP(void)
+{
+  UiTestApplication application;
+
+  // Three focusable siblings in a plain View container.
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedX(120.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackwardSiblingsP(void)
+{
+  UiTestApplication application;
+
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedX(120.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v3);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardBackwardRtlSiblingsP(void)
+{
+  UiTestApplication application;
+
+  View parent = View::New();
+  parent.SetRequestedWidth(180.0f);
+  parent.SetRequestedHeight(50.0f);
+  parent.SetLayoutDirection(Dali::LayoutDirection::RIGHT_TO_LEFT);
+
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedX(120.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+
+  parent.Measure(180.0f, 50.0f);
+  parent.Arrange(LayoutRect(0.0f, 0.0f, 180.0f, 50.0f));
+
+  DALI_TEST_EQUALS(v1.GetPositionX(), 130.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(v2.GetPositionX(), 70.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(v3.GetPositionX(), 10.0f, TEST_LOCATION);
+
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardBackwardRtlStandaloneSiblingsP(void)
+{
+  UiTestApplication application;
+
+  View parent = View::New();
+  parent.SetRequestedWidth(180.0f);
+  parent.SetRequestedHeight(50.0f);
+  parent.SetLayoutDirection(Dali::LayoutDirection::RIGHT_TO_LEFT);
+
+  View v1 = View::New();
+  v1.SetLayoutMode(LayoutMode::STANDALONE);
+  v1.SetFocusable(true);
+  v1.SetRequestedX(120.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetLayoutMode(LayoutMode::STANDALONE);
+  v2.SetFocusable(true);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetLayoutMode(LayoutMode::STANDALONE);
+  v3.SetFocusable(true);
+  v3.SetRequestedX(0.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+
+  parent.Measure(180.0f, 50.0f);
+  parent.Arrange(LayoutRect(0.0f, 0.0f, 180.0f, 50.0f));
+
+  DALI_TEST_EQUALS(v1.GetPositionX(), 120.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(v2.GetPositionX(), 60.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(v3.GetPositionX(), 0.0f, TEST_LOCATION);
+
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardBackwardRtlHorizontalStackP(void)
+{
+  UiTestApplication application;
+
+  StackLayout parent = StackLayout::New(StackOrientation::HORIZONTAL);
+  parent.SetRequestedWidth(200.0f);
+  parent.SetRequestedHeight(50.0f);
+  parent.SetLayoutDirection(Dali::LayoutDirection::RIGHT_TO_LEFT);
+
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedWidth(40.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedWidth(60.0f);
+  v3.SetRequestedHeight(50.0f);
+
+  v1.SetLayoutParams(StackLayoutParams::New().SetAlignment(LayoutAlignment::FILL));
+  v2.SetLayoutParams(StackLayoutParams::New().SetAlignment(LayoutAlignment::FILL));
+  v3.SetLayoutParams(StackLayoutParams::New().SetAlignment(LayoutAlignment::FILL));
+
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+
+  parent.Measure(200.0f, 50.0f);
+  parent.Arrange(LayoutRect(0.0f, 0.0f, 200.0f, 50.0f));
+
+  DALI_TEST_EQUALS(v1.GetPositionX(), 160.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(v2.GetPositionX(), 110.0f, TEST_LOCATION);
+  DALI_TEST_EQUALS(v3.GetPositionX(), 50.0f, TEST_LOCATION);
+
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardSkipsNonFocusableP(void)
+{
+  UiTestApplication application;
+
+  // v1(focusable) → v2(NOT focusable) → v3(focusable)
+  // FORWARD from v1 should skip v2 and land on v3.
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f); // not focusable
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedX(120.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardNestedLayoutP(void)
+{
+  UiTestApplication application;
+
+  // parent
+  //   ├─ v1 (focusable)
+  //   └─ nested
+  //       ├─ v2 (focusable)
+  //       └─ v3 (focusable)
+  //
+  // FORWARD from v1 → v2 → v3 (depth-first child order).
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedY(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View nested = View::New();
+  nested.SetRequestedX(60.0f);
+  nested.SetRequestedY(0.0f);
+  nested.SetRequestedWidth(50.0f);
+  nested.SetRequestedHeight(120.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedY(0.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedY(60.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+  nested.Add(v2);
+  nested.Add(v3);
+  parent.Add(v1);
+  parent.Add(nested);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardAtEndFailsN(void)
+{
+  UiTestApplication application;
+
+  // Only two views. After reaching the last one, FORWARD should fail.
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(v2);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v2);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+
+  // No next view — should fail and stay on v2
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v2);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerBackwardAtBeginFailsN(void)
+{
+  UiTestApplication application;
+
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(v2);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+
+  // No previous view — should fail and stay on v1
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::BACKWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardSkipsInvisibleAndDisabledP(void)
+{
+  UiTestApplication application;
+
+  // v1(focusable) → v2(invisible) → v3(disabled) → v4(focusable)
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetVisible(false);
+  v2.SetRequestedX(60.0f);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetEnabled(false);
+  v3.SetRequestedX(120.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+  View v4 = View::New();
+  v4.SetFocusable(true);
+  v4.SetRequestedX(180.0f);
+  v4.SetRequestedWidth(50.0f);
+  v4.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(v2);
+  parent.Add(v3);
+  parent.Add(v4);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v4);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardDescendantBlockedSkipsSubtreeP(void)
+{
+  UiTestApplication application;
+
+  // parent
+  //   ├─ v1 (focusable)
+  //   ├─ blocked (descendant focus blocked)
+  //   │   └─ v2 (focusable — but unreachable)
+  //   └─ v3 (focusable)
+  //
+  // FORWARD from v1 should skip the blocked subtree and go to v3.
+  View parent  = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedX(0.0f);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  View blocked = View::New();
+  blocked.SetRequestedX(60.0f);
+  blocked.SetRequestedWidth(50.0f);
+  blocked.SetRequestedHeight(50.0f);
+  blocked.SetAllowDescendantFocusEnabled(false);
+  View v2 = View::New();
+  v2.SetFocusable(true);
+  v2.SetRequestedWidth(50.0f);
+  v2.SetRequestedHeight(50.0f);
+  blocked.Add(v2);
+  View v3 = View::New();
+  v3.SetFocusable(true);
+  v3.SetRequestedX(120.0f);
+  v3.SetRequestedWidth(50.0f);
+  v3.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  parent.Add(blocked);
+  parent.Add(v3);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v3);
+  END_TEST;
+}
+
+int UtcDaliFocusManagerForwardSingleViewN(void)
+{
+  UiTestApplication application;
+
+  // Only one focusable view — FORWARD should fail.
+  View parent = View::New();
+  View v1 = View::New();
+  v1.SetFocusable(true);
+  v1.SetRequestedWidth(50.0f);
+  v1.SetRequestedHeight(50.0f);
+  parent.Add(v1);
+  application.GetScene().Add(parent);
+  application.SendNotification();
+  application.Render();
+
+  FocusManager::Get().RequestFocus(v1);
+  DALI_TEST_CHECK(!FocusManager::Get().MoveFocus(FocusDirection::FORWARD));
+  DALI_TEST_CHECK(FocusManager::Get().GetCurrentFocusView() == v1);
+  END_TEST;
+}

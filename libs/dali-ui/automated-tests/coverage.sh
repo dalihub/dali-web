@@ -1,0 +1,94 @@
+#!/bin/bash
+
+set -euo pipefail
+
+opt_genhtml=true
+if [ "${1:-}" == "-n" ] ; then
+  opt_genhtml=false
+fi
+
+BUILD_DIR_NAME=tizen
+
+BUILDSYSTEM=make
+
+if [ -e ../build/tizen/build.ninja ] ; then
+    BUILDSYSTEM=ninja
+fi
+
+if [ -z "${DESKTOP_PREFIX:-}" ] ; then
+    echo "ERROR: DESKTOP_PREFIX is not set. Source the DALi setenv script before running coverage." >&2
+    exit 1
+fi
+
+FASTCOV_BIN="${DESKTOP_PREFIX}/bin/fastcov.py"
+CMAKE_CACHE="../build/$BUILD_DIR_NAME/CMakeCache.txt"
+TOP_LEVEL_INFO="../build/$BUILD_DIR_NAME/dali.info"
+TOP_LEVEL_ONLY_INFO="../build/$BUILD_DIR_NAME/dali-top-level.info"
+AUTOMATED_TEST_INFO="../build/$BUILD_DIR_NAME/dali-automated-tests.info"
+CANONICAL_INFO="../build/$BUILD_DIR_NAME/dali-canonical.info"
+
+if [ ! -x "$FASTCOV_BIN" ] ; then
+    echo "ERROR: fastcov.py not found or not executable: $FASTCOV_BIN" >&2
+    exit 1
+fi
+
+if [ ! -f "$CMAKE_CACHE" ] ; then
+    echo "ERROR: CMake cache not found: $CMAKE_CACHE" >&2
+    exit 1
+fi
+
+CXX_COMPILER=$(sed -n 's/^CMAKE_CXX_COMPILER:FILEPATH=//p' "$CMAKE_CACHE" | head -1)
+CXX_COMPILER=${CXX_COMPILER:-${CXX:-c++}}
+CXX_VERSION=$("$CXX_COMPILER" -dumpfullversion -dumpversion 2>/dev/null || true)
+CXX_MAJOR=${CXX_VERSION%%.*}
+
+if [ -n "$CXX_MAJOR" ] && command -v "gcov-$CXX_MAJOR" >/dev/null 2>&1 ; then
+    GCOV_BIN=$(command -v "gcov-$CXX_MAJOR")
+elif command -v gcov >/dev/null 2>&1 ; then
+    GCOV_BIN=$(command -v gcov)
+else
+    echo "ERROR: gcov not found. Install the gcov package matching $CXX_COMPILER." >&2
+    exit 1
+fi
+
+echo "Using gcov for coverage data collection: $GCOV_BIN"
+
+(  cd ../build/$BUILD_DIR_NAME ; $BUILDSYSTEM cov_data )
+
+if [ ! -s "$TOP_LEVEL_INFO" ] ; then
+    echo "ERROR: coverage data was not generated: $TOP_LEVEL_INFO" >&2
+    echo "Check that dali-ui was configured with coverage flags and that gcov matches the compiler version." >&2
+    exit 1
+fi
+
+FASTCOV_OPTS=(--branch-coverage --lcov --gcov "$GCOV_BIN")
+EXCLUDED_SOURCES=(/usr/include /usr/local/include automated-tests dali-env third-party generated/ .autogen.cpp)
+echo "Using fastcov.py for coverage data collection"
+
+"$FASTCOV_BIN" "${FASTCOV_OPTS[@]}" \
+    -d build \
+    --exclude "${EXCLUDED_SOURCES[@]}" \
+    -o "$AUTOMATED_TEST_INFO"
+
+if [ ! -s "$AUTOMATED_TEST_INFO" ] ; then
+    echo "ERROR: automated test coverage data was not generated: $AUTOMATED_TEST_INFO" >&2
+    exit 1
+fi
+
+cp "$TOP_LEVEL_INFO" "$TOP_LEVEL_ONLY_INFO"
+"$FASTCOV_BIN" --branch-coverage --lcov \
+    --add-tracefile "$TOP_LEVEL_ONLY_INFO" "$AUTOMATED_TEST_INFO" \
+    --exclude "${EXCLUDED_SOURCES[@]}" \
+    -o "$CANONICAL_INFO"
+mv "$CANONICAL_INFO" "$TOP_LEVEL_INFO"
+rm -f "$TOP_LEVEL_ONLY_INFO" "$AUTOMATED_TEST_INFO"
+
+if [ ! -s "$TOP_LEVEL_INFO" ] ; then
+    echo "ERROR: canonical coverage data was not generated: $TOP_LEVEL_INFO" >&2
+    exit 1
+fi
+
+if [ "$opt_genhtml" = true ] ; then
+    genhtml --branch-coverage -o "../build/$BUILD_DIR_NAME/doc/coverage" "$TOP_LEVEL_INFO"
+    echo "Coverage output: ../build/$BUILD_DIR_NAME/doc/coverage/index.html"
+fi
