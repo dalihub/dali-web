@@ -242,6 +242,13 @@ IF( ENABLE_TIZEN_NAMESPACE )
 ELSE()
   SET( DALI_TIZEN_NAMESPACE_VALUE 0 )
 ENDIF()
+# Web builds can keep generated headers outside the imported source tree.
+IF(DALI_GENERATED_INCLUDE_DIR)
+  LIST(REMOVE_ITEM PUBLIC_API_HEADERS ${public_api_namespace_header})
+  SET(public_api_namespace_header ${DALI_GENERATED_INCLUDE_DIR}/dali/public-api/common/dali-namespace.h)
+  INCLUDE_DIRECTORIES(BEFORE ${DALI_GENERATED_INCLUDE_DIR})
+  INSTALL(FILES ${public_api_namespace_header} DESTINATION ${INCLUDE_DIR}/dali/public-api/common)
+ENDIF()
 CONFIGURE_FILE(
   ${public_api_namespace_header_template}
   ${public_api_namespace_header}
@@ -293,6 +300,7 @@ IF(WIN32 AND NOT STATIC)
 ENDIF()
 TARGET_INCLUDE_DIRECTORIES(${name}
   PUBLIC
+    $<$<BOOL:${DALI_GENERATED_INCLUDE_DIR}>:$<BUILD_INTERFACE:${DALI_GENERATED_INCLUDE_DIR}>>
     $<BUILD_INTERFACE:${ROOT_SRC_DIR}>
     $<INSTALL_INTERFACE:include>
 )

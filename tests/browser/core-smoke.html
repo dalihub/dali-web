@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>DALi Core WebAssembly execution probe</title>
+<h1>DALi Core WebAssembly execution probe</h1>
+<p>This checks actor animation using mock graphics. It does not render DALi pixels.</p>
+<pre id="log"></pre>
+<script>
+  window.probeResult = { status: "running", output: [] };
+  function record(message) {
+    const text = String(message);
+    window.probeResult.output.push(text);
+    document.getElementById("log").textContent += text + "\n";
+  }
+  var Module = {
+    print: record,
+    printErr: record,
+    onExit(code) {
+      const passed = window.probeResult.output.some(text => text.startsWith("PASS: DALi Core"));
+      window.probeResult.status = code === 0 && passed ? "passed" : "failed";
+    },
+    onAbort(reason) {
+      record(reason);
+      window.probeResult.status = "failed";
+    }
+  };
+  window.addEventListener("error", event => {
+    record(event.message);
+    window.probeResult.status = "failed";
+  });
+</script>
+<script src="core-smoke.js"></script>
+</html>

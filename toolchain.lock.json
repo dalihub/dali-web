@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux-x86_64",
+  "emsdkCommit": "d7b4130688bfa348392b921ab04015aa15c4f154",
+  "emscriptenVersion": "6.0.13",
+  "emscriptenCommit": "e13ee988ce3d87a738dd8f3661d02223308c412a",
+  "emscriptenRelease": "eb132757325583b787fe9414b09afea9442b72ad",
+  "sdkArchiveSha256": "cda6801012ff3319a539111826ed02a9abd7eff135c2ef261c8941caf5a3763e",
+  "nodeVersion": "24.19.0",
+  "cmakeVersion": "3.22.1",
+  "ninjaVersion": "1.10.1",
+  "pythonVersion": "3.10.12"
+}
