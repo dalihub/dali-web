@@ -29,4 +29,4 @@ R2-b 재검증과 기록 전환을 완료했고, [P1 실행 계약](docs/P1-EXEC
 
 이전 `webassembly-probe`는 과거 증거·SDK·P0 복제본 보존 공간입니다. 문서 사본과 미이관 자료 위치는 [MIGRATION](docs/MIGRATION.md)에 있습니다. 계획은 자동 실행 지시가 아니며 P2-a 생산 GLES 의존성 진단을 완료했습니다. 30개 번역 단위 컴파일은 통과했지만 strict 링크는 기본/FULL_ES3 각각 16/12개 미해결로 실패했습니다. [결과](docs/P2-a-RESULTS.md)와 [P2-b 인수인계](docs/P2-b-HANDOFF.md)를 남겼으며 상위 P2는 미완료입니다.
 
-P2-b에서는 source 선택 기반과 공통 Controller/context 분리를 진행했습니다. [중간 결과](docs/P2-b-RESULTS.md): 32개 단위 compile/nm 통과, 기본/FULL_ES3 strict 링크는 13/9개 미해결로 실패했습니다. 실제 host·생산 링크·픽셀 검증은 아직 없으며 다음은 sync 환경 분리입니다. native GLES/Vulkan/DYNAMIC source 목록 검사는 통과했으나 native build/runtime은 미검증입니다.
+P2-b에서는 source/context에 이어 sync 환경 분리를 구현했습니다. [sync 중간 결과](docs/P2-b-SYNC-RESULTS.md): 34개 compile/nm과 주입형 fence 수명 단위 검사 통과, 기본/FULL_ES3 strict 링크는 10/6개 미해결로 실패했습니다. 실제 host·생산 링크·GPU 검증은 아직 없으며 다음은 웹 메모리입니다. native source 회귀·추출 코드 교차 compile은 통과했으나 native build/runtime은 미검증입니다.

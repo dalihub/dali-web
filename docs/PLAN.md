@@ -2,7 +2,7 @@
 
 갱신일: 2026-10-23. 목표는 C++ DALi 코드의 브라우저 직접 렌더링과 최종적인 코드 편집·실행 환경입니다. 컴파일 서버는 사용할 수 있지만 렌더링은 브라우저에서 수행합니다.
 
-P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. D1~D4 결정 확정으로 P1 실행 계약 설계를 완료했습니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. P2-a 생산 GLES source manifest·컴파일·strict 링크 진단을 완료했습니다. 기본/FULL_ES3 링크는 16/12개 미해결로 실패했고, P2-b source/context 중간 구현은 [결과](P2-b-RESULTS.md), 후속 순서는 [인수인계](P2-b-HANDOFF.md)를 따릅니다. [진단 결과](P2-a-RESULTS.md). 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 스레드는 D3의 메인 이벤트 + 업데이트·렌더 Worker로 정했으며 실행 검증은 후속 단계입니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
+P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. D1~D4 결정 확정으로 P1 실행 계약 설계를 완료했습니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. P2-a 생산 GLES source manifest·컴파일·strict 링크 진단을 완료했습니다. 기본/FULL_ES3 링크는 16/12개 미해결로 실패했고, P2-b source/context 및 sync 중간 구현은 [결과](P2-b-SYNC-RESULTS.md), 후속 순서는 [인수인계](P2-b-HANDOFF.md)를 따릅니다. [진단 결과](P2-a-RESULTS.md). 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 스레드는 D3의 메인 이벤트 + 업데이트·렌더 Worker로 정했으며 실행 검증은 후속 단계입니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
 
 ## 작업 단계와 context 경계
 
@@ -96,7 +96,7 @@ D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 
 
 ### 바로 적용할 context 단위
 
-R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조사·SDK guard 검사와 D1~D4 결정 반영으로 설계를 완료했습니다. runtime·호스팅 검증 완료를 뜻하지 않습니다. P2-a 진단 완료·P2-b source/context 중간 구현이며 생산 링크 실패로 상위 P2는 미완료입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
+R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조사·SDK guard 검사와 D1~D4 결정 반영으로 설계를 완료했습니다. runtime·호스팅 검증 완료를 뜻하지 않습니다. P2-a 진단 완료·P2-b sync 중간 구현이며 생산 링크 실패로 상위 P2는 미완료입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
 
 | 단위 | 목표 | 완료 및 인수인계 조건 |
 |---|---|---|
@@ -107,7 +107,9 @@ R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조
 
 ### P2 현재 실행 경계
 
-P2-a 완료: 생산 GLES 23개를 포함한 30개 번역 단위와 pthread Core 컴파일 통과, 두 strict 링크 실패(16/12). [Manifest](P2-a-MANIFEST.md)와 [결과](P2-a-RESULTS.md)를 보존합니다. P2-b에서 source 선택 기반과 Controller/context 분리를 구현하고 중간 검증을 남겼습니다. [중간 결과](P2-b-RESULTS.md). 기본/FULL_ES3 strict 링크는 여전히 실패하며 실제 host는 없습니다. 다음은 [파일별 적용 순서·회귀 게이트](P2-b-HANDOFF.md)의 sync → 웹 메모리 → GL wrapper/capability → binary cache 경계 → 실제 host입니다. native source 선택 검사는 통과했지만 host compiler 부재로 native build/runtime은 미검증입니다. 생산 링크 성공 전 상위 P2는 미완료입니다.
+P2-a 30개 compile/nm·16/12개 미해결 및 source/context 32개·13/9개 결과를 보존한다. P2-b sync 환경 분리 후 최종 34개 compile/nm 통과, 기본/FULL_ES3 strict exit 1·10/6개 미해결이다. [sync 결과](P2-b-SYNC-RESULTS.md). WebFence 주입형 Node 수명 검사는 통과했지만 실제 browser/GPU 증거는 아니다.
+
+다음은 [파일별 적용 순서](P2-b-HANDOFF.md)의 웹 메모리 → GL wrapper/capability → shader cache → 실제 D3 host와 기본 WebGL2 생산 strict 링크다. WEB production configure 거부 및 상위 P2 미완료를 유지한다. 정식 source closure/generated source 정리도 남았다. native source 회귀와 추출 파일 교차 compile은 통과했지만 host compiler 부재로 native build/runtime은 미검증이다. sync 단위의 중간 인수인계를 남겼으며 남은 작업은 취소하지 않는다.
 
 ### 이후 단계의 분할 후보
 

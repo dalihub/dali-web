@@ -32,7 +32,7 @@
 #include <dali/integration-api/gl-defines.h>
 #include <dali/integration-api/graphics-sync-abstraction.h>
 #include <dali/integration-api/pixel-data-integ.h>
-#include <dali/internal/graphics/gles-impl/egl-sync-object.h>
+#include <dali/internal/graphics/gles-impl/gles-resource-factory.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-command-buffer.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-pipeline.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-program.h>
@@ -88,83 +88,6 @@ struct GLESDeleter
     }
   }
 };
-
-template<>
-struct GLESDeleter<GLES::SyncObject>
-{
-  GLESDeleter() = default;
-
-  void operator()(GLES::SyncObject* object)
-  {
-    // Destroy and delete object otherwise
-    if(DALI_LIKELY(object))
-    {
-      object->DestroyResource();
-    }
-    delete object;
-  }
-};
-
-template<>
-struct GLESDeleter<EGL::SyncObject>
-{
-  GLESDeleter() = default;
-
-  void operator()(EGL::SyncObject* object)
-  {
-    // Destroy and delete object otherwise
-    if(DALI_LIKELY(object))
-    {
-      object->DestroyResource();
-    }
-    delete object;
-  }
-};
-
-/**
- * @brief Helper function allocating graphics object
- *
- * @param[in] info Create info structure
- * @param[in] controller Controller object
- * @param[out] out Unique pointer to the return object
- */
-template<class GLESType, class GfxCreateInfo, class T>
-auto NewObject(const GfxCreateInfo& info, GlesGraphicsController& controller, T&& oldObject)
-{
-  // Use allocator
-  using Type = typename T::element_type;
-  using UPtr = Graphics::UniquePtr<Type>;
-  if(info.allocationCallbacks)
-  {
-    auto* memory = info.allocationCallbacks->allocCallback(
-      sizeof(GLESType),
-      0,
-      info.allocationCallbacks->userData);
-    return UPtr(new(memory) GLESType(info, controller), GLESDeleter<GLESType>());
-  }
-  else // Use standard allocator
-  {
-    // We are given all object for recycling
-    if(oldObject)
-    {
-      auto reusedObject = oldObject.release();
-      // If succeeded, attach the object to the unique_ptr and return it back
-      if(static_cast<GLESType*>(reusedObject)->TryRecycle(info, controller))
-      {
-        return UPtr(reusedObject, GLESDeleter<GLESType>());
-      }
-      else
-      {
-        // can't reuse so kill object by giving it back to original
-        // unique pointer.
-        oldObject.reset(reusedObject);
-      }
-    }
-
-    // Create brand new object
-    return UPtr(new GLESType(info, controller), GLESDeleter<GLESType>());
-  }
-}
 
 template<class T0, class T1>
 T0* CastObject(T1* apiObject)
@@ -274,6 +197,7 @@ void GlesGraphicsController::Shutdown()
 
   // Final flush
   Flush();
+  ShutdownSyncObjects();
 
   // Invalidate shared context for framebuffers
   GLES::Framebuffer::SetSharedContext(nullptr);
@@ -383,30 +307,30 @@ Graphics::UniquePtr<CommandBuffer> GlesGraphicsController::CreateCommandBuffer(
   const CommandBufferCreateInfo&       commandBufferCreateInfo,
   Graphics::UniquePtr<CommandBuffer>&& oldCommandBuffer)
 {
-  return NewObject<GLES::CommandBuffer>(commandBufferCreateInfo, *this, std::move(oldCommandBuffer));
+  return NewObject<GLES::CommandBuffer, GLESDeleter>(commandBufferCreateInfo, *this, std::move(oldCommandBuffer));
 }
 
 Graphics::UniquePtr<RenderPass> GlesGraphicsController::CreateRenderPass(const RenderPassCreateInfo& renderPassCreateInfo, Graphics::UniquePtr<RenderPass>&& oldRenderPass)
 {
-  return NewObject<GLES::RenderPass>(renderPassCreateInfo, *this, std::move(oldRenderPass));
+  return NewObject<GLES::RenderPass, GLESDeleter>(renderPassCreateInfo, *this, std::move(oldRenderPass));
 }
 
 Graphics::UniquePtr<Texture>
 GlesGraphicsController::CreateTexture(const TextureCreateInfo& textureCreateInfo, Graphics::UniquePtr<Texture>&& oldTexture)
 {
-  return NewObject<GLES::Texture>(textureCreateInfo, *this, std::move(oldTexture));
+  return NewObject<GLES::Texture, GLESDeleter>(textureCreateInfo, *this, std::move(oldTexture));
 }
 
 Graphics::UniquePtr<Buffer> GlesGraphicsController::CreateBuffer(
   const BufferCreateInfo& bufferCreateInfo, Graphics::UniquePtr<Buffer>&& oldBuffer)
 {
-  return NewObject<GLES::Buffer>(bufferCreateInfo, *this, std::move(oldBuffer));
+  return NewObject<GLES::Buffer, GLESDeleter>(bufferCreateInfo, *this, std::move(oldBuffer));
 }
 
 Graphics::UniquePtr<Framebuffer> GlesGraphicsController::CreateFramebuffer(
   const FramebufferCreateInfo& framebufferCreateInfo, Graphics::UniquePtr<Framebuffer>&& oldFramebuffer)
 {
-  return NewObject<GLES::Framebuffer>(framebufferCreateInfo, *this, std::move(oldFramebuffer));
+  return NewObject<GLES::Framebuffer, GLESDeleter>(framebufferCreateInfo, *this, std::move(oldFramebuffer));
 }
 
 void GlesGraphicsController::UpdateFramebufferRenderbufferUsage(Framebuffer& framebuffer, const DepthStencilState& depthStencilState)
@@ -455,25 +379,12 @@ Graphics::UniquePtr<Shader> GlesGraphicsController::CreateShader(const ShaderCre
 
 Graphics::UniquePtr<Sampler> GlesGraphicsController::CreateSampler(const SamplerCreateInfo& samplerCreateInfo, Graphics::UniquePtr<Sampler>&& oldSampler)
 {
-  return NewObject<GLES::Sampler>(samplerCreateInfo, *this, std::move(oldSampler));
+  return NewObject<GLES::Sampler, GLESDeleter>(samplerCreateInfo, *this, std::move(oldSampler));
 }
 
 Graphics::UniquePtr<RenderTarget> GlesGraphicsController::CreateRenderTarget(const RenderTargetCreateInfo& renderTargetCreateInfo, Graphics::UniquePtr<RenderTarget>&& oldRenderTarget)
 {
-  return NewObject<GLES::RenderTarget>(renderTargetCreateInfo, *this, std::move(oldRenderTarget));
-}
-
-Graphics::UniquePtr<SyncObject> GlesGraphicsController::CreateSyncObject(const SyncObjectCreateInfo& syncObjectCreateInfo,
-                                                                        UniquePtr<SyncObject>&&     oldSyncObject)
-{
-  if(GetGLESVersion() < GLES::GLESVersion::GLES_30)
-  {
-    return NewObject<EGL::SyncObject>(syncObjectCreateInfo, *this, std::move(oldSyncObject));
-  }
-  else
-  {
-    return NewObject<GLES::SyncObject>(syncObjectCreateInfo, *this, std::move(oldSyncObject));
-  }
+  return NewObject<GLES::RenderTarget, GLESDeleter>(renderTargetCreateInfo, *this, std::move(oldRenderTarget));
 }
 
 MemoryRequirements GlesGraphicsController::GetBufferMemoryRequirements(Buffer& buffer) const

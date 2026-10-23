@@ -1,4 +1,8 @@
-# P2-b source/context 중간 결과
+# P2-b 중간 결과
+
+최신: [sync 환경 분리 결과](P2-b-SYNC-RESULTS.md). 34개 compile/nm 통과, strict 기본/FULL_ES3 exit 1·10/6개 미해결. 다음은 웹 메모리이며 전체 P2-b·상위 P2는 미완료다.
+
+## 이전 source/context 중간 결과 (7b6ee23ff3)
 
 2026-10-23 (Asia/Seoul). **P2-b 진행 중, 상위 P2 미완료.** 사용자 요청의 전체 P2-b를 완료한 결과가 아니라, NEXT-CONTEXT의 검증 가능한 단위별 중간 인수인계다. 다음 구현은 sync 환경 분리다.
 

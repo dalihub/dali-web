@@ -1,0 +1,20 @@
+{
+  "logs/p2-b/context-001/preserved-hashes.json": {
+    "count": 1370,
+    "changed": []
+  },
+  "logs/p2-b/sync-session-001/before.json": {
+    "count": 36,
+    "changed": []
+  },
+  "p2aSnapshotFiles": {
+    "count": 176,
+    "changed": []
+  },
+  "originalRepoStatesChanged": [],
+  "finalInputsMatchCompiledManifest": true,
+  "nativeRuntimeTested": false,
+  "coreContractChanged": false,
+  "pagesOrServerStarted": false,
+  "upstreamOrLocksUpdated": false
+}

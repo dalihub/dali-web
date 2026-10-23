@@ -16,12 +16,18 @@ add_subdirectory("${DALI_WEB_ROOT}/libs/dali-core/build/tizen" core)
 # This is a boundary regression probe, not the final production Web closure.
 set(adaptor_graphics_dir "${dali_gles_graphics_dir}")
 include("${adaptor_graphics_dir}/gles-impl/file.list")
+if(DALI_GLES_ENVIRONMENT STREQUAL "WEB")
+  set(sync_sources ${adaptor_graphics_gles_sync_web_src_files})
+else()
+  set(sync_sources ${adaptor_graphics_gles_sync_native_src_files})
+endif()
 set(cachePath "/diagnostic-only")
 configure_file("${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen/shader-cache-path.in" "${CMAKE_CURRENT_BINARY_DIR}/shader-cache-path.cpp" @ONLY)
 add_library(gles-boundary OBJECT
   ${adaptor_graphics_gles_common_src_files}
   ${adaptor_graphics_gles_pending_src_files}
   ${dali_gles_context_source}
+  ${sync_sources}
   "${adaptor_graphics_dir}/gles/gl-implementation.cpp"
   "${adaptor_graphics_dir}/gles/gl-extensions.cpp"
   "${adaptor_graphics_dir}/gles/gl-extensions-support.cpp"

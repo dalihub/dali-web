@@ -25,12 +25,6 @@
 #include <dali/integration-api/gl-abstraction.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-resource.h>
 
-namespace DALI_NAMESPACE::Internal::Adaptor
-{
-class EglSyncImplementation;
-class EglSyncObject;
-} //namespace DALI_NAMESPACE::Internal::Adaptor
-
 namespace DALI_NAMESPACE::Graphics::GLES
 {
 using SyncObjectResource = Resource<Graphics::SyncObject, Graphics::SyncObjectCreateInfo>;

@@ -1,0 +1,15 @@
+{
+  "startHead": "7b6ee23ff36b3658fc957e1607de2d21963796c1",
+  "startStatus": "clean",
+  "origin": "https://github.com/dalihub/dali-web.git",
+  "remoteMainRead": "a68e3f00f0c7752561137c179500b004b930285e",
+  "remoteReadCommand": [
+    "git",
+    "ls-remote",
+    "origin",
+    "refs/heads/main"
+  ],
+  "remoteReadExitCode": 0,
+  "remotePushPerformed": false,
+  "modelFromCurrentSessionTurnContext": "gpt-6-astra"
+}

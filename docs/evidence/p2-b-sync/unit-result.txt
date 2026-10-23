@@ -1,0 +1,4 @@
+web-gles-fence.cpp: Poll(84) > Web fence poll failed: 0x911d
+web-gles-fence.cpp: Insert(115) > Web fence creation failed
+web-gles-fence.cpp: Poll(69) > Web fence context lost
+PASS: pending, completion, failure, deferred deletion, shutdown, replacement, context loss (injected GL; no GPU validation)

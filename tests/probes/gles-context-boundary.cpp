@@ -45,9 +45,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE void retainDiagnosticFrame(
   core->PostRender();
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE void retainDiagnosticNativeDependency(
+extern "C" EMSCRIPTEN_KEEPALIVE void retainDiagnosticSyncDependency(
   Dali::Graphics::GLES::SyncPool* pool)
 {
-  auto sync = pool->AllocateSharedSyncObject(true);
+  auto sync = pool->AllocateSharedSyncObject(false);
   sync->Poll();
+  const auto id = pool->AllocateSyncObject(nullptr, Dali::Graphics::GLES::SyncPool::SyncContext::GL);
+  pool->ClientWait(id);
+  pool->FreeSyncObject(id);
 }

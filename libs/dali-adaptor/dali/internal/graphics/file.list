@@ -54,11 +54,12 @@ IF(DALI_GLES_ENVIRONMENT STREQUAL "NATIVE_EGL")
   SET(adaptor_graphics_gles_src_files
       ${adaptor_graphics_gles_common_src_files}
       ${adaptor_graphics_gles_native_src_files}
+      ${adaptor_graphics_gles_sync_native_src_files}
       ${adaptor_graphics_gles_pending_src_files})
 ELSE()
   # Only the context boundary is implemented so far. Do not expose an incomplete
   # production renderer as a supported Web build.
-  MESSAGE(FATAL_ERROR "WEB production source closure is incomplete: sync, memory, wrapper and shader cache remain; use the P2-b boundary probe")
+  MESSAGE(FATAL_ERROR "WEB production source closure is incomplete: memory, wrapper and shader cache remain; use the P2-b boundary probe")
 ENDIF()
 
 SET( adaptor_graphics_vulkan_src_files

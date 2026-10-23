@@ -29,7 +29,7 @@ for backend in ['GLES', 'VULKAN', 'DYNAMIC']:
     execute('native-configure-' + backend, [os.environ['CMAKE'], '-S', str(root / 'libs/dali-adaptor/build/tizen'),
         '-B', str(build / backend), '-G', 'Ninja', '-DCMAKE_MAKE_PROGRAM=' + os.environ['NINJA'],
         '-DENABLE_GRAPHICS_BACKEND=' + backend, '-DENABLE_PKG_CONFIGURE=OFF'])
-for name in ['native-gles-context', 'native-gles-rendering', 'egl-graphics']:
+for name in ['native-gles-context', 'native-gles-rendering', 'native-gles-sync', 'native-gles-sync-pool', 'egl-graphics']:
     obj = build / (name + '.o')
     args = [os.environ['EMXX'], '-std=c++17', '-pthread', '-DDEBUG_ENABLED', '-I' + str(include),
             '-I' + str(root / 'libs/dali-core'), '-I' + str(root / 'libs/dali-adaptor'),

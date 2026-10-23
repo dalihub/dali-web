@@ -25,11 +25,6 @@
 
 namespace DALI_NAMESPACE
 {
-namespace Internal::Adaptor
-{
-class EglSyncObject;
-}
-
 namespace Graphics
 {
 class GlesGraphicsController;
@@ -39,8 +34,9 @@ namespace GLES
 class Context;
 
 /**
- * A vector of current fence syncs. They only age if glWaitSync is called on them in the
- * same frame they are created, otherwise they are deleted.
+ * Owns current fences and defers disposal to their creating context.
+ * Native fences retain the existing age policy; Web fences remain pending until
+ * an actual poll completes or fails. Age is never GPU completion on Web.
  * They must be created in the writeContext, but can be synced from a readContext.
  *
  * To match the created context and destroy context, we use discarded sync objects queue per each context.
@@ -73,7 +69,8 @@ public:
      * @param[in] context The context associated with this sync object
      * @param[in] frameCount The frame count when this sync object was created
      * @param[in] useNativeFenceFd If true, use native fence FD for synchronization.
-     *                              If false, use EGL sync object for synchronization.
+     *                              If false, use the environment fence (EGL or WebGL2).
+     *                              Native FD requests are rejected on Web.
      */
     SharedSyncObject(Graphics::GlesGraphicsController& controller, const Context* context, uint32_t frameCount, bool useNativeFenceFd);
 
@@ -83,17 +80,17 @@ public:
     ~SharedSyncObject();
 
     /**
-     * Poll the native fence FD until it is signaled.
+     * Poll the environment fence for completion.
      *
-     * This method polls the native fence FD and waits for it to be signaled.
-     * After polling completes, the FD is automatically closed.
+     * Native may block on its fence FD. Web polls with zero timeout on the GL
+     * owner; other threads only read the completion published by owner collection.
      *
      * @return True if the sync object was signaled, false otherwise.
      */
     bool Poll();
 
     /**
-     * Wait on a sync object in any context in the CPU
+     * Native CPU wait, or nonblocking Web completion poll.
      *
      * @return true if the sync object was signaled, false otherwise.
      */
@@ -109,8 +106,9 @@ public:
     /**
      * Update the age of the sync object.
      *
-     * This method decrements the age counter and marks the sync object as synced
-     * when the age reaches zero.
+     * Native retains its existing age policy. Web returns nonzero while the
+     * fence is pending and zero for complete, failed or cancelled fences.
+     * A zero result permits removal from the pool; it does not imply completion.
      *
      * @return The old age value before decrementing. Returns 0 if the sync object
      *         was already synced.
@@ -171,7 +169,8 @@ public:
 
   /**
    * Age outstanding sync objects. Call at the end of each frame.
-   * When a sync object is older than 2 frames, delete it.
+   * Native retires old objects by frame age. Web retains pending fences and
+   * collects owner-side deferred deletion; only poll results indicate completion.
    */
   void AgeSyncObjects();
 
@@ -180,7 +179,8 @@ public:
    *
    * This method implements sync object reuse optimization: when multiple sync objects
    * are requested within the same frame using the same context, only one sync object
-   * is created and shared among all requests. This reduces GPU driver overhead and
+   * is created and shared among all requests on native. Web inserts a new fence
+   * for every request so later commands are covered. Native reuse reduces overhead and
    * improves performance by avoiding redundant sync object creation.
    *
    * The context is automatically obtained from the current context at the time of
@@ -220,18 +220,12 @@ private:
 
     uint8_t Age();
 
-    GlesGraphicsController& controller;
-    const Context*         writeContext;
-
-    union
-    {
-      GLsync                            glSyncObject;
-      Internal::Adaptor::EglSyncObject* eglSyncObject;
-    };
-
+    const Context* writeContext;
     uint8_t age{3u};
-    bool    synced{false};
-    bool    egl{false};
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> mImpl;
   };
 
 private:

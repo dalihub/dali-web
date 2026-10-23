@@ -93,3 +93,18 @@
 - GLES/VULKAN/DYNAMIC source 보존 및 잘못된 조합 거부 검사 통과. native configure는 C/C++ compiler 부재로 각각 exit 1. native context/rendering/egl-graphics는 Emscripten 교차 compile/nm 각각 exit 0이며 host-native build/runtime 성공으로 해석하지 않음.
 - 원본/P0 Git 상태 및 과거 보존 스냅샷 일치, 추가 보존 대상 1,370개 hash 불변. 전체 입력 hash와 최종 compile 입력 일치. SDK·산출물·큰 로그 commit 제외, 최대 -j6. 원격 push·upstream 갱신·서버·브라우저·Pages 배포 없음.
 - [중간 결과](P2-b-RESULTS.md)·[증거](evidence/p2-b/README.md), STATE/PLAN/HANDOFF/NEXT-CONTEXT 갱신. 다음은 sync 분리 → 웹 메모리 → wrapper/capability → cache → 실제 host/strict 링크. native runtime·P3 픽셀·D3/D4 초기 probe·P3/P4 격리 게이트 유지.
+
+## 017 P2-b sync 환경 분리와 중간 수명 검증
+
+2026-10-23 (Asia/Seoul). **P2-b sync 중간 구현·상위 P2 미완료.** 다음은 웹 메모리이며 전체 strict 생산 링크 요청의 나머지 범위는 유지한다.
+
+- 시작 clean main `7b6ee23ff36b3658fc957e1607de2d21963796c1`. sandbox DNS 실패 후 읽기 전용 origin 조회 exit 0, 원격 main `a68e3f00f0c7752561137c179500b004b930285e`. upstream/toolchain lock 변경·원격 push 없음.
+- SyncPool concrete EGL storage/FD/cast를 native 파일로 추출하고 native 정책 보존. texture dependency policy·Controller sync factory도 환경별 선택. allocation/recycle helper 추출, Core·GraphicsInterface·GraphicsSyncAbstraction 계약 변경 없음.
+- WebFence의 실제 fence/zero-timeout poll, pending/complete/failed/cancelled, owner 삭제/다른 스레드 해제 요청, 종료 cancellation 구현. frame age/flush 완료 판정 없음. 같은 frame shared fence 재사용 및 native interop/cross-context wait를 Web에서 허용하지 않음.
+- 특이 사항: Core bool 완료 계약과 별도로 내부 failure latch 제공. 실제 host의 비동기 오류/stop 연결은 남았다. 완료 상태가 아닌 실패를 완료로 위장하지 않는다. 실제 GPU/브라우저 sync 의미는 아직 미검증.
+- sync-web-001/002/003 각각 새 Core 333단계·34개 compile/nm 통과, strict 기본/FULL_ES3 각각 exit 1·10/6개 미해결·map 없음. 최종은 003(최종 헤더 표기 포함). NativeFence 미해결 3개 제거, cache utility/GL mapping/BlendBarrier는 남음.
+- fence-unit-001/002 compile/link·Node 각각 exit 0. 실제 WebFence 코드 + 주입 GL 응답의 수명 검사이며 생산 링크/GPU 증거가 아님. 테스트 전용 --wrap은 생산 진단에 사용하지 않음.
+- sync-sources-001 native GLES/VULKAN/DYNAMIC 목록 회귀 통과. sync-native-001/002 세 native configure는 compiler 부재로 실패, 최종 추출 5개 Emscripten 교차 compile/nm 통과. native build/install/runtime과 구분.
+- 이전 snapshot 1,370개, P2-a snapshot 176개, 이번 시작 증거/lock 36개 hash 일치(중복 포함). 원본/P0 Git 상태·사용자 변경 보존. 개인 SDK 필수화·SDK 설치·upstream 갱신·서버·브라우저·Pages 배포 없음. 새 build/log·최대 -j6.
+- [sync 결과](P2-b-SYNC-RESULTS.md)와 [별도 증거](evidence/p2-b-sync/README.md), PLAN/STATE/HANDOFF/NEXT-CONTEXT 갱신. 현재 세션 turn_context의 모델 `gpt-6-astra`를 확인해 로컬 checkpoint co-author에 사용한다.
+- 자원 생성/삭제·스레드 수명까지 포함한 sync 단위에서 중간 인수인계. 웹 메모리 → wrapper/capability → cache → 실제 D3 host/strict 생산 링크 및 source/generated 정리는 미완료다. P3 픽셀·최초 pthread/browser 헤더/SW/Pages·P3/P4 격리 게이트 유지. 합의 방향 안에서 다음 웹 메모리 구현 진행 가능.

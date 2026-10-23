@@ -16,6 +16,7 @@
 
 #include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <emscripten/html5_webgl.h>
+#include <dali/internal/graphics/web/web-gles-fence.h>
 
 namespace DALI_NAMESPACE::Graphics
 {
@@ -29,6 +30,7 @@ void GlesGraphicsController::CreateSurfaceContext(Integration::RenderSurfaceInte
 void GlesGraphicsController::DeleteSurfaceContext(Integration::RenderSurfaceInterface* surface)
 {
   DALI_ASSERT_ALWAYS(GetSurfaceContext(surface) && "Unknown Web GLES surface");
+  GLES::WebFence::Shutdown();
   mSyncPool.InvalidateContext(mContext.get());
   mTextureDependencyChecker.InvalidateContext(mContext.get());
   mSingleSurface = nullptr;

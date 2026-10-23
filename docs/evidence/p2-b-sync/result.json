@@ -1,0 +1,75 @@
+{
+  "compileCount": 34,
+  "compileExitCodes": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "coreBuildExitCode": 0,
+  "links": {
+    "webgl2": {
+      "exitCode": 1,
+      "undefined": [
+        "Dali::ADAPTOR_MAJOR_VERSION",
+        "Dali::ADAPTOR_MICRO_VERSION",
+        "Dali::ADAPTOR_MINOR_VERSION",
+        "Dali::FileLoader::ReadFile(std::__2::basic_string<char, std::__2::char_traits<char>, std::__2::allocator<char>> const&, Dali::Vector<char, true>&, Dali::FileLoader::FileType)",
+        "Dali::TizenPlatform::PrintSystemError(char const*, char const*, int)",
+        "glBlendBarrier",
+        "glFlushMappedBufferRange",
+        "glGetBufferPointerv",
+        "glMapBufferRange",
+        "glUnmapBuffer"
+      ],
+      "count": 10,
+      "mapExists": false
+    },
+    "full-es3": {
+      "exitCode": 1,
+      "undefined": [
+        "Dali::ADAPTOR_MAJOR_VERSION",
+        "Dali::ADAPTOR_MICRO_VERSION",
+        "Dali::ADAPTOR_MINOR_VERSION",
+        "Dali::FileLoader::ReadFile(std::__2::basic_string<char, std::__2::char_traits<char>, std::__2::allocator<char>> const&, Dali::Vector<char, true>&, Dali::FileLoader::FileType)",
+        "Dali::TizenPlatform::PrintSystemError(char const*, char const*, int)",
+        "glBlendBarrier"
+      ],
+      "count": 6,
+      "mapExists": false
+    }
+  },
+  "productionLinkComplete": false,
+  "browserOrGpuTested": false,
+  "injectedFenceUnitPassed": true
+}

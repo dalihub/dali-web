@@ -20,7 +20,7 @@
 // EXTERNAL INCLUDES
 #include <dali/integration-api/debug.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
-#include <dali/internal/graphics/gles/egl-sync-implementation.h>
+#include <dali/internal/graphics/gles-impl/gles-sync-policy.h>
 #include <algorithm>
 
 namespace DALI_NAMESPACE::Graphics::GLES
@@ -30,13 +30,6 @@ namespace
 #if defined(DEBUG_ENABLED)
 Debug::Filter* gLogSyncFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_FENCE_SYNC");
 #endif
-
-SyncPool::SyncContext GetTextureDependencySyncContext(GlesGraphicsController& controller)
-{
-  return static_cast<Internal::Adaptor::EglSyncImplementation&>(controller.GetSyncImplementation()).UseGlSyncForTextureDependencies()
-           ? SyncPool::SyncContext::GL
-           : SyncPool::SyncContext::EGL;
-}
 
 void FreeAllBackwardSyncObjectSyncs(GlesGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies)
 {

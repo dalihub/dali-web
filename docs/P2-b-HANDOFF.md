@@ -1,6 +1,6 @@
 # P2-b 구현 인수인계
 
-2026-10-23. P2-a에서 확인한 [manifest](P2-a-MANIFEST.md)와 [진단 결과](P2-a-RESULTS.md)를 입력으로 한다. P2-b source/context 중간 구현을 수행했다. [중간 결과](P2-b-RESULTS.md). 단계 1은 환경 선택 기반만 구현되었고 production WEB closure·생성물 전체 정리는 남았다. 단계 2의 Controller/context와 native 렌더 콜백 EGL 경계를 분리했다. 다음 구현은 단계 3 sync이며, native 실행 회귀와 Web context 실제 실행은 여전히 미검증이다. D1~D4와 [P1 계약](P1-EXECUTION-CONTRACT.md)을 유지하며, 아래 순서는 자동 실행 지시가 아니다.
+2026-10-23. P2-a manifest/진단 및 source/context에 이어 단계 3 sync 환경 분리의 중간 구현·검증을 남겼다. [sync 결과](P2-b-SYNC-RESULTS.md), [이전 context 결과](P2-b-RESULTS.md). 다음은 단계 4 웹 메모리다. 실제 host·생산 링크·native runtime은 미완료이며 D1~D4와 [P1 계약](P1-EXECUTION-CONTRACT.md)을 유지한다. 아래 순서는 자동 실행 지시가 아니다.
 
 ## 적용 순서와 파일 경계
 
@@ -15,7 +15,11 @@
 | 7 | 새 `web/` host/context/surface, `tests/probes/gles-link-smoke.cpp`, 진단 CMake/script | 실제 host RenderController·PlatformAbstraction·GraphicsInterface·RenderSurface 구현. link-only 진입점을 실제 초기화·자원 생성·command submit·회수 경로로 확장. Core+생산 Controller 연결 유지 | 실제 선택된 생산 경로 strict Wasm link exit 0, map의 GLES/Core 포함 및 mock 미포함 확인. map 실패/부분 object 결과는 성공 아님 |
 | 8 | 웹 host callback/timer/trigger/thread ownership, `combined-update-render-controller` 웹 경계 | D3 main 이벤트 + update/upload/render pthread. main ready/stop 대기 비동기화, DOM 데이터 경계. native semaphore/join loop를 main으로 복사하지 않음 | compile/link -pthread 일치, Worker GL 소유권·main 응답·시작/종료. 최초 browser 단위에 D4 로컬 SW/헤더 probe, 실제 Pages 배포는 별도 승인 |
 
-위 표는 전체 목표다. `gles-graphics-controller.*`, `gles/native-gles-context.cpp`, `web/web-gles-context.cpp`는 구현되었으며, native callback context 분리를 위해 `gles-native-rendering.h`와 native/web rendering cpp도 추가했다. 나머지 Web sync·memory·wrapper·host 파일은 아직 없다. `DALI_GLES_ENVIRONMENT=NATIVE_EGL`이 기본이고 WEB production closure는 아직 configure에서 거부한다. `cmake/p2-b`만 부분 경계 진단용으로 WEB context를 선택한다. controller rename은 관련 include·factory·native 빌드 참조도 함께 갱신한다. 중복 Controller 구현·호환 alias로 구조를 남기지 않는다. public Core API 변경 계획은 없다. 기존 GraphicsSyncAbstraction/GraphicsInterface 계약을 바꿔야 하거나 전체 플랫폼 포팅이 필요하면 중단·보고한다.
+위 표는 전체 목표다. Controller/context/native rendering 분리와 sync 환경 파일 분리를 구현했다. WebFence는 zero-timeout poll, pending/complete/failed/cancelled 상태, owner 삭제·다른 스레드 해제 요청·종료 cancellation을 구현했다. native cast/FD는 native 파일로 이동했고 native 정책을 보존했다. Web은 native interop/cross-context GPU wait를 거부하며 shared fence를 frame 단위로 재사용하지 않는다. 실제 GPU 동작은 미검증이다.
+
+단계 4 웹 메모리 → 5 wrapper/capability → 6 cache → 7/8 실제 host가 남았다. host는 `WebFence::HasFailure()`를 GL owner에서 읽어 비동기 오류/stop으로 전달하고, 마지막 제출 후 fence shutdown → context 폐기 순서를 보장해야 한다. 실패 후에는 새 Worker/실행 인스턴스를 사용한다. Core/GraphicsSyncAbstraction 계약을 바꿔야 하면 먼저 중단·보고한다.
+
+`DALI_GLES_ENVIRONMENT=NATIVE_EGL` 기본값과 WEB production configure 거부를 유지한다. `cmake/p2-b`는 이제 Web sync를 선택하지만 여전히 native memory/wrapper/cache를 포함하는 부분 경계 진단이다. 정식 source closure와 native 생성 경로 전체 정리는 미완료다.
 
 ## 회귀·완료 게이트
 

@@ -18,14 +18,24 @@ SET( adaptor_graphics_gles_common_src_files ${adaptor_graphics_gles_common_src_f
     ${adaptor_graphics_dir}/gles-impl/gles-context.cpp
     ${adaptor_graphics_dir}/gles-impl/gles-sync-object.cpp
     ${adaptor_graphics_dir}/gles-impl/gles-framebuffer-state-cache.cpp
+    ${adaptor_graphics_dir}/gles-impl/gles-sync-pool.cpp
+    ${adaptor_graphics_dir}/gles-impl/gles-texture-dependency-checker.cpp
 )
 
 # Pending environment splits; retained in every existing native build.
 SET(adaptor_graphics_gles_pending_src_files
-    ${adaptor_graphics_dir}/gles-impl/egl-sync-object.cpp
     ${adaptor_graphics_dir}/gles-impl/gles2-graphics-memory.cpp
     ${adaptor_graphics_dir}/gles-impl/gles3-graphics-memory.cpp
-    ${adaptor_graphics_dir}/gles-impl/gles-sync-pool.cpp
-    ${adaptor_graphics_dir}/gles-impl/gles-texture-dependency-checker.cpp
     ${adaptor_graphics_dir}/gles-impl/gles-graphics-program.cpp
+)
+
+SET(adaptor_graphics_gles_sync_native_src_files
+    ${adaptor_graphics_dir}/gles-impl/egl-sync-object.cpp
+    ${adaptor_graphics_dir}/gles/native-gles-sync.cpp
+    ${adaptor_graphics_dir}/gles/native-gles-sync-pool.cpp
+)
+SET(adaptor_graphics_gles_sync_web_src_files
+    ${adaptor_graphics_dir}/web/web-gles-sync.cpp
+    ${adaptor_graphics_dir}/web/web-gles-sync-pool.cpp
+    ${adaptor_graphics_dir}/web/web-gles-fence.cpp
 )

@@ -904,6 +904,8 @@ public:
     return mSharedContext;
   }
 
+  void ShutdownSyncObjects();
+
   GLES::SyncPool& GetSyncPool()
   {
     return mSyncPool;

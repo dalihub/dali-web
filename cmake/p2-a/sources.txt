@@ -28,3 +28,5 @@ libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp
 libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp
 libs/dali-adaptor/dali/internal/graphics/gles/native-gles-context.cpp
 libs/dali-adaptor/dali/internal/graphics/gles/native-gles-rendering.cpp
+libs/dali-adaptor/dali/internal/graphics/gles/native-gles-sync.cpp
+libs/dali-adaptor/dali/internal/graphics/gles/native-gles-sync-pool.cpp
