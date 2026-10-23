@@ -47,3 +47,13 @@
 - 명시적 구간 업로드와 callback 매핑을 구분하고 shadow 일관성, valid range·discard/recycle·확장·실패·GPU write 경계 및 메모리 비용 검증 명시. 전체 덮어쓰기만 허용하는 기능 축소안은 미채택.
 - P2 변경 범위와 PLAN·STATE·HANDOFF·NEXT-CONTEXT·README 갱신. 다음 논의는 D3 실행 주체. D3·D4 권장안은 미승인이고 생산 코드 구현은 시작하지 않음.
 - 시작 clean main `b5362821a3834c44b0a859bc9829a4e49717c349`, 원격 SHA 일치. 문서 링크·공백·변경 범위 검사만 수행, runtime/build 미실행. 실행 기록 `logs/p1/d2-design-001/`. 소스·lock·SDK·기존 증거·원본 사용자 변경은 수정하지 않음.
+
+## 013 P1 D3 기본 실행 구조와 격리 조기 게이트
+
+2026-10-23 (Asia/Seoul). 사용자 승인으로 D3 확정, D1~D3 확정·D4 미결. P1 미완료·P2 미착수.
+
+- 생산 기본 E: 브라우저 main = DALi 이벤트, 별도 pthread Worker = 업데이트·업로드·렌더. 이전 C 우선 권장안을 대체. DOM 연결과 이벤트 로직 분리, main blocking을 비동기 ready/stop으로 전환하는 계약 반영.
+- Core TLS·Adaptor 이벤트 플래그와 플랫폼 main-loop 직접 결합을 구분한 소스 조사 기록. 전체 Worker 호환성 감사나 실행 성공으로 확대 해석하지 않음.
+- 이벤트 Worker는 플레이그라운드 격리 후보로 유지. P2 이후 P3/P4 구간에서 TLS·callback·timer·종료·무한 루프·전체 인스턴스 종료/재생성을 검증하고 P4 종료 전 결과·장애 기록. 두 실행 구성 동시 지원을 확정하지 않음.
+- PLAN·STATE·HANDOFF·NEXT-CONTEXT·README와 P2 변경 범위 갱신. 마지막 논의는 D4 격리 호스팅. 소스·lock·SDK·원본·기존 증거 변경 및 Pages 배포 없음.
+- 시작 clean main `f686f106f8d99d218ab54dfbb029ef0fe1ddb722`, 원격 동일. 문서 검사만 수행, build/runtime 미검증. 기록 `logs/p1/d3-design-001/`.

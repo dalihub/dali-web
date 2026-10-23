@@ -1,8 +1,8 @@
 # 다음 컨텍스트용 프롬프트
 
 ```text
-DALi 브라우저 포팅을 이어가자. P1의 D1·D2 확정 내용을 읽고 미결 항목 D3부터 논의를 이어가자.
-D1 아키텍처와 D2 업로드 설계는 승인됐고 D3~D4가 미결이어서 P1은 미완료, P2는 미착수야.
+DALi 브라우저 포팅을 이어가자. P1의 D1~D3 확정 내용을 읽고 마지막 미결 항목 D4 논의를 이어가자.
+D1 아키텍처·D2 업로드·D3 실행 구조는 승인됐고 D4가 미결이어서 P1은 미완료, P2는 미착수야.
 
 작업 repo: /home/jy/work/dali/dali-web
 기록 기준: dali-web/docs
@@ -27,7 +27,13 @@ D2 확정: 웹 전용 메모리 구현과 보존이 필요한 버퍼 소유 CPU 
 매핑 객체는 접근·업로드를 담당하고 native Memory2/3는 유지해줘. Memory4는 추가하지 마.
 명시적 부분 갱신과 callback을 구분하고 저장소 수명·보존 의미·비용을 검증해야 해.
 D2 후속 commit 제목은 "Record approved web buffer upload design"이야.
-먼저 D3의 실행 스레드 구조를 설명해줘. D3/D4는 미결이며 D1·D2 승인을 확대 해석하지 마.
+D3 확정: main에서 DALi 이벤트, 별도 pthread Worker에서 업데이트·렌더 실행.
+DOM/이벤트 연결 경계를 분리하고 main의 초기화·종료 대기를 비동기로 바꿔야 해.
+이벤트 Worker는 플레이그라운드 격리 후보이며 지원 확정이 아니야.
+P2 이후 P3/P4 구간에서 격리 조기 검증, P4 종료 전 결과·장애 기록이 필요해.
+D3 후속 commit 제목은 "Record approved main-thread event execution design"이야.
+마지막 D4: 격리 헤더 제어가 가능한 실행 origin 허용 여부와 Pages 역할을 설명해줘.
+D4는 미결이고 아직 배포·생산 구현을 시작하지 마.
 남은 논의를 끝내고 명시적인 구현 지시를 받은 뒤에 P2를 시작해줘.
 
 Memory3 WRITE-only는 SDK 6.0.13 guard에서 거부되고,

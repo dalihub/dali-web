@@ -1,6 +1,6 @@
 # P1 웹 실행 계약 설계
 
-2026-10-23 (Asia/Seoul). **D1 아키텍처·D2 업로드 설계 확정, D3~D4 결정 대기. P1 완료 아님.** 사용자가 공통 GLES 로직과 Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택하는 설계를 승인했다. 정식 포팅을 목표로 하며 생산 코드 변경·생산 링크·Pages 배포는 아직 수행하지 않았다. D3~D4 권장안은 미승인이다. 여기서 D1은 P1의 결정 ID이며 PLAN의 Pages 배포 단계 D1과 구별한다.
+2026-10-23 (Asia/Seoul). **D1 아키텍처·D2 업로드·D3 실행 구조 확정, D4 결정 대기. P1 완료 아님.** 사용자가 공통 GLES 로직과 Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택하는 설계를 승인했다. 정식 포팅을 목표로 하며 생산 코드 변경·생산 링크·Pages 배포는 아직 수행하지 않았다. D4 권장안은 미승인이다. 여기서 D1은 P1의 결정 ID이며 PLAN의 Pages 배포 단계 D1과 구별한다.
 
 기준 HEAD: `ef6a1f545ff03df69c3297135048f545ee8dd352`. 시작 main clean, 원격 main 일치 확인. [upstreams.lock.json](../upstreams.lock.json), [toolchain.lock.json](../toolchain.lock.json) 유지. Core `e2ce797a41cff49851361210491c8ed38bea46e9`, Adaptor `f0dd9b39d5a51ff0233ea50bf872dd6200e93981`, UI `f6c046d2a15ab7c6bad8d76612e667d66ed1f6d0`. [R2-b](R2-b-RESULTS.md)의 컴파일·mock 결과를 생산 실행 증거로 확장하지 않는다.
 
@@ -94,7 +94,7 @@ Core → Graphics::Controller
 6. 빌드 선택은 가능한 기능의 상한을 정하며 실제 context limits·extensions는 실행 시 확인한다. 필요한 기능의 빈 성공 구현, undefined-symbol 억제, 임의 GLES 버전 위장은 금지한다. unsupported 요청은 명시적으로 거부한다.
 7. 정식 구현의 수용 기준은 공통 GLES의 concrete EGL/native 의존 제거, 웹 link closure의 native 의존 배제, 업로드·sync·수명 의미 보존, native GLES/Vulkan 회귀, 실제 DALi 픽셀·반복 시작/종료·context loss 검증이다. P2 링크는 이 중간 마일스톤이며 최종 완료가 아니다.
 
-D1과 별도로 D2 업로드 설계도 아래와 같이 승인됐다. D3 스레드 모델·D4 호스팅은 미승인이다. 남은 논의가 끝나기 전에 구현을 시작하지 않는다.
+D1과 별도로 D2 업로드 설계도 아래와 같이 승인됐다. D3는 아래와 같이 추가 승인됐고 D4 호스팅은 미승인이다. 남은 논의가 끝나기 전에 구현을 시작하지 않는다.
 
 ## 4. Memory3 재확인과 데이터 보존
 
@@ -116,25 +116,53 @@ D1과 별도로 D2 업로드 설계도 아래와 같이 승인됐다. D3 스레�
 2. **적용 조건:** 기존 byte를 참조·보존해야 하는 callback/partial mapping 경로에 shadow를 적용한다. 명시적 offset/length와 완전한 새 데이터가 주어지는 부분 갱신은 해당 범위만 BufferSubData하여 GPU의 나머지를 보존할 수 있다. 모든 버퍼에 무조건 사본을 추가하지 않는다. shadow가 존재하면 직접 구간 갱신도 사본에 반영해 이후 callback과 일관성을 유지한다.
 3. **callback:** 기존의 유효한 내용을 제공하고 수정하지 않은 byte를 보존한다. 반환된 bytesUpdatedCount를 임의의 dirty 위치 정보로 해석하지 않는다. 정확한 변경 범위를 알 수 없으면 매핑 범위를 보수적으로 업로드한다. 기존 DISCARD/orphan 계약에서 보존을 보장하지 않은 데이터까지 유효하다고 가정하지 않는다.
 4. **수명·오류:** 최초/확장 영역의 초기화 정책과 유효 범위, discard/recycle 시 보존 범위를 명시한다. map/lock의 offset·size·정수 overflow·allocation 실패를 검사한다. 실패를 성공 포인터로 위장하지 않고 기존 호출부가 안전하게 처리할 수 있는지 검증한다. 구체적인 오류 전달에 공통 API 변경이 필요하면 영향과 대안을 보고한다.
-5. **경계:** GPU가 변경한 데이터는 shadow에 자동 반영되지 않는다. GPU write/readback과 context 복구는 별도 계약이다. CPU shadow를 보유한다고 자동 복구까지 완료한 것으로 취급하지 않는다. 웹 GL 소유자와 매핑 포인터의 thread 접근 규칙은 D3에서 확정한다.
+5. **경계:** GPU가 변경한 데이터는 shadow에 자동 반영되지 않는다. GPU write/readback과 context 복구는 별도 계약이다. CPU shadow를 보유한다고 자동 복구까지 완료한 것으로 취급하지 않는다. D3에 따라 웹 GL·GPU 매핑/업로드와 shadow 갱신은 업데이트·렌더 소유자에서 직렬화한다. 이벤트 측은 데이터/명령을 큐로 전달하며 매핑 포인터를 스레드 간 공유하지 않는다.
 6. **비용:** 대상 버퍼의 CPU 메모리·복사량·업로드량을 측정한다. 전체 write·명시적 구간 write·callback·uniform 경로별로 결과를 기록하고, 최적화하더라도 보존 의미를 축소하지 않는다. native 구현에는 웹 shadow 비용을 강제로 추가하지 않는다.
 
 필수 데이터 검사: 알려진 16-byte 초기 패턴 → 중간 4-byte 갱신 후 앞/뒤 보존; callback 0/부분/전체 갱신; nonzero map offset; lock 범위 초과·malloc 실패; buffer grow/recycle; CPU uniform vs GPU uniform; 두 연속 frame; unmap/destructor 중복·종료 중 해제. WebGL2 readback 또는 그 buffer를 사용한 실제 픽셀로 검증한다. 단순 CPU shadow unit test만으로 GPU 업로드 통과 처리하지 않는다.
 
-## 5. 실행 주체와 동기화 후보
+## 5. D3 확정: 메인 이벤트 + 업데이트·렌더 Worker
 
 현재 생산 기본은 event thread와 combined update/render pthread다. Core queue는 `C/internal/update/queue/update-message-queue.cpp`, `event/common/notification-manager.cpp`, `common/lockless-pointer-ring.h`의 SPSC batch·acquire/release와 mutex pool을 사용한다. 여러 Worker가 producer를 공유하는 설계로 바꾸지 않는다. thread-safe API라는 추측으로 모든 Actor 접근을 허용하지 않는다.
 
 | 후보 | 소유자 / 브라우저 연결 | 장점·비용 | 후보별 검증 |
 |---|---|---|---|
+| E: 메인 이벤트 + 업데이트·렌더 pthread (채택) | main=DOM/앱·Core event/TLS, render Worker=update/upload/GL·OffscreenCanvas | 기존 이벤트 소유권과 DOM 연동에 자연스러움. 메인 동기 대기 제거 필요, 임의 코드의 페이지 차단은 방지하지 못함 | 비동기 초기화·종료, callback/timer/trigger, queue 순서, context 소유권·resize·resume 검증 |
 | A: 메인 단일 실행 | DOM/event/update/render 모두 main, rAF 한 tick | P2/P3 진단은 단순. 긴 C++ 작업이 UI·중단을 막음 | 실제 DALi 프레임 순서·notification·입력 재진입, 긴 frame responsiveness. mock 성공만으로 채택 금지 |
 | B: 단일 dedicated Worker | main=DOM/rAF/resize, Worker=Core event+update+render+OffscreenCanvas | SAB 없이 UI와 분리. DALi 내부 실행은 직렬화하는 새 host loop 필요 | Canvas transfer 전 context 생성 금지, 메시지 순서·시간 역전·resize·Worker 종료, notification/event phase 회귀 |
 | C: event Worker + update/render pthread | main=DOM/rAF, app pthread=event/Core TLS, render pthread=update/upload/GL·OffscreenCanvas | 기존 DALi 동시성 구조에 가까움. SAB/격리·초기화 barrier·동기화 복잡 | 모든 DALi/host object `-pthread` 재빌드, pool readiness, SPSC stress, 정상 종료 handshake, suspend/resume, sync proxy deadlock 검사 |
 | D: pthread + main proxied GL | C의 GL 호출을 main context로 proxy | OffscreenCanvas 대안. proxy 비용·양방향 대기 위험 | GL 호출 순서·proxy 지연·main 응답성과 shutdown; 기본안 아님 |
 
-**생산 방향 권장 C**, 단 Pages 제약을 우회할 격리 호스팅 승인과 브라우저 검증이 조건이다. 배포 단순성과 SAB 없는 Worker가 우선이면 B가 실질적 대안이다. A는 진단 대상으로 제한하는 안이며 P0 때문에 선택하지 않는다. 세 후보 모두 현재 생산 실행 미검증이다.
+**생산 기본 E를 사용자 승인으로 채택했다.** 브라우저 메인이 DOM·앱 코드·Core 이벤트를 소유하고 별도 pthread Worker가 업데이트·업로드·렌더를 소유한다. 앞선 C 우선 권장안을 대체한다. C는 플레이그라운드 격리 후보, B는 대안이며 두 실행 구성을 동등하게 지원한다고 확정하지 않는다. 모든 후보의 생산 실행은 미검증이다.
 
-C의 rAF는 main에서 sequence/timestamp를 event owner로 전달하고 render owner에는 기존 queue와 wakeup을 통해 전달한다. 최대 한 pending tick으로 coalesce하고 callback 반환을 기다리는 main-side futex/join은 금지한다. notification은 event owner에 비동기 wakeup 후 ProcessEvents에서 소비한다. GL은 한 render owner에서만 실행하며 event→render init 완료·stop 완료는 message/atomic 상태와 acknowledgment로 표현한다. pthread Worker 안의 대기가 허용되더라도 main proxy와 순환 대기를 만들지 않아야 한다. Worker rAF 직접 사용은 지원 브라우저 검증 후 대안이며 필수 전제로 두지 않는다.
+### 소스 조사 근거와 포팅 경계
+
+| 근거 | 확인 내용 | 웹 설계 영향 |
+|---|---|---|
+| `C/internal/event/common/event-thread-services.cpp:42`, `thread-local-storage.cpp:56` | Core 이벤트 검사는 TLS/종료 상태 기반 | Worker 이벤트 가능성을 배제하지 않지만 전체 지원 증거도 아님. 생성·앱 조작·종료의 owner 일치 필요 |
+| `A/internal/adaptor/common/adaptor-impl.cpp:773,1194,1611` | 이벤트 여부는 TLS 플래그. main thread라는 assert 문구도 실제로는 Adaptor TLS 검사 | 문자열상의 main과 OS/browser main을 구분. callback이 잘못된 스레드에서 Core를 호출하면 안 됨 |
+| `A/internal/thread/common/thread-settings-impl.cpp:37`, `thread/linux/thread-settings-impl-linux.cpp:52` | UI thread 등록과 getpid 기반 main thread 조회가 별개 | 웹의 browser main/앱 event/render thread 식별 의미를 정의 |
+| `A/internal/system/macos/callback-manager-mac.mm:168` | CFRunLoopGetMain에 observer 등록 | 실제 플랫폼 main-loop 결합이 존재. native callback을 Worker에서 그대로 재사용 불가 |
+| `A/internal/adaptor/common/combined-update-render-controller.cpp:199,219` | pthread 생성, Start에서 semaphore 대기 | 메인에서는 비동기 ready/stop 통지로 전환. native wait loop를 그대로 실행하지 않음 |
+
+이 조사는 주요 경로의 정적 조사이며 모든 main-thread 의존성을 감사한 결과는 아니다. callback/timer/trigger·TLS·초기화·종료 전체 경로 감사가 구현의 선행 검증이다.
+
+### E 실행 계약
+
+1. main에서 Core/Adaptor event 상태를 만들고 Actor 조작·입력·notification·ProcessEvents를 실행한다. render Worker만 GL context와 버퍼 매핑·shadow 갱신·GPU 업로드를 수행한다. 이벤트와 업데이트 간 기존 SPSC queue 소유권·메모리 순서를 유지한다.
+2. DOM 접근과 DALi 이벤트 처리 사이에 웹 host 연결 경계를 둔다. 입력·resize·프레임 timestamp·종료 요청은 명시적 데이터로 전달하며 main 전용 브라우저 API를 Core/공통 이벤트 로직에 넣지 않는다. 현재 E에서는 같은 스레드 연결이 가능하고 후속 C에서는 메시지 전달로 대체할 수 있어야 한다.
+3. main rAF가 프레임 timestamp/sequence를 전달한다. event 처리로 flush한 명령을 render owner가 소비하고 최대 한 pending tick으로 합친다. native SleepUntil 루프를 브라우저 main에 복사하지 않는다. notification은 비동기 wakeup 뒤 event owner에서 소비한다.
+4. main이 render 준비·종료를 semaphore/condition/join으로 기다리지 않는다. ready/failure/stopped 상태를 비동기 통지하며 준비 전 앱 요청의 보류·실패 정책을 명시한다. main proxy와 render wait의 순환 대기를 금지한다. pause/resume/resize/정상 종료도 같은 규칙을 적용한다.
+5. 긴 사용자 초기화/콜백/무한 루프는 main과 편집기를 막을 수 있다. E는 개발자가 제어하는 일반 앱의 기본이며 임의 코드의 중단 가능성을 보장하지 않는다. 별도 render Worker가 이 위험을 해결한다고 주장하지 않는다.
+
+### 플레이그라운드 격리 조기 검증 게이트
+
+P2의 생산 링크와 기본 초기화 경로가 확보된 뒤 P3/P4 구간에서 독립 검증 단위를 마련하고, **P4 종료 전 격리 가능성·장애·변경 범위를 기록한다.** 실행은 해당 단계의 명시적 지시로 진행하며 이번에 Worker 실험을 시작하지 않는다. 검증 실패가 기본 E의 픽셀 성공을 무효화하지는 않지만, 해결 방향 없이 플레이그라운드 구현으로 넘어갈 수는 없다.
+
+1. C 후보에서 Worker를 이벤트 owner로 두고 Core/Adaptor 생성·입력·timer·callback·trigger·정상 종료·재생성을 감사/검증한다. main-thread ID API와 TLS, 플랫폼 loop, 앱 signal이 올바른 owner에서 동작하는지 확인한다.
+2. 사용자 초기화 또는 callback 무한 루프를 넣고 편집기 main의 heartbeat·중단 버튼이 살아 있는지 검사한다. event Worker 하나만 종료하는 데 그치지 않고 소속 pthread·pending message·Canvas/context를 포함한 실행 인스턴스 전체 종료와 신규 실행을 검증한다.
+3. iframe만으로 별도 thread나 확실한 중단을 보장하지 않는다. Worker 격리도 보안 sandbox 전체를 증명하지 않는다. 코드 컴파일 격리와 자원 제한은 P8/P9의 별도 계약이다.
+4. 통과 전에는 C를 지원 구성으로 선언하지 않는다. 실패하면 원인과 대안을 보고하고 D3 확장 결정을 받는다. 이 검증을 P8/P9까지 미루지 않는다.
 
 ## 6. pthreads·격리·호스팅
 
@@ -145,7 +173,7 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 | 호스팅 후보 | 조건·현재 판정 | 검증 방법 |
 |---|---|---|
 | GitHub Pages 직접 | 정적 사이트와 `/dali-web/` project 경로는 공식 지원. Pages의 사용자 정의 응답 헤더 설정은 확인한 공식 문서에 보장되지 않음. 기본 Pages를 pthread 가능 환경으로 승인할 근거 없음 | D1에서 실제 response headers, crossOriginIsolated/SAB, worker/wasm MIME·하위 경로·404 확인. 이번 배포·해당 URL runtime 검증 없음 |
-| 헤더 제어 실행 origin + Pages 안내/편집 UI | C의 권장 호스팅 후보. 실행은 isolated origin top-level을 우선 | 격리 헤더 서버에서 최소 pthread+OffscreenCanvas → DALi. Pages에서 top-level 링크로 이동. iframe 사용 시 별도 isolation 검증 |
+| 헤더 제어 실행 origin + Pages 안내/편집 UI | E 및 후속 C의 권장 호스팅 후보. 실행은 isolated origin top-level을 우선 | 격리 헤더 서버에서 최소 pthread+OffscreenCanvas → DALi. Pages에서 top-level 링크로 이동. iframe 사용 시 별도 isolation 검증 |
 | Pages + Service Worker 격리 | 우회 후보, 기본 채택하지 않음. 최초 방문 reload와 SW 제어 범위 필요 | clean profile 최초/두 번째 방문, 업데이트·unregister·offline·cache·실패 반복 reload, Firefox/Chromium 검사 |
 | Pages + A/B non-pthread | SAB 요구 없음. B는 OffscreenCanvas 별도 조건 | isolated=false에서도 GL/Worker가 동작하는지 확인, threading 산출물과 혼동 금지 |
 
@@ -159,10 +187,10 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 |---|---|---|---|
 | D1 확정 | 공통 GLES와 실행 환경 분리 | Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택. Core 계약·기존 GLES/Vulkan/DYNAMIC 유지 | 설계 승인 완료. 구현·회귀는 P2 이후, 상세 파일·인터페이스는 위 경계 준수 |
 | D2 확정 | 업로드 의미·비용 | 별도 웹 메모리 구현 + 보존이 필요한 버퍼 소유 CPU shadow. native Memory2/3 유지, Memory4 추가 없음 | 설계 승인 완료. 보존·수명·오류·메모리 비용 검증은 P2 이후 |
-| D3 | 생산 실행 주체와 P2 진단 범위 | C를 목표로 별도 pthread 산출물, P2의 A 링크 harness는 진단 전용 / B를 목표로 non-pthread Worker | thread 선택이 P1 완료 조건. 현재 선택하지 않음 |
-| D4 | 격리 호스팅 우선순위 | C이면 별도 헤더 제어 origin 허용, Pages는 안내/UI / Pages 고정이면 B 또는 SW 검증 선행 | C+기본 Pages 가능으로 선언 불가. 실제 제공자 선택은 D1 배포 단계에서 가능 |
+| D3 확정 | 생산 실행 주체와 격리 검증 | E: 메인 이벤트 + 업데이트·렌더 pthread Worker. DOM/이벤트 경계 분리, C는 조기 격리 검증 후보 | 설계 승인 완료. 비동기 대기 전환·runtime 검증 필요, 플레이그라운드 안전 중단 미보장 |
+| D4 | 격리 호스팅 우선순위 | E의 pthread 실행에 별도 헤더 제어 origin 허용, Pages는 안내/UI / Pages 고정이면 SW 검증 선행. non-pthread로 변경하려면 D3 재논의 | E+기본 Pages 가능으로 선언 불가. 실제 제공자 선택은 D1 배포 단계에서 가능 |
 
-게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D3~D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 D3 실행 주체부터 남은 두 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
+게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 마지막 D4 호스팅 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
 
 ## 8. P2 최소 링크 인수인계 (결정 후 실행)
 
@@ -172,13 +200,13 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 
 | 집합 | 출발 파일/영역 | 필요 이유·범위 |
 |---|---|---|
-| Core | `libs/dali-core/build/tizen`, generated namespace/invoke-method headers | R2 CMake 옵션 재사용. pthread는 별도 build dir에서 Core도 재빌드 |
+| Core | `libs/dali-core/build/tizen`, generated namespace/invoke-method headers | R2 CMake 옵션 재사용. E용 pthread는 별도 build dir에서 Core도 재빌드 |
 | Controller/렌더 자원 | `A/internal/graphics/gles-impl/file.list`의 cpp 23개를 출발 목록으로 사용 | controller/debug, context/state cache, command-buffer, buffer, Memory2/3, texture/sampler, framebuffer/render target/pass, shader/program/reflection/pipeline/cache, sync/dependency checker. 제외된 native sync/Memory3도 참조를 정리한 뒤 제외; 검증 없이 파일만 삭제하지 않음 |
 | GL wrapper | `A/internal/graphics/gles/gl-implementation.cpp`, `gles2/3-implementation.h`, GL extension cache 관련 소스 | wrapper vtable·GLES3 함수 참조, shader prefix, capabilities. 미지원 API import 분리 필요 |
 | host 경계 | 새 `A/internal/graphics/web/` 및 최소 `tests/probes/gles-link-smoke.cpp` 후보 | 실제 HTML5 context/GraphicsInterface/RenderSurface, host RenderController·PlatformAbstraction. 이름은 후보이며 public API 추가 아님 |
 | sync/플랫폼 보조 | `gles-sync-pool`, `gles-texture-dependency-checker`, `egl-sync-object`, `gles/egl-sync-implementation`, `graphics/common` | C++ cast·RTTI/typeinfo 의존까지 추적해 native 환경 파일로 분리. 공통 GLES와 Web target에 concrete EGL/native fence 의존이 남지 않도록 검증 |
 | shader/util | `graphics/common/shader-parser`, environment-variable, locale-numeric-guard, pixel-data, logging/trace, file-loader·program binary path·system-error | shader source compile/reflection에 필요한 실제 utility만. binary off여도 런타임 if만으로 file symbol 참조 제거가 보장되지 않으므로 compile boundary 필요 |
-| Emscripten | libc/libc++, GLES headers·WebGL2 JS library; C 선택 시 pthread/worker runtime | libEGL native·X11·Wayland·Ecore·TBM·FreeType/HarfBuzz·이미지 codec은 초기 target에 추가하지 않음 |
+| Emscripten | libc/libc++, GLES headers·WebGL2 JS library; E의 pthread/worker runtime | libEGL native·X11·Wayland·Ecore·TBM·FreeType/HarfBuzz·이미지 codec은 초기 target에 추가하지 않음 |
 
 이 목록은 소스 기반의 최소 **시작 closure**이지 검증 완료한 최종 linker closure가 아니다. Controller vtable·program/texture 의존성 때문에 R2-b 6개 파일만으로 충분하지 않다. P2 첫 산출물은 명시적 source manifest와 실제 undefined-symbol 분류다. 예상 밖으로 플랫폼 전체를 끌어들이면 범위를 늘리지 말고 보고한다.
 
@@ -189,7 +217,8 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 3. 새 웹 메모리 구현 파일(예: `web-buffer-memory.{h,cpp}`), 버퍼 소유 웹 저장소 및 필요 시 `gles-graphics-buffer.{h,cpp}`: D2의 bounds·수명·보존 계약 구현. 메모리 객체는 map/upload를 담당하고 shadow는 버퍼 수명에 귀속. native `gles2/3-graphics-memory`는 유지하며 웹에서는 선택하지 않는다.
 4. `A/internal/graphics/gles/gl-implementation.{h,cpp}`, `gles3-implementation.h`, `gles-impl/gles-context.cpp`, `gles-graphics-program.cpp`: web capability와 금지 경로, source shader 유지.
 5. `A/internal/graphics/gles-impl/gles-sync-pool.{h,cpp}`, `gles-texture-dependency-checker.{h,cpp}`, `egl-sync-object.{h,cpp}`: native fence 제외와 허용 GPU sync 의미. native 환경 파일과 Web sync 파일을 분리. 현재 GL sync 경로도 의미·호출 가능성을 확인한 뒤 재사용.
-6. `tests/probes/gles-link-smoke.cpp`, 새 빌드/검증 script와 `docs/P2-RESULTS.md`: 재현·정확한 scope 기록. 기존 mock probe 보존. Core public API 변경은 현재 제안에 없음.
+6. 웹 host의 callback/timer/trigger·thread ID·ready/stop 연결과 `combined-update-render-controller`의 웹 실행 경계: E의 main blocking 제거와 GL 소유권 보장. 네이티브 실행은 보존.
+7. `tests/probes/gles-link-smoke.cpp`, 새 빌드/검증 script와 `docs/P2-RESULTS.md`: 재현·정확한 scope 기록. 기존 mock probe 보존. Core public API 변경은 현재 제안에 없음.
 
 ### P2 검증 절차와 이후 게이트
 
@@ -198,7 +227,7 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 3. 실제 Controller를 생성·주입하고 Core 및 renderer/resource/command 경로를 참조하는 harness를 링크. unused archive만 붙이고 성공이라고 하지 않음. map에서 실제 GLES implementation 포함, mock 미포함 확인. undefined symbol suppression/빈 GL stub 금지.
 4. 예상 미해결 7개뿐 아니라 새로운 GLES3.1·EGL·file/trace symbol을 감사. 기본 WebGL2 링크 exit 0과 source manifest/map을 남긴다. FULL_ES3 비교는 별도 variant이며 성공 여부를 구분.
 5. native GLES/Vulkan 및 기존 DYNAMIC 구성의 source 선택·빌드 회귀와 웹 native 의존 배제 검사를 계획에 포함한다. 실행 가능한 native 환경에서는 자원·render·종료 회귀도 수행하며 실행하지 못한 항목은 미검증으로 남긴다. P2 최소 인수는 **선택된 생산 GLES path Wasm 링크 성공**이다. context bootstrap 실행은 가능하면 별도 기록하되 DALi 픽셀 성공으로 승격하지 않음. 수정된 native 공통 경로는 native compile 회귀를 수행하거나 미검증으로 남겨 범위 승인을 받음.
-6. P3에서 실제 DALi shader/geometry로 배경+사각형 픽셀·GL error·업로드 보존·context 생성/해제 검증. P4에서 시간·입력·resize·프레임 재요청과 반복 start/stop. C/B의 실제 worker 검증이 없으면 생산 실행 완료 판정 불가.
+6. P3에서 실제 DALi shader/geometry로 배경+사각형 픽셀·GL error·업로드 보존·context 생성/해제 검증. P4에서 시간·입력·resize·프레임 재요청과 반복 start/stop. E의 실제 Worker 검증이 없으면 생산 실행 완료 판정 불가. C 격리 후보는 위 조기 게이트로 따로 검증.
 7. 전체 Adaptor, 폰트/UI, Windows, 성능, 자동 context 복구, 배포는 별도 단계. 링크 오류를 풀기 위해 이 범위로 확대해야 하면 중단·보고.
 
 ## 9. 이번 실행 증거와 한계
