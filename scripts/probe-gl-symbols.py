@@ -4,6 +4,7 @@ import os
 import shutil
 import pathlib
 import re
+import shlex
 import subprocess
 
 root = pathlib.Path(__file__).resolve().parents[1]
@@ -30,8 +31,12 @@ results = {}
 for name, extra in (("webgl2", []), ("webgl2-full-es3", ["-sFULL_ES3=1"])):
     command = [str(compiler), str(source), "-sMIN_WEBGL_VERSION=2", "-sMAX_WEBGL_VERSION=2",
                *extra, "-o", str(build / f"gl-symbols-{name}.js")]
+    with (logs / "gl-commands.log").open("a") as log:
+        log.write(shlex.join(command) + "\n")
     run = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (logs / f"gl-symbols-{name}.log").write_text(run.stdout)
+    with (logs / "gl-commands.log").open("a") as log:
+        log.write(f"exitCode={run.returncode} variant={name}\n")
     missing = sorted(set(re.findall(r"undefined symbol: (\w+)", run.stdout)))
     results[name] = {"exitCode": run.returncode, "missingSymbols": missing, "symbolCount": len(symbols)}
 results["scope"] = "Direct GL/EGL imports from two compiled translation units only; not full adaptor linkage or runtime support."

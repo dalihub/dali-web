@@ -1,0 +1,25 @@
+{
+  "webgl2": {
+    "exitCode": 1,
+    "missingSymbols": [
+      "eglCopyBuffers",
+      "eglCreatePixmapSurface",
+      "glBlendBarrier",
+      "glFlushMappedBufferRange",
+      "glGetBufferPointerv",
+      "glMapBufferRange",
+      "glUnmapBuffer"
+    ],
+    "symbolCount": 265
+  },
+  "webgl2-full-es3": {
+    "exitCode": 1,
+    "missingSymbols": [
+      "eglCopyBuffers",
+      "eglCreatePixmapSurface",
+      "glBlendBarrier"
+    ],
+    "symbolCount": 265
+  },
+  "scope": "Direct GL/EGL imports from two compiled translation units only; not full adaptor linkage or runtime support."
+}

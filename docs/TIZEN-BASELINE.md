@@ -21,4 +21,4 @@ git remote set-url upstream-dali-ui ssh://review.tizen.org:29418/platform/core/u
 
 필요하면 fetch 명령에 `GIT_SSH_COMMAND="ssh -l YOUR_TIZEN_USER"`를 지정하거나 개인 SSH config에서 사용자명을 설정합니다. 계정·키를 저장소에 추가하지 않습니다.
 
-새 고정 소스의 빌드·Node·브라우저 검증은 아직 수행하지 않았습니다. 과거 P0 성공 결과를 새 SHA의 성공 결과로 간주하지 않습니다. R2-a에서 Core 빌드·Node를, R2-b에서 브라우저·GL 탐색을 검증합니다. 기록 기준은 R2-b 완료 전까지 기존 `webassembly-probe/docs`입니다.
+현재 고정 소스의 Core 빌드·Node는 R2-a, Firefox·Adaptor 6개 파일 컴파일·GL 탐색 비교는 [R2-b](R2-b-RESULTS.md)에서 완료했습니다. 과거 P0 성공을 새 SHA 검증으로 간주하지 않습니다. 생산 렌더러·UI 결합은 미검증입니다. 현재 기록 기준은 이 repo의 [STATE](STATE.md)와 [HANDOFF](HANDOFF.md)입니다.

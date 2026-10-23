@@ -8,6 +8,6 @@
 - 원문 `handoffs/004-R1-a.md`: 기존 공간 `webassembly-probe/docs/handoffs/004-R1-a.md`.
 - 원문 README·STATE·PLAN 및 상위 AGENTS: 기존 작업 공간의 문서입니다.
 
-기록 기준은 R2-b 완료 전까지 기존 `webassembly-probe/docs`입니다.
+R2-b 완료 후 현재 기록 기준은 [STATE](../STATE.md)와 [HANDOFF](../HANDOFF.md)입니다. 원문 두 파일의 외부 링크는 위 로컬 매핑을 유지하며 일반 clone에서 열리지 않습니다. 그 외 과거 문서는 링크를 재매핑한 [보관 사본](../archive/probe/README.md)에 있습니다.
 
 R1-a 릴리스 기준은 이후 [Tizen 브랜치 기준](../TIZEN-BASELINE.md)으로 대체됐습니다. 스냅샷 원문은 수정하지 않습니다.

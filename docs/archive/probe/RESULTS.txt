@@ -1,0 +1,122 @@
+DALi WebAssembly initial feasibility probe — 2026-10-22
+
+Continuation records
+  This file is the initial evidence snapshot. For the current plan and handoff,
+  start at README.md, docs/STATE.md and docs/HANDOFF.md.
+
+Scope
+  Validate compilation and Core execution before implementing a browser adaptor.
+  This is NOT a completed WebGL renderer or a web playground.
+  Original dali-core and dali-adaptor working trees were not modified.
+  The src/ copies are isolated local clones, with no tracked source edits.
+
+Inputs
+  dali-core: 800960a7e (full revision in logs/revisions.txt)
+  dali-adaptor: 8448c8c07 (full revision in logs/revisions.txt)
+  Emscripten: 6.0.13
+  SDK release: eb132757325583b787fe9414b09afea9442b72ad
+  Node: 24.19.0
+  CMake: 3.22.1; Ninja: 1.10.1
+  Firefox: 157.0.1; geckodriver: 0.37.1
+  Platform tested: local Ubuntu; Windows and other browsers NOT tested.
+  SDK and build tools are local to tools/; no system package installation.
+
+Verified results
+  1. Core Debug/static WebAssembly build: PASS, 375 Ninja build steps.
+     Upstream invoke-method generation remained enabled.
+     Upstream linker-test executes successfully in Node.
+     Evidence: logs/configure.log, logs/build.log, logs/linker-test.log
+
+  2. Core Actor animation execution in Node: PASS.
+     A one-second linear X-position animation yields 50 at 500 ms and
+     100 after completion. The application uses upstream TestApplication
+     and MOCK graphics/platform implementations, in a single-thread harness.
+     Evidence: core-smoke.cpp, logs/core-smoke.log
+
+  3. The same WebAssembly executes in headless Firefox: PASS.
+     Served over local HTTP, using a disposable browser profile.
+     Evidence: logs/browser-result.json, logs/geckodriver.log
+     This does not verify actual pixels, real-time frame scheduling, browser
+     input, production adaptor threading, or production graphics rendering.
+
+  4. Six unmodified adaptor translation units compile with em++: PASS.
+     gl-implementation.cpp, egl-implementation.cpp,
+     egl-graphics-controller.cpp, gles2-graphics-memory.cpp,
+     gles3-graphics-memory.cpp, combined-update-render-controller.cpp.
+     Evidence: logs/adaptor-summary.txt, logs/adaptor/*.log
+     This is not an entire adaptor build or final adaptor link.
+     The SDK includes GLES 3.1/3.2 headers; their inclusion alone is not
+     a compilation blocker in this SDK.
+
+  5. Link-only GL/EGL symbol inventory: FAIL, with concrete missing symbols.
+     Extracted 265 direct imports from gl-implementation.o and
+     egl-implementation.o. Generated symbol references are LINK ONLY;
+     their placeholder declarations must not be used as callable API wrappers.
+     Default WebGL 2 missing symbols:
+       eglCopyBuffers, eglCreatePixmapSurface, glBlendBarrier,
+       glFlushMappedBufferRange, glGetBufferPointerv, glMapBufferRange,
+       glUnmapBuffer.
+     WebGL 2 + FULL_ES3 missing symbols:
+       eglCopyBuffers, eglCreatePixmapSurface, glBlendBarrier.
+     Evidence: logs/gl-symbols.json, logs/gl-symbols-*.log
+     Only two translation units were inventoried. This does not imply that
+     fixing those three symbols completes the adaptor port. Dynamic extension
+     lookup, other translation units and runtime behavior remain unverified.
+
+Special findings / 특이 사항
+  - Core compilation and the selected animation path required no source changes.
+    This removes an initial uncertainty but does not prove all Core behavior.
+  - Native EGL pixmap/copy paths need exclusion or an actual web replacement.
+    Unsupported advanced blend behavior requires capability handling; silently
+    replacing required semantics with no-op functions would be incorrect.
+  - FULL_ES3 alone is insufficient for the current Memory3 mapping call:
+    it passes only GL_MAP_WRITE_BIT. SDK libwebgl.js requires an INVALIDATE flag
+    as well. Compare the existing Memory2 BufferSubData path against a carefully
+    specified mapping alternative; do not blindly change preservation semantics.
+  - The SDK's glProgramBinary implementation always reports an error. The
+    adaptor defaults shader binary usage on; a web profile needs it disabled
+    (DALI_SHADER_USE_PROGRAM_BINARY=0) and source compilation verified.
+  - Native resource/surface context sharing is not reproduced by the SDK EGL
+    implementation. A first web target should explicitly specify one canvas
+    and one context, then adapt resource uploads and rendering to that model.
+  - The production thread controller compiles, but its waits and startup
+    synchronization have not been executed in a browser. Compilation does not
+    establish browser thread compatibility.
+
+Relevant source locations
+  src/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp
+  src/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp
+  src/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp
+  src/dali-adaptor/dali/internal/graphics/gles/egl-implementation.cpp
+  src/dali-adaptor/dali/internal/adaptor/common/combined-update-render-controller.cpp
+  tools/emsdk/upstream/emscripten/src/lib/libwebgl.js
+  tools/emsdk/upstream/emscripten/src/lib/libwebgl2.js
+  tools/emsdk/upstream/emscripten/src/lib/libegl.js
+
+Reproduce in this prepared directory
+  bash build-core.sh
+  bash probe-adaptor.sh
+  python3 probe-gl-symbols.py
+  python3 check-browser.py
+
+  check-browser.py requires permission to launch local Firefox/geckodriver
+  and bind loopback sockets. It terminates its browser and local server.
+  probe-gl-symbols.py intentionally records failed links and exits normally;
+  inspect exitCode in logs/gl-symbols.json for each link result.
+  All builds use at most six parallel compile jobs.
+
+SDK setup detail
+  EMSDK_KEEP_DOWNLOADS=1 ./emsdk install 6.0.13
+  ./emsdk activate 6.0.13
+  download-sdk.py is a one-time bootstrap helper for the pinned official SDK.
+  Its SHA256 receipt is logs/sdk-sha256.txt; it is a recorded local digest,
+  not a comparison against a published trusted SHA256. Archive extraction
+  succeeded with xz integrity checking.
+
+Next implementation milestone
+  Link and run the production GLES renderer through a minimal browser platform
+  harness: one canvas/context, browser frame callbacks, explicit supported GL
+  capabilities, then real rectangle pixels and animation. Follow with pointer
+  input. This requires more work than the current mock-graphics Core harness.
+  No renderer-completion date is established by these tests. The initial
+  1–3 week PoC estimate remains provisional until that render path works.

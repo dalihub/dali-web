@@ -1,0 +1,7 @@
+PASS: 181 relative Markdown links audited; 9 historical original links mapped by docs/r1-a/README.md, no unexpected missing paths
+PASS: shell/Python syntax and git diff --check
+PASS: original/P0 Git state, user files, P0/R1/R2-a logs, locks and Core artifacts preserved
+PASS: historical document archive hashes
+PASS: fresh Firefox 50/100, six compile exits 0; GL inventory equals P0 with two expected link exits 1
+PASS: probe identity, pinned subtree trees (Core R2-a CMake-only delta)
+PASS: artifacts, logs, SDK and profiles ignored

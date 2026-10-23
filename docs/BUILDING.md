@@ -59,8 +59,40 @@ Core CMake에 선택적 `DALI_GENERATED_INCLUDE_DIR`을 추가했습니다. 웹 
 
 SDK·빌드·로그·프로필은 루트 ignore 대상입니다. 외부 출력 경로를 사용하면 해당 경로의 보존·제외 여부는 사용자가 관리합니다.
 
-## R2-b용 이관 파일
+## R2-b 브라우저·Adaptor·GL 검사
 
-`tests/browser/core-smoke.html`, `tests/browser/check-browser.py`, `scripts/probe-adaptor.sh`, `scripts/probe-gl-symbols.py`는 경로 이관만 했습니다. R2-a에서 브라우저·Adaptor·GL을 재실행하지 않았습니다.
+현재 lock 기준으로 Firefox 50/100·Adaptor 6개 컴파일·GL 탐색 비교를 완료했습니다. [결과](R2-b-RESULTS.md). Firefox 157.0.1과 geckodriver 0.37.1을 사용했습니다. Firefox·geckodriver는 별도 설치하며 PATH로 찾고, 드라이버는 `GECKODRIVER`로 재정의할 수 있습니다. 로컬 HTTP 소켓과 브라우저 실행 권한이 필요합니다. 제한된 sandbox에서는 실행 전에 실패할 수 있습니다.
 
-R2-b에서는 새 실행 디렉터리를 지정하고 `source scripts/env.sh` 후 같은 셸에서 검사합니다. Adaptor 검사는 Core 생성 헤더를 필요로 하므로 Core 빌드가 선행합니다. GL 탐색은 Adaptor 검사에서 생성한 두 object를 사용합니다. Python 검사는 `DALI_WEB_BUILD_DIR`와 명시적 `DALI_WEB_RUN_DIR`를 사용합니다. Firefox 검사는 PATH의 geckodriver(또는 `GECKODRIVER`)와 Firefox를 필요로 합니다. GL의 예상 미해결 심볼은 JSON 내부 exitCode를 기준으로 판정하며 Python 자체 종료 0을 링크 성공으로 해석하지 않습니다.
+repo 루트에서 새 실행 디렉터리와 Core 빌드 경로를 지정합니다. 아래 SDK/host 경로는 선택 옵션이며 자신의 설치 경로로 바꿉니다. 활성 SDK가 PATH에 있으면 두 export를 생략할 수 있습니다.
+
+```sh
+export DALI_WEB_EMSDK=/path/to/emsdk
+export DALI_WEB_HOST_TOOLS=/path/to/host/usr
+export DALI_WEB_BUILD_DIR="$PWD/build/core"
+export DALI_WEB_RUN_DIR="$PWD/logs/r2-b/my-new-run"
+# mkdir이 실패하면 기존 실행 디렉터리이므로 새 이름을 선택합니다.
+mkdir -p "$(dirname "$DALI_WEB_RUN_DIR")"
+mkdir "$DALI_WEB_RUN_DIR" || exit 1
+source scripts/env.sh
+
+# 현재 소스로 Core 빌드가 없으면 먼저 build-core.sh를 별도 run 경로로 실행합니다.
+"$PYTHON" tests/browser/check-browser.py > "$DALI_WEB_RUN_DIR/browser.log" 2>&1
+browser_code=$?
+printf 'browser exitCode=%s\n' "$browser_code" >> "$DALI_WEB_RUN_DIR/commands.log"
+test "$browser_code" -eq 0 || exit "$browser_code"
+bash scripts/probe-adaptor.sh > "$DALI_WEB_RUN_DIR/adaptor.log" 2>&1
+adaptor_code=$?
+printf 'adaptor exitCode=%s\n' "$adaptor_code" >> "$DALI_WEB_RUN_DIR/commands.log"
+test "$adaptor_code" -eq 0 || exit "$adaptor_code"
+"$PYTHON" scripts/probe-gl-symbols.py > "$DALI_WEB_RUN_DIR/gl.log" 2>&1
+gl_probe_code=$?
+printf 'GL probe exitCode=%s\n' "$gl_probe_code" >> "$DALI_WEB_RUN_DIR/commands.log"
+test "$gl_probe_code" -eq 0 || exit "$gl_probe_code"
+cat "$DALI_WEB_RUN_DIR/gl-symbols.json"
+```
+
+Adaptor 검사는 Core 생성 헤더를 사용하고 6개 파일을 순차 컴파일합니다. 각 명령·종료 코드는 `adaptor/commands.log`에, 진단은 각 unit 로그에 남습니다. GL 탐색은 그중 두 object에서 직접 GL/EGL import를 추출합니다. 개별 링크 명령/종료 코드는 `gl-commands.log`, 진단과 집계는 `gl-symbols-*.log`, `gl-symbols.json`에 남습니다. 같은 디렉터리를 재사용하면 결과 파일이 덮어써질 수 있으므로 반드시 새 디렉터리를 사용합니다.
+
+Python 종료 0은 탐색 결과 수집 성공입니다. 현재 두 링크 모두 종료 1이며, 기본 7개/FULL_ES3 3개 미해결입니다. placeholder 선언은 링크 전용이며 생성 코드를 실행하거나 API wrapper로 사용하지 않습니다. 미해결 심볼 해소·실제 호출 의미·전체 Adaptor 링크·실제 픽셀은 후속 단계입니다.
+
+R2-b 실제 실행에서는 `logs/r2-b/run-001/`을 사용했습니다. 실제 명령·도구 버전·실패한 sandbox 시도까지 보존했고 repo에는 [작은 증거](evidence/r2-b/commands.txt)만 포함합니다. 전체 로그와 이전 공간 위치는 [MIGRATION](MIGRATION.md)을 참고합니다.

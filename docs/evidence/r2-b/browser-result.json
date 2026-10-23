@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "output": [
+    "core-impl.cpp: Core(137) > Core policy enum : 0x0",
+    "INFO: Trace Start: Test ",
+    "INFO: scene-impl.cpp: ChangedSurface(474) > Send Surface Rect Message, width[480], height[800]",
+    "INFO: render-manager.cpp: InitializeScene(530) > InitializeScene 0x668a0",
+    "INFO: scene-graph-scene.cpp: SetSurfaceRect(232) > update surfce rect in scene-graph, from width[0], height[0], to width[480], height[800]. Changed count [1]",
+    "PASS: DALi Core WebAssembly actor animation midpoint=50.0 endpoint=100.0 (mock graphics)"
+  ]
+}

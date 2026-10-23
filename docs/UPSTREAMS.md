@@ -18,4 +18,4 @@
 
 루트 `.gitignore`는 tools·build·logs·profiles·browser-profiles·dist만 제외합니다. `libs/*/build/`의 tracked 빌드 소스와 tracked autogen 파일은 원본 tree의 일부입니다. 중첩 `.git`, SDK, P0 생성 헤더와 산출물을 파일 복사로 섞지 않습니다.
 
-현재 Tizen 기준의 P0 tree 비교는 [Tizen 기준](TIZEN-BASELINE.md)과 lock을 참고합니다. R2-a에서 현재 Core SHA 기반 Wasm 빌드·Node 모의 애니메이션을 검증했습니다. 웹용 생성 헤더 경로 옵션은 import 후 별도 변경입니다. Adaptor 새 SHA의 빌드·런타임과 UI 결합 빌드는 미검증이며 UI 결합 빌드는 P6 대상입니다. [R1-a 결정 스냅샷](r1-a/R1-a-UPSTREAMS.md)은 대체된 과거 기준입니다.
+현재 Tizen 기준의 P0 tree 비교는 [Tizen 기준](TIZEN-BASELINE.md)과 lock을 참고합니다. R2-a에서 현재 Core SHA 기반 Wasm 빌드·Node 모의 애니메이션을 검증했습니다. 웹용 생성 헤더 경로 옵션은 import 후 별도 변경입니다. R2-b에서 현재 Core Firefox 검사와 Adaptor 6개 번역 단위 컴파일·GL 탐색 비교를 완료했습니다. 전체 Adaptor 빌드·링크·런타임과 UI 결합은 미검증이며 UI 결합 빌드는 P6 대상입니다. [현재 검증 결과](R2-b-RESULTS.md)를 참고합니다. [R1-a 결정 스냅샷](r1-a/R1-a-UPSTREAMS.md)은 대체된 과거 기준입니다.

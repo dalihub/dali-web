@@ -23,6 +23,8 @@ cd dali-web
 
 ## 진행 기록
 
-R2-b 완료 전 기록 기준은 기존 작업 공간 `webassembly-probe/docs`입니다. 이 repo의 [R1-a 결정](docs/r1-a/R1-a-UPSTREAMS.md)과 [R1-b 시작 인수인계](docs/r1-a/HANDOFF.md)는 변경하지 않는 역사적 스냅샷입니다. 원문에 있는 이전 공간의 증거 링크는 일반 clone에 포함되지 않으며, 위치 매핑은 [스냅샷 안내](docs/r1-a/README.md)를 참고합니다.
+R2-b 재검증과 기록 전환을 완료했습니다. 현재 시작점은 [STATE](docs/STATE.md), [P1 인수인계](docs/HANDOFF.md), [PLAN](docs/PLAN.md), [JOURNAL](docs/JOURNAL.md)입니다. 다음 요청문은 [NEXT-CONTEXT](docs/NEXT-CONTEXT.md)에 있습니다.
 
-R2-a에서 실험 코드의 경로 이관과 Core 빌드·Node 검사를 완료했습니다. R2-b에서 브라우저·GL 탐색을 재검증한 뒤 기록 기준을 전환합니다.
+현재 Core의 Wasm·Node·Firefox 모의 애니메이션 50/100과 Adaptor 6개 파일 컴파일을 검증했습니다. GL 탐색은 265개 심볼 중 기본 7개/FULL_ES3 3개 미해결이며 실제 생산 링크·픽셀 렌더링은 미완료입니다. [R2-b 결과](docs/R2-b-RESULTS.md), [빌드·재현](docs/BUILDING.md).
+
+이전 `webassembly-probe`는 과거 증거·SDK·P0 복제본 보존 공간입니다. 문서 사본과 미이관 자료 위치는 [MIGRATION](docs/MIGRATION.md)에 있습니다. 계획은 자동 실행 지시가 아니며 다음 단계 P1은 아직 시작하지 않았습니다.

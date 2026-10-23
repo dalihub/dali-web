@@ -1,0 +1,55 @@
+# Display-only path normalization; exact commands remain in local logs/r2-b/run-001.
+
+# commands.log
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/emcc --version
+exitCode=0 log=emcc-version.log
+${LEGACY_PROBE}/tools/emsdk/node/24.19.0_64bit/bin/node --version
+exitCode=0 log=node-version.log
+${REPO}/../webassembly-probe/tools/host/usr/bin/cmake --version
+exitCode=0 log=cmake-version.log
+${REPO}/../webassembly-probe/tools/host/usr/bin/ninja --version
+exitCode=0 log=ninja-version.log
+/usr/bin/python3 --version
+exitCode=0 log=python-version.log
+firefox --version
+exitCode=1 log=firefox-version.log
+geckodriver --version
+exitCode=1 log=geckodriver-version.log
+git -C ${REPO}/../webassembly-probe/tools/emsdk rev-parse HEAD
+exitCode=0 log=sdk-revision.log
+git ls-remote origin refs/heads/main
+exitCode=128 log=remote-before.log
+/usr/bin/python3 tests/browser/check-browser.py
+exitCode=1 log=browser.log
+firefox --version
+exitCode=0 log=firefox-version-host.log
+geckodriver --version
+exitCode=0 log=geckodriver-version-host.log
+git ls-remote origin refs/heads/main
+exitCode=0 log=remote-before-host.log
+/usr/bin/python3 tests/browser/check-browser.py
+exitCode=0 log=browser-host.log
+bash scripts/probe-adaptor.sh
+exitCode=0 log=adaptor.log
+/usr/bin/python3 scripts/probe-gl-symbols.py
+exitCode=0 log=gl.log
+
+# adaptor/commands.log
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ -std=c++17 -c -DDEBUG_ENABLED -I${REPO}/build/core/generated/include -I${REPO}/libs/dali-core -I${REPO}/libs/dali-adaptor ${REPO}/libs/dali-adaptor/dali/internal/graphics/gles/gl-implementation.cpp -o ${REPO}/build/core/adaptor/gl-implementation.o
+exitCode=0 unit=gl-implementation
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ -std=c++17 -c -DDEBUG_ENABLED -I${REPO}/build/core/generated/include -I${REPO}/libs/dali-core -I${REPO}/libs/dali-adaptor ${REPO}/libs/dali-adaptor/dali/internal/graphics/gles/egl-implementation.cpp -o ${REPO}/build/core/adaptor/egl-implementation.o
+exitCode=0 unit=egl-implementation
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ -std=c++17 -c -DDEBUG_ENABLED -I${REPO}/build/core/generated/include -I${REPO}/libs/dali-core -I${REPO}/libs/dali-adaptor ${REPO}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp -o ${REPO}/build/core/adaptor/egl-graphics-controller.o
+exitCode=0 unit=egl-graphics-controller
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ -std=c++17 -c -DDEBUG_ENABLED -I${REPO}/build/core/generated/include -I${REPO}/libs/dali-core -I${REPO}/libs/dali-adaptor ${REPO}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp -o ${REPO}/build/core/adaptor/gles2-graphics-memory.o
+exitCode=0 unit=gles2-graphics-memory
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ -std=c++17 -c -DDEBUG_ENABLED -I${REPO}/build/core/generated/include -I${REPO}/libs/dali-core -I${REPO}/libs/dali-adaptor ${REPO}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp -o ${REPO}/build/core/adaptor/gles3-graphics-memory.o
+exitCode=0 unit=gles3-graphics-memory
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ -std=c++17 -c -DDEBUG_ENABLED -I${REPO}/build/core/generated/include -I${REPO}/libs/dali-core -I${REPO}/libs/dali-adaptor ${REPO}/libs/dali-adaptor/dali/internal/adaptor/common/combined-update-render-controller.cpp -o ${REPO}/build/core/adaptor/combined-update-render-controller.o
+exitCode=0 unit=combined-update-render-controller
+
+# gl-commands.log
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ ${REPO}/build/core/gl-symbols.cpp -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -o ${REPO}/build/core/gl-symbols-webgl2.js
+exitCode=1 variant=webgl2
+${LEGACY_PROBE}/tools/emsdk/upstream/emscripten/em++ ${REPO}/build/core/gl-symbols.cpp -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3=1 -o ${REPO}/build/core/gl-symbols-webgl2-full-es3.js
+exitCode=1 variant=webgl2-full-es3
