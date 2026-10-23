@@ -1,0 +1,15 @@
+{
+  "preservationEqual": true,
+  "repoCount": 5,
+  "fileHashCount": 136,
+  "productionDiffEmpty": true,
+  "relativeLinksChecked": 59,
+  "missingRelativeLinks": [],
+  "explicitSourcePathsChecked": 11,
+  "proposedPathsExcluded": [
+    "A/internal/graphics/web/"
+  ],
+  "diffCheckExitCode": 0,
+  "initialPathCheckExitCode": 1,
+  "initialPathCheckNote": "Proposed new web directory incorrectly treated as an existing path; checker corrected."
+}

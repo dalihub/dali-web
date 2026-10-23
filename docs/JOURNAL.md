@@ -16,3 +16,15 @@
 - 생성물은 ignored build/logs 아래. 남긴 브라우저·서버·빌드 프로세스 없음. SDK·프로필·대용량 로그 commit 제외.
 
 후속 항목에는 변경 파일·revision, 명령/종료 코드·증거 위치, 실패 원인·특이 사항, 미검증 범위·다음 행동·잔여 프로세스를 함께 기록합니다.
+
+## 010 P1 실행 계약 초안과 결정 게이트
+
+2026-10-23 (Asia/Seoul). **P1 미완료·결정 대기, P2 미착수.**
+
+- 시작 HEAD `ef6a1f545ff03df69c3297135048f545ee8dd352`, clean main. 최초 sandbox remote 조회는 DNS 오류 exit 128, 호스트 권한 조회 exit 0으로 원격 main 일치 확인. upstream/lock 유지.
+- [P1 실행 계약](P1-EXECUTION-CONTRACT.md): 현재 Core·GLES 호출 순서, 실제/논리 context, upload·frame·cleanup, 미지원 GL/EGL 정책, thread/hosting 후보, P2 source closure·변경 파일·검증 게이트 기록.
+- 특이 사항: 현재 Memory3 WRITE-only를 SDK가 거부함. Memory2의 uninitialized staging 전체 upload는 partial callback 보존 대안이 아님. Controller/sync pool의 concrete EGL/native fence 결합을 확인하고 변경 경계를 설계에 포함. 생산 수정 없음.
+- SDK 6.0.13 access guard를 추출해 Node 24.19.0에서 실행, exit 0. WRITE-only 반환 0, invalidate 포함은 guard만 통과. 브라우저·GL·데이터 보존·pthread runtime 검증 아님. [검사·명령·한계](evidence/p1/README.md), 로컬 `logs/p1/run-001/`.
+- 온라인 공식 문서와 SDK 소스로 pthread/SAB/격리 조건 및 EGL 제한 검토. Pages 실제 배포·응답 헤더/runtime 검증 없음. 기존 R2-b 결과 재실행 없음.
+- D1 기능/context, D2 upload 의미, D3 thread owner, D4 격리 hosting 미결. P1 완료 조건을 막으므로 완료 선언하지 않음. README·PLAN·STATE·HANDOFF·NEXT-CONTEXT 갱신. 다음은 사용자 설계 결정이며 P2 자동 실행 아님.
+- 원본/P0 Git·사용자 파일·과거 로그·R2-b 증거·lock·Core 산출물 전후 보존 검사와 문서 검사 결과를 P1 evidence에 기록. SDK·생산 소스·build 변경 없음. 남긴 서버·브라우저·빌드 프로세스 없음.

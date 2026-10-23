@@ -2,7 +2,7 @@
 
 갱신일: 2026-10-23. 목표는 C++ DALi 코드의 브라우저 직접 렌더링과 최종적인 코드 편집·실행 환경입니다. 컴파일 서버는 사용할 수 있지만 렌더링은 브라우저에서 수행합니다.
 
-P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. 다음은 P1 웹 실행 계약 설계입니다. 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 이는 제안 범위이며 스레드 구조와 GL 대체 경로는 P1에서 구체화합니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
+P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. P1 실행 계약 초안을 작성했으며 D1~D4 결정 대기입니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. P1 완료와 P2 착수는 아직 승인되지 않았습니다. 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 이는 제안 범위이며 스레드 구조와 GL 대체 경로는 P1에서 구체화합니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
 
 ## 작업 단계와 context 경계
 
@@ -12,7 +12,7 @@ P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-
 | R0 완료 | `dalihub/dali-web` Public 빈 저장소 생성 | 없음 | GitHub에서 `isPrivate=false`, `isEmpty=true` 확인 | 저장소 URL과 생성 상태 |
 | R1 완료 | 단일 repo 뼈대와 Core·Adaptor·UI subtree 구성 | P0, R0 | 원본 URL·SHA·import 정책 기록, subtree 3개 구성, 라이선스 보존, 생성물 제외, 일반 clone으로 소스 확인 | repo 경로·commit, upstream 매핑, import 근거 |
 | R2 완료 | 기존 실험·문서 이관과 재현 | R1 | 새 경로에서 Core 빌드·Node·Firefox 테스트 재현, GL 탐색 결과 비교, 문서 링크와 시작점 갱신 | 새 repo의 STATE·HANDOFF, 검증 로그, 이전 공간 보존 위치 |
-| P1 예정 | 웹 실행 계약 설계. Core 초기화, GLES Controller, 표면·컨텍스트·프레임 호출 경로 | R2 | 실제 호출 순서, 구현 파일 범위, 미지원 기능 정책, 스레드 선택과 검증 방법 명시 | 설계 결정과 P2에 필요한 최소 의존성 목록 |
+| P1 결정 대기 | 웹 실행 계약 설계. Core 초기화, GLES Controller, 표면·컨텍스트·프레임 호출 경로 | R2 | 실제 호출 순서, 구현 파일 범위, 미지원 기능 정책, 스레드 선택과 검증 방법 명시, D1~D4 결정 확정 | 설계 결정과 P2에 필요한 최소 의존성 목록 |
 | P2 예정 | 실제 GLES 렌더러 링크. 실험 CMake와 Adaptor GLES·EGL 경로 | P1 | 모의 그래픽 없이 선택한 생산 GLES 경로를 포함한 Wasm 실행 파일 링크 성공 | 링크 대상, 수정 diff, 남은 런타임 가정 |
 | P3 예정 | Canvas 컨텍스트·표면과 실제 DALi 도형 렌더링 | P2 | 실제 DALi Renderer로 사각형 표시, 배경과 도형의 픽셀 검사, GL 오류 확인 | 재현 페이지, 이미지·픽셀 증거, 초기화·해제 순서 |
 | P4 예정 | 브라우저 프레임 루프, 애니메이션, 포인터 입력, 리사이즈 | P3 | 시간 기반 움직임, 클릭 반응, 배율·크기 변경 후 좌표 일치, 반복 시작·종료 | 프레임·입력 계약과 회귀 검증 |
@@ -69,7 +69,7 @@ R2-b 이관 검증을 완료하여 `dali-web/docs`가 현재 기록 기준입니
 
 GitHub Pages는 사전 빌드된 예제와 정적 편집·실행 UI의 호스팅 대상으로 계획합니다. 사용자 C++ 코드를 매번 컴파일하는 서비스는 P8에서 별도로 운영합니다. Actions는 SDK·예제·사이트 빌드와 배포를 담당하고, 실시간 사용자 컴파일 서버로 취급하지 않습니다.
 
-D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 헤더 제약을 확인합니다. 단일 스레드 실행, 별도 실행 호스팅, Service Worker 방안 중 실제 검증된 구성을 선택합니다. Pages 사용을 이유로 스레드 모델을 미리 확정하지 않습니다. 배포 시 `/dali-web/` 하위 경로의 Wasm·Worker·리소스 URL을 검증합니다.
+D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 헤더 제약을 확인합니다. P1 초안은 pthread Worker와 별도 격리 실행 호스팅을 권장하고, non-pthread Worker 및 Service Worker를 대안으로 기록했습니다. 아직 채택·실행 검증되지 않았으며 D1~D4를 확정해야 합니다. Pages 사용을 이유로 스레드 모델을 미리 확정하지 않습니다. 배포 시 `/dali-web/` 하위 경로의 Wasm·Worker·리소스 URL을 검증합니다.
 
 ## 단계별 주요 판단
 
@@ -96,7 +96,7 @@ D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 
 
 ### 바로 적용할 context 단위
 
-R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1 이후는 미착수입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
+R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 설계 초안·소규모 SDK guard 검사를 마쳤으나 D1~D4 미결로 완료하지 않았습니다. P2 이후는 미착수입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
 
 | 단위 | 목표 | 완료 및 인수인계 조건 |
 |---|---|---|

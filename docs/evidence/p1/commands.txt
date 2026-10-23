@@ -1,0 +1,19 @@
+# Normalized commands; run from repository root.
+# Initial remote query observed in tool transcript:
+git ls-remote origin refs/heads/main
+sandbox exitCode=128 (DNS)
+host exitCode=0; main=ef6a1f545ff03df69c3297135048f545ee8dd352
+# SDK chosen with DALI_WEB_EMSDK, optional DALI_WEB_HOST_TOOLS; source scripts/env.sh
+emcc --version
+exitCode=0
+node docs/evidence/p1/check-map-guards.mjs "$DALI_WEB_EMSDK"
+exitCode=0
+python3 logs/p1/run-001/preserve.py logs/p1/run-001/preservation-before.json
+exitCode=0
+python3 logs/p1/run-001/preserve.py logs/p1/run-001/preservation-after.json
+exitCode=0
+# Inline Python snapshot equality/source hash/version audit: exitCode=0
+# Inline Python document links/path audit: exitCode=1 (proposed directory), corrected exitCode=0
+git diff --check
+exitCode=0
+# No production build, browser execution, or deployment in P1.

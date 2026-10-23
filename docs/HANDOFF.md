@@ -1,28 +1,43 @@
-# 다음 context 인수인계: P1
+# 다음 context 인수인계: P1 결정 → P2
 
-2026-10-23. R2-b 및 R2 완료, P1 미착수. 기록 기준은 `dali-web/docs`입니다.
+2026-10-23. **P1 설계 초안 작성, 결정 대기. P1 완료 아님, P2 미착수.** 현재 기록은 `dali-web/docs`, 이전 `webassembly-probe`는 증거 보존 공간이다.
 
 ## 먼저 읽을 것
 
-1. 작업 환경의 상위 AGENTS.md와 repo README.
-2. [STATE](STATE.md), 이 문서, [PLAN](PLAN.md)의 P1 범위.
-3. [R2-b 결과](R2-b-RESULTS.md), [이관/미이관 자료](MIGRATION.md), [Tizen 기준](TIZEN-BASELINE.md).
-4. `upstreams.lock.json`, `toolchain.lock.json`, [BUILDING](BUILDING.md), [UPSTREAMS](UPSTREAMS.md).
+1. 상위 AGENTS.md, repo README, [STATE](STATE.md), [PLAN](PLAN.md).
+2. [P1 실행 계약](P1-EXECUTION-CONTRACT.md), 특히 7절 D1~D4와 8절 P2 계획.
+3. [P1 증거](evidence/p1/README.md), [R2-b 결과](R2-b-RESULTS.md).
+4. `upstreams.lock.json`, `toolchain.lock.json`, [BUILDING](BUILDING.md), [UPSTREAMS](UPSTREAMS.md), [MIGRATION](MIGRATION.md), [Tizen 기준](TIZEN-BASELINE.md).
 
-## 현재 기준과 재현
+## 기준과 결과
 
-작업 repo `/home/jy/work/dali/dali-web`, 원격 https://github.com/dalihub/dali-web, main. R2-a 기반은 `728cf818d4db74890a4c37d01737c8eea3d9a14b`. R2-b 문서·검증 commit은 Git log의 `Validate R2-b probes and migrate project records`입니다. 실제 HEAD·status·origin·원격 SHA를 먼저 확인하고 현재 lock을 유지합니다.
+작업 repo `/home/jy/work/dali/dali-web`, main, 원격 https://github.com/dalihub/dali-web. P1 시작 HEAD와 원격 main은 `ef6a1f545ff03df69c3297135048f545ee8dd352`로 일치했고 clean이었다. P1 문서 commit은 `Document P1 execution contract and pending decisions`로 식별한다. 실제 HEAD·status·remote를 다시 확인한다. upstream/lock은 갱신하지 않는다.
 
-R2-a Core 빌드·Node 통과, R2-b Firefox 50/100·Adaptor 6개 컴파일 통과. GL 탐색 Python 0, 두 개별 링크 1, 265개 심볼 중 기본 7개/FULL_ES3 3개 미해결. P0와 동일한 결과지만 현재 SHA에서 재검증했습니다. 실제 DALi 렌더링 성공은 아닙니다.
+R2-a Core Wasm·Node, R2-b Firefox mock 50/100 및 Adaptor 6개 compile 통과. GL 탐색 Python 0, 두 링크 각각 1, 기본 7개/FULL_ES3 3개 unresolved. P1에서 이 검사를 반복하거나 생산 렌더링으로 승격하지 않았다.
 
-Core 산출물은 `build/core/`, 새 전체 로그는 `logs/r2-b/run-001/`. 작은 증거는 `docs/evidence/r2-b/`. 기존 SDK·host 도구는 형제 `webassembly-probe/tools/`에 있으며 선택적으로 환경변수로 재사용합니다. 개인 경로는 필수 조건이 아닙니다. 재현 명령은 BUILDING의 R2-b 절차를 사용하고 새 실행 디렉터리를 지정합니다. Core 빌드가 필요하면 최대 -j6입니다.
+P1은 현재 Core→GLES→표면/컨텍스트→업로드→프레임→종료 경로와 웹 경계를 기록했다. SDK 6.0.13의 map access guard만 추출해 Node 24.19.0에서 실행했고 exit 0이다. WRITE-only가 0으로 거부됨을 확인했으며 실제 GL 검사가 아니다. 새 로그는 `logs/p1/run-001/`, 작은 공개 증거는 `docs/evidence/p1/`이다.
 
-## P1 작업 범위와 완료 조건
+## 먼저 확정해야 하는 결정
 
-1. 현재 소스에서 Core 초기화 → GLES Controller → 컨텍스트/표면 → 프레임·리소스 업로드·해제 호출 순서를 추적하고 파일·함수 근거를 기록합니다.
-2. 단일 Canvas·WebGL 2 초기 범위와 미지원 EGL pixmap/copy·고급 blend·셰이더 바이너리 정책을 검토합니다. FULL_ES3의 링크 결과를 올바른 메모리 매핑 의미로 가정하지 않습니다. Memory2 업로드와 Memory3의 데이터 보존 의미를 비교합니다.
-3. 이벤트·업데이트·렌더 소유자와 스레드 후보, 브라우저 프레임 연결 및 검증 방법을 정리합니다. P0의 단일 스레드 harness를 생산 설계로 자동 채택하지 않습니다.
-4. pthreads·SharedArrayBuffer·COOP/COEP 및 Pages 호스팅 제약을 근거로 확인합니다. 실험이 커지면 독립 단위로 나누고 미검증 가정을 명시합니다. Pages 배포는 D1입니다.
-5. 실행 계약과 P2 최소 링크 대상·의존성·변경 파일 범위·검증 절차를 문서로 남기고, 설계 선택에 필요한 사용자 결정을 구분합니다. 생산 렌더러 신규 구현은 P2 이후입니다.
+1. D1: 단일 Canvas/WebGL2·HTML5 context adapter와 native/binary/advanced blend 제외안, 또는 제한 EGL adapter.
+2. D2: CPU shadow + BufferSubData로 partial write 보존, 또는 full overwrite만 지원하고 callback/partial API 명시 제외.
+3. D3: 생산 event Worker + update/render pthread(C) 권장, non-pthread 단일 Worker(B) 대안. main 단일 harness(A)는 링크 진단용으로만 제한하는 안.
+4. D4: C이면 별도 격리 실행 origin을 허용할지, Pages 고정이면 B/SW 검증 중 어느 방향인지.
 
-원본 UI 사용자 파일 `todo-items/README.md`, `todo-items/recycler-api-abi-refactoring.md`와 P0·R2-a 원본 증거를 보존합니다. 네이티브 build/install·UI 결합·Windows·성능·실제 픽셀은 미검증입니다. 이전 R2-b 시작 인수인계는 [보관 사본](archive/probe/docs/HANDOFF.md)에 있습니다. 남긴 실행 프로세스는 없습니다. P1을 이번 R2-b 작업에서 자동 실행하지 않습니다.
+위 결정은 미승인이다. 결정 없이 P2 구현하지 않는다. P1의 스레드 선택 완료 조건을 없애고 완료 처리하지 않는다. 실제 호스팅 사업자 선택은 배포 단계에 미룰 수 있지만 헤더 제어 허용 여부는 thread 결정과 함께 정해야 한다.
+
+## 특이 사항과 P2 경계
+
+1. Memory3는 GLES3에서 자동 선택되나 WRITE-only가 SDK에서 거부된다. invalidate 추가만으로 partial-write 보존이 해결되지 않는다.
+2. Memory2는 새 malloc staging 전체를 업로드한다. callback·uniform 부분 쓰기, map/lock 크기와 offset, 반복 unmap 수명을 검증해야 한다. GLES2로 버전을 위장하지 않는다.
+3. EglGraphicsController.Initialize의 concrete EGL sync cast와 sync pool의 native FD 경로를 분리해야 한다. 빈 GL/EGL/sync 함수나 undefined-symbol 억제는 불가다.
+4. 한 실제 WebGL context에서 resource/surface 역할과 캐시를 일치시킨다. SDK EGL 공유 인자를 native 공유 지원으로 오해하지 않는다.
+5. P2 대상은 Core + 생산 GLES 자원/명령 구현 + 최소 web host다. 6개 R2-b object나 unused archive만 링크한 결과는 충분하지 않다. 전체 Tizen Adaptor/UI를 가져오지 않는다. 구체적인 source 집합·변경 파일·검증은 P1 8절에 있다.
+
+P2 허가 후에는 별도 build/log dir, source manifest, nm/linker map, 실제 Controller/Core 연결, strict undefined-symbol 검사를 수행한다. unexpected dependency가 플랫폼 전체 포팅으로 커지면 중단·보고한다. P2 링크 exit 0과 P3 실제 픽셀 검증을 구분한다.
+
+## 보존·미검증
+
+원본 사용자 변경·P0·R2-a/R2-b 증거·lock·Core 기존 산출물을 보존했다. 외부 SDK는 선택적 재사용이며 개인 절대 경로를 필수 조건으로 만들지 않는다. 빌드 최대 -j6. SDK·산출물·브라우저 프로필·대용량 로그는 commit 제외. 남긴 서버·브라우저·빌드 프로세스 없음.
+
+실제 DALi 픽셀·생산 GLES 링크/실행·전체 Adaptor·pthread/SAB/OffscreenCanvas·Pages headers/runtime·다른 브라우저/Windows·성능·native build/install·UI·context loss 복구는 미검증이다. [다음 프롬프트](NEXT-CONTEXT.md)는 먼저 결정을 요청하도록 구성했다.

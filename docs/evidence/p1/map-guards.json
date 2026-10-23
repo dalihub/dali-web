@@ -1,0 +1,39 @@
+{
+  "node": "v24.19.0",
+  "sdkSource": "upstream/emscripten/src/lib/libwebgl.js",
+  "sha256": "06d4f65fc0aa47c3906658fae3720b60808eef17fce2f70fc9300f5ae55450ad",
+  "results": [
+    {
+      "access": 2,
+      "actual": 0,
+      "messages": [
+        "glMapBufferRange access must include INVALIDATE_BUFFER or INVALIDATE_RANGE"
+      ]
+    },
+    {
+      "access": 6,
+      "actual": "guards-passed",
+      "messages": []
+    },
+    {
+      "access": 10,
+      "actual": "guards-passed",
+      "messages": []
+    },
+    {
+      "access": 3,
+      "actual": 0,
+      "messages": [
+        "glMapBufferRange access does not support MAP_READ or MAP_UNSYNCHRONIZED"
+      ]
+    },
+    {
+      "access": 34,
+      "actual": 0,
+      "messages": [
+        "glMapBufferRange access does not support MAP_READ or MAP_UNSYNCHRONIZED"
+      ]
+    }
+  ],
+  "limitation": "SDK access guards only. No GL context, allocation, upload, DALi or browser execution."
+}
