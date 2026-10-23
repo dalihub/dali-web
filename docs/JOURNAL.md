@@ -57,3 +57,13 @@
 - 이벤트 Worker는 플레이그라운드 격리 후보로 유지. P2 이후 P3/P4 구간에서 TLS·callback·timer·종료·무한 루프·전체 인스턴스 종료/재생성을 검증하고 P4 종료 전 결과·장애 기록. 두 실행 구성 동시 지원을 확정하지 않음.
 - PLAN·STATE·HANDOFF·NEXT-CONTEXT·README와 P2 변경 범위 갱신. 마지막 논의는 D4 격리 호스팅. 소스·lock·SDK·원본·기존 증거 변경 및 Pages 배포 없음.
 - 시작 clean main `f686f106f8d99d218ab54dfbb029ef0fe1ddb722`, 원격 동일. 문서 검사만 수행, build/runtime 미검증. 기록 `logs/p1/d3-design-001/`.
+
+## 014 D4 호스팅 정책 확정과 P1 설계 완료
+
+2026-10-23 (Asia/Seoul). D1~D4 사용자 결정 확정, P1 설계 완료·P2 미착수.
+
+- D4: GitHub Pages + SW 격리 우선 검증, 실패/과도한 비용 시 직접 호스팅 전환 검토. 사용자 제약으로 타사 관리형 호스팅 제외. D3 유지, 배포·서버 구축은 별도 승인.
+- URL 기준 경로와 SW bootstrap 분리, 최초 pthread/browser 검증 단위에 작은 호스팅 probe 준비. 실제 Pages 검증 전 지원 완료 판정 금지, 로컬 성공과 실제 배포 성공 구분.
+- 설계 문서 7절에서 P1 완료 조건별 근거와 후속 미검증 게이트 점검. 미결 설계 결정 없음. 실제 생산 링크·픽셀·스레드·호스팅은 검증 완료 아님.
+- 다음 컨텍스트는 P2-a source manifest·컴파일/strict 링크 의존성 진단. 대규모 구현은 P2-b로 넘기고 진단 후 인수인계. P2-a 진단 완료를 상위 P2 생산 링크 완료로 간주하지 않음.
+- README·PLAN·STATE·HANDOFF·NEXT-CONTEXT 갱신. 시작 clean main `e471178f2cb9bc96f0f389fb52cb67c4c2d228ae`, 원격 동일. 문서 링크·공백·변경 범위 검사만 수행. 기록 `logs/p1/d4-close-001/`. 소스·lock·SDK·기존 증거·원본 사용자 변경 불변, build/runtime/배포 미실행.

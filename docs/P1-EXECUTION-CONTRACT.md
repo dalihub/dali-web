@@ -1,6 +1,6 @@
 # P1 웹 실행 계약 설계
 
-2026-10-23 (Asia/Seoul). **D1 아키텍처·D2 업로드·D3 실행 구조 확정, D4 결정 대기. P1 완료 아님.** 사용자가 공통 GLES 로직과 Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택하는 설계를 승인했다. 정식 포팅을 목표로 하며 생산 코드 변경·생산 링크·Pages 배포는 아직 수행하지 않았다. D4 권장안은 미승인이다. 여기서 D1은 P1의 결정 ID이며 PLAN의 Pages 배포 단계 D1과 구별한다.
+2026-10-23 (Asia/Seoul). **D1~D4 설계 결정 확정, P1 설계 완료. P2 미착수.** 사용자가 공통 GLES/환경 분리, 웹 버퍼 보존, 메인 이벤트 + 업데이트·렌더 Worker, GitHub Pages 우선 검증과 실패 시 직접 호스팅 검토를 승인했다. 생산 코드 변경·생산 링크·실제 Pages 실행 성공을 뜻하지 않는다. 아래 미검증 조건은 각 후속 단계의 인수 게이트로 유지한다. D1 결정 ID와 PLAN의 배포 단계 D1은 별개다.
 
 기준 HEAD: `ef6a1f545ff03df69c3297135048f545ee8dd352`. 시작 main clean, 원격 main 일치 확인. [upstreams.lock.json](../upstreams.lock.json), [toolchain.lock.json](../toolchain.lock.json) 유지. Core `e2ce797a41cff49851361210491c8ed38bea46e9`, Adaptor `f0dd9b39d5a51ff0233ea50bf872dd6200e93981`, UI `f6c046d2a15ab7c6bad8d76612e667d66ed1f6d0`. [R2-b](R2-b-RESULTS.md)의 컴파일·mock 결과를 생산 실행 증거로 확장하지 않는다.
 
@@ -94,7 +94,7 @@ Core → Graphics::Controller
 6. 빌드 선택은 가능한 기능의 상한을 정하며 실제 context limits·extensions는 실행 시 확인한다. 필요한 기능의 빈 성공 구현, undefined-symbol 억제, 임의 GLES 버전 위장은 금지한다. unsupported 요청은 명시적으로 거부한다.
 7. 정식 구현의 수용 기준은 공통 GLES의 concrete EGL/native 의존 제거, 웹 link closure의 native 의존 배제, 업로드·sync·수명 의미 보존, native GLES/Vulkan 회귀, 실제 DALi 픽셀·반복 시작/종료·context loss 검증이다. P2 링크는 이 중간 마일스톤이며 최종 완료가 아니다.
 
-D1과 별도로 D2 업로드 설계도 아래와 같이 승인됐다. D3는 아래와 같이 추가 승인됐고 D4 호스팅은 미승인이다. 남은 논의가 끝나기 전에 구현을 시작하지 않는다.
+D1과 별도로 D2 업로드 설계도 아래와 같이 승인됐다. D3와 D4도 아래와 같이 승인됐다. P1 설계 논의는 종료하며 이번에는 생산 구현을 시작하지 않는다.
 
 ## 4. Memory3 재확인과 데이터 보존
 
@@ -173,13 +173,21 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 | 호스팅 후보 | 조건·현재 판정 | 검증 방법 |
 |---|---|---|
 | GitHub Pages 직접 | 정적 사이트와 `/dali-web/` project 경로는 공식 지원. Pages의 사용자 정의 응답 헤더 설정은 확인한 공식 문서에 보장되지 않음. 기본 Pages를 pthread 가능 환경으로 승인할 근거 없음 | D1에서 실제 response headers, crossOriginIsolated/SAB, worker/wasm MIME·하위 경로·404 확인. 이번 배포·해당 URL runtime 검증 없음 |
-| 헤더 제어 실행 origin + Pages 안내/편집 UI | E 및 후속 C의 권장 호스팅 후보. 실행은 isolated origin top-level을 우선 | 격리 헤더 서버에서 최소 pthread+OffscreenCanvas → DALi. Pages에서 top-level 링크로 이동. iframe 사용 시 별도 isolation 검증 |
-| Pages + Service Worker 격리 | 우회 후보, 기본 채택하지 않음. 최초 방문 reload와 SW 제어 범위 필요 | clean profile 최초/두 번째 방문, 업데이트·unregister·offline·cache·실패 반복 reload, Firefox/Chromium 검사 |
+| 직접 구축한 헤더 제어 호스팅 | Pages 우선 검증 실패 시 전환 검토. 타사 관리형 호스팅 서비스 제외, 서버 구축은 별도 승인. 실행은 isolated origin top-level을 우선 | 격리 헤더 서버에서 최소 pthread+OffscreenCanvas → DALi. Pages에서 top-level 링크로 이동. iframe 사용 시 별도 isolation 검증 |
+| Pages + Service Worker 격리 | D4의 우선 검증 경로. 아직 지원 확정 아님. 최초 방문 reload와 SW 제어 범위 필요 | clean profile 최초/두 번째 방문, 업데이트·unregister·offline·cache·실패 반복 reload, Firefox/Chromium 검사 |
 | Pages + A/B non-pthread | SAB 요구 없음. B는 OffscreenCanvas 별도 조건 | isolated=false에서도 GL/Worker가 동작하는지 확인, threading 산출물과 혼동 금지 |
 
-[GitHub 공식 Pages 설명](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)은 정적 호스팅·프로젝트 URL을 설명한다. 헤더 제어가 어려운 GitHub Pages에서의 SW 우회는 [coi-serviceworker 원저자 문서](https://github.com/gzuidhof/coi-serviceworker)가 제시한다. 이는 GitHub의 pthread 지원 보장이 아니다. HTML meta tag로 response COOP/COEP를 대체하지 않는다. 헤더 제어 가능 대안의 사례는 [Cloudflare 공식 헤더 문서](https://developers.cloudflare.com/pages/how-to/add-custom-http-headers/)이며 서비스 선택·배포는 이번 범위 밖이다.
+[GitHub 공식 Pages 설명](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)은 정적 호스팅·프로젝트 URL을 설명한다. 헤더 제어가 어려운 GitHub Pages에서의 SW 우회는 [coi-serviceworker 원저자 문서](https://github.com/gzuidhof/coi-serviceworker)가 제시한다. 이는 GitHub의 pthread 지원 보장이 아니다. HTML meta tag로 response COOP/COEP를 대체하지 않는다. 사용자 제약에 따라 다른 관리형 호스팅 서비스는 선택지에서 제외한다. 허용 후보는 GitHub Pages와 직접 구축한 호스팅뿐이다.
 
 소규모 후속 검증안: header 없는 localhost와 COOP/COEP localhost 두 모드에 같은 최소 Wasm pthread 카운터+Worker GL context probe를 제공한다. 격리 없는 pthread는 명시 실패, 격리 환경에서 counter와 GL error 확인. 별도 non-pthread B를 비교한다. CPU counter/단순 clear는 DALi 렌더 증거가 아니다. 이 실험은 아직 실행하지 않았으며 커지면 독립 P1 검증 단위로 승인받는다.
+
+### D4 확정: GitHub Pages 우선 검증, 직접 호스팅은 실패 시 검토
+
+1. GitHub Pages + Service Worker 격리를 우선 검증한다. 이는 지원 가능성 검증 방향의 승인이지 배포 완료·runtime 호환성 보장이 아니다. D3 pthread 구조를 유지하며 Pages 제약 때문에 non-pthread로 조용히 변경하지 않는다.
+2. 최초 pthread/browser 검증 단위에 작은 호스팅 probe를 함께 준비한다(P2 링크 진단의 선행 조건은 아님). 로컬에서 헤더 없는 응답+SW와 직접 COOP/COEP 응답을 비교한 뒤, 별도 배포 승인 하에 실제 Pages URL에서 검증한다. 로컬 성공만으로 Pages 지원을 선언하지 않는다. 전체 예제 배포 단계까지 최초 검증을 미루지 않는다.
+3. 검증 항목은 window/worker의 crossOriginIsolated·SAB, pthread 생성/공유 카운터, Worker WebGL2 context, 최초 방문·재방문·SW 업데이트/해제·캐시·실패 재로딩 방지, Firefox/Chromium, `/dali-web/` 하위 Wasm/Worker/리소스 경로다. 단순 counter/clear 성공과 실제 DALi 렌더 성공을 구분한다.
+4. 격리 실패·반복 reload·worker 시작 실패·업데이트 불안정 등 재현 가능한 문제가 남거나 우회 실험이 커지면 중단·보고한다. 승인 후 직접 구축한 정적 파일 서버와 COOP/COEP 설정으로 전환을 검토한다. 자동 서버 구축·외부 서비스 가입은 하지 않는다. 서버 환경·주소·운영은 전환 시 별도 결정한다.
+5. HTML/JS/Wasm/Worker/resource URL은 설정 가능한 기준 경로로 관리하고, SW 등록은 웹 bootstrap/deploy 계층에 둔다. C++ 엔진은 호스팅 주소·SW에 의존하지 않는다. 전환 시 기존 SW·캐시·재방문 및 새 origin의 리소스 로딩을 검증한다. 실행 위치는 계속 사용자 브라우저다.
 
 ## 7. 사용자 결정과 완료 게이트
 
@@ -188,9 +196,19 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 | D1 확정 | 공통 GLES와 실행 환경 분리 | Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택. Core 계약·기존 GLES/Vulkan/DYNAMIC 유지 | 설계 승인 완료. 구현·회귀는 P2 이후, 상세 파일·인터페이스는 위 경계 준수 |
 | D2 확정 | 업로드 의미·비용 | 별도 웹 메모리 구현 + 보존이 필요한 버퍼 소유 CPU shadow. native Memory2/3 유지, Memory4 추가 없음 | 설계 승인 완료. 보존·수명·오류·메모리 비용 검증은 P2 이후 |
 | D3 확정 | 생산 실행 주체와 격리 검증 | E: 메인 이벤트 + 업데이트·렌더 pthread Worker. DOM/이벤트 경계 분리, C는 조기 격리 검증 후보 | 설계 승인 완료. 비동기 대기 전환·runtime 검증 필요, 플레이그라운드 안전 중단 미보장 |
-| D4 | 격리 호스팅 우선순위 | E의 pthread 실행에 별도 헤더 제어 origin 허용, Pages는 안내/UI / Pages 고정이면 SW 검증 선행. non-pthread로 변경하려면 D3 재논의 | E+기본 Pages 가능으로 선언 불가. 실제 제공자 선택은 D1 배포 단계에서 가능 |
+| D4 확정 | 격리 호스팅 우선순위 | GitHub Pages + SW 우선 검증. 실패/과도한 비용 시 직접 호스팅 전환 검토, 타사 관리형 서비스 제외 | 설계 승인 완료. Pages 실제 URL 검증·배포와 직접 서버 구축은 별도 승인/검증 대상 |
 
-게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 마지막 D4 호스팅 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
+게이트 판정: **P1 설계 완료.** 호출 순서·변경 파일 경계·미지원 기능 정책·버퍼 보존·스레드 선택·호스팅 정책·후속 검증 방법을 기록했고 D1~D4 사용자 결정이 모두 확정됐다. P1을 막던 미결 설계 결정은 없다. 다음은 P2-a 최소 생산 GLES 링크 대상·의존성 진단이다.
+
+| P1 완료 조건 | 충족 근거 | 후속 미검증 범위 |
+|---|---|---|
+| 현재 호출 순서·파일 경계 | 1~3절 소스·함수 추적과 D1 | 실제 초기화/해제·native 회귀 |
+| 미지원 기능·메모리 의미 | 3~4절, D2 및 SDK guard 증거 | 실제 upload 보존·오류 경로·픽셀 |
+| 실행 주체·동기화 | 5절 D3, main/TLS 조사 | pthread/OffscreenCanvas·비동기 시작/종료·플레이그라운드 격리 |
+| 호스팅 조건과 실패 정책 | 6절 D4 | 실제 Pages·SW·격리 및 직접 서버 운영 |
+| P2 범위·인수인계 | 8절 및 HANDOFF/NEXT-CONTEXT | 최종 source closure·생산 Wasm 링크 |
+
+설계 완료와 구현 검증 완료를 구별한다. 미검증 결과는 P2/P3/P4/배포 및 플레이그라운드 게이트에서 확인하며 완료로 간주하지 않는다. 설계와 충돌하거나 예상 범위를 크게 벗어나는 결과가 나오면 중단·보고한다.
 
 ## 8. P2 최소 링크 인수인계 (결정 후 실행)
 

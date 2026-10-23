@@ -1,54 +1,65 @@
 # 다음 컨텍스트용 프롬프트
 
 ```text
-DALi 브라우저 포팅을 이어가자. P1의 D1~D3 확정 내용을 읽고 마지막 미결 항목 D4 논의를 이어가자.
-D1 아키텍처·D2 업로드·D3 실행 구조는 승인됐고 D4가 미결이어서 P1은 미완료, P2는 미착수야.
+DALi 브라우저 포팅을 이어가자. P2-a 최소 생산 GLES 링크 대상·의존성 진단을 진행해줘.
+P1 설계는 D1~D4 사용자 결정 반영으로 완료됐고, P2는 미착수야.
 
 작업 repo: /home/jy/work/dali/dali-web
-기록 기준: dali-web/docs
-과거 증거: /home/jy/work/dali/webassembly-probe
+현재 기록: dali-web/docs
+과거 증거 보존 공간: /home/jy/work/dali/webassembly-probe
 원격: https://github.com/dalihub/dali-web
 
 상위 AGENTS.md, README, docs/STATE.md, HANDOFF.md, PLAN.md,
-P1-EXECUTION-CONTRACT.md, evidence/p1/README.md, R2-b-RESULTS.md,
-upstreams.lock.json, toolchain.lock.json, BUILDING.md, UPSTREAMS.md를 읽어줘.
-실제 HEAD/status/원격을 확인하고 기존 변경과 lock을 보존해줘.
-P1 시작은 ef6a1f545ff03df69c3297135048f545ee8dd352였고,
-최초 설계 commit은 d2964ae0910cc475992ed1c396247db150791b68이고,
-D1 후속은 "Record approved GLES platform separation design"이야.
+P1-EXECUTION-CONTRACT.md(특히 3~8절), NEXT-CONTEXT.md,
+R2-b-RESULTS.md, evidence/p1/README.md, MIGRATION.md,
+upstreams.lock.json, toolchain.lock.json, BUILDING.md, UPSTREAMS.md를 먼저 읽어줘.
+P1 마감 commit 제목은 "Finalize P1 hosting policy and P2 handoff"야.
+실제 HEAD/status/원격을 확인하고 기존 변경을 보존해줘. upstream/lock은 갱신하지 마.
 
-D1 확정: 공통 GLES 로직과 Native/EGL·Web 환경 구현을 파일 단위로 분리하고
-빌드 시 선택해줘. Core 계약과 기존 GLES/Vulkan/DYNAMIC을 유지하고,
-컨텍스트·표면 / 업로드 / sync·native interop의 책임을 분리하는 정식 포팅 방향이야.
-EGL concrete cast·타입은 native 구현에 두고 웹 미지원 기능을 빈 함수로 만들지 마.
-설계 3절의 D1 계약을 따라줘. 구현은 아직 시작하지 마.
+확정 계약:
+1. 공통 GLES와 Native/EGL·Web 환경 구현을 파일 단위로 분리하고 빌드 시 선택.
+   Core 계약과 기존 GLES/Vulkan/DYNAMIC 유지, concrete EGL/native FD 결합은 native에 격리.
+2. 웹 전용 메모리 구현 + 보존이 필요한 버퍼 소유 CPU shadow.
+   매핑 객체는 접근/업로드 담당, native Memory2/3 유지, Memory4 추가 없음.
+3. 브라우저 main = DALi 이벤트, 별도 pthread Worker = 업데이트·업로드·렌더.
+   DOM/이벤트 경계 분리, main 초기화·종료 blocking 제거.
+   이벤트 Worker는 플레이그라운드 격리 후보이며 지원 확정 아님.
+4. GitHub Pages + SW 격리 우선 검증, 실패/과도한 비용 시 직접 호스팅 전환 검토.
+   다른 관리형 호스팅 서비스는 사용 불가. D3를 호스팅 때문에 임의 변경하지 마.
+   Pages 배포·서버 구축은 별도 승인이 필요해.
 
-D2 확정: 웹 전용 메모리 구현과 보존이 필요한 버퍼 소유 CPU shadow를 사용해줘.
-매핑 객체는 접근·업로드를 담당하고 native Memory2/3는 유지해줘. Memory4는 추가하지 마.
-명시적 부분 갱신과 callback을 구분하고 저장소 수명·보존 의미·비용을 검증해야 해.
-D2 후속 commit 제목은 "Record approved web buffer upload design"이야.
-D3 확정: main에서 DALi 이벤트, 별도 pthread Worker에서 업데이트·렌더 실행.
-DOM/이벤트 연결 경계를 분리하고 main의 초기화·종료 대기를 비동기로 바꿔야 해.
-이벤트 Worker는 플레이그라운드 격리 후보이며 지원 확정이 아니야.
-P2 이후 P3/P4 구간에서 격리 조기 검증, P4 종료 전 결과·장애 기록이 필요해.
-D3 후속 commit 제목은 "Record approved main-thread event execution design"이야.
-마지막 D4: 격리 헤더 제어가 가능한 실행 origin 허용 여부와 Pages 역할을 설명해줘.
-D4는 미결이고 아직 배포·생산 구현을 시작하지 마.
-남은 논의를 끝내고 명시적인 구현 지시를 받은 뒤에 P2를 시작해줘.
+이번 P2-a 범위:
+- 설계 8절을 근거로 명시적 생산 GLES source manifest와 의존성을 작성해줘.
+- 별도 build/log 경로에서 필요한 작은 CMake·진단 harness를 준비하고,
+  현재 소스의 컴파일·strict 링크 진단을 수행해줘.
+- nm/linker 진단으로 Core/utility/GL/EGL/native 및 concrete 타입 의존성을 분류하고,
+  실제 사용 파일·명령·버전·개별 종료 코드·검증 한계를 남겨줘.
+- mock Controller, 빈 GL/EGL/sync 함수, undefined-symbol 억제로 성공시키지 마.
+  unused archive만 연결해 생산 링크 성공으로 판정하지 마.
+- 광범위한 Controller 분리·sync·shadow 구현은 P2-b로 넘기고,
+  진단 근거로 변경 파일·적용 순서·회귀 검증 계획을 구체화해줘.
+- 진단 완료와 P2-b 인수인계를 남기고 멈춰줘.
+  생산 링크 성공 전에는 상위 P2 완료를 선언하지 마.
 
-Memory3 WRITE-only는 SDK 6.0.13 guard에서 거부되고,
-Memory2도 부분 callback의 기존 byte를 자동 보존하지 않아.
-SDK guard 추출 Node 검사는 실제 WebGL runtime 검증이 아니야.
-EGL sync/native fence·공유 context 결합의 변경 경계도 확인해줘.
-FULL_ES3 링크 지원을 runtime 호환성으로 판단하거나 빈 GL 함수를 만들지 마.
-기존 50/100은 mock, GL 두 링크는 exit 1(미해결 7/3)이야.
+현재 검증 사실:
+Core Wasm·Node·Firefox 50/100은 mock 검사이며 Adaptor 6개 파일 컴파일만 통과했어.
+GL 탐색 Python 0, 실제 두 링크는 각각 1, 미해결 7개/3개야.
+Memory3 WRITE-only는 SDK guard에서 거부되고 Memory2도 부분 쓰기를 자동 보존하지 않아.
+FULL_ES3 링크 지원과 실제 런타임 호환성·데이터 보존을 구별해줘.
+생산 픽셀·전체 Adaptor·pthread·OffscreenCanvas·Pages는 미검증이야.
 
-P2를 승인하면 설계 8절의 최소 생산 GLES 링크 대상과 검증 절차를 따라줘.
-생산 소스 source manifest·nm·link map을 남기고 mock 포함을 금지해줘.
-실험이 커지거나 합의한 방향을 바꿔야 하면 멈추고 보고해줘.
-원본/P0/SDK/R2 증거 보존, 새 실행 디렉터리, 빌드 최대 -j6,
-SDK·산출물·프로필·큰 로그 commit 제외 규칙을 지켜줘.
+후속 게이트도 보존해줘:
+- 최초 pthread/browser 검증 단위에서 로컬 헤더/SW 비교 probe 준비,
+  별도 승인 후 실제 Pages URL의 최초/재방문·업데이트·하위 경로 검증.
+- P2 이후 P3/P4 구간에 플레이그라운드 격리 조기 검증,
+  P4 종료 전 가능성·장애·변경 범위 기록. 무한 루프와 전체 실행 종료/재생성 포함.
+
+원본 사용자 변경·P0·SDK·R2/P1 증거를 보존해줘.
+SDK 재사용 가능, 개인 절대 경로를 필수 조건으로 만들지 말고 빌드는 최대 -j6.
+SDK·산출물·프로필·대용량 로그는 commit하지 마.
 로컬 commit과 대상 원격 push는 허용해. force push 금지,
-상위 AGENTS.md의 실제 모델 AI co-author trailer를 정확히 한 번 넣어줘.
-Pages 배포와 upstream 갱신은 하지 마.
+모든 생성 commit에 상위 AGENTS.md의 실제 모델 AI co-author trailer를 정확히 한 번 넣어줘.
+실험이 커지거나 합의한 방향을 바꿔야 하면 멈추고 보고해줘.
+PLAN·STATE·JOURNAL·HANDOFF·다음 프롬프트를 갱신하고
+설계 대비 특이 사항·미검증 범위·P2-b 진행 가능 여부를 보고해줘.
 ```
