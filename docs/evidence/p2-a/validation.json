@@ -1,0 +1,15 @@
+{
+  "preservationEqual": true,
+  "originalRepos": 5,
+  "preservedFileHashes": 176,
+  "productionAndLocksDiffEmpty": true,
+  "pythonSyntax": true,
+  "documentLinks": true,
+  "diffCheck": true,
+  "runtimeTested": false,
+  "nativeRegressionTested": false,
+  "sourceHashes": true,
+  "pthreadAllCompileCommands": true,
+  "mockSourcesAbsent": true,
+  "generatedOutputsIgnored": true
+}

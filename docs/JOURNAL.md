@@ -67,3 +67,16 @@
 - 설계 문서 7절에서 P1 완료 조건별 근거와 후속 미검증 게이트 점검. 미결 설계 결정 없음. 실제 생산 링크·픽셀·스레드·호스팅은 검증 완료 아님.
 - 다음 컨텍스트는 P2-a source manifest·컴파일/strict 링크 의존성 진단. 대규모 구현은 P2-b로 넘기고 진단 후 인수인계. P2-a 진단 완료를 상위 P2 생산 링크 완료로 간주하지 않음.
 - README·PLAN·STATE·HANDOFF·NEXT-CONTEXT 갱신. 시작 clean main `e471178f2cb9bc96f0f389fb52cb67c4c2d228ae`, 원격 동일. 문서 링크·공백·변경 범위 검사만 수행. 기록 `logs/p1/d4-close-001/`. 소스·lock·SDK·기존 증거·원본 사용자 변경 불변, build/runtime/배포 미실행.
+
+## 015 P2-a 생산 GLES manifest·strict 링크 진단
+
+2026-10-23 (Asia/Seoul). **P2-a 진단 완료·P2-b 미착수·상위 P2 미완료.**
+
+- 시작 clean main 및 원격 main `3eb2c89ecad10f810d2ff064f2b4f3d43a42a426`. sandbox 원격 조회 DNS 실패 exit 128, 호스트 조회 exit 0으로 일치 확인. upstream/lock 변경 없음.
+- 명시적 생산 GLES 23개 + wrapper/utility/generated/harness 포함 30개 manifest와 독립 CMake·진단 script 추가. 실제 Controller/Core 생성·초기화·frame·native sync를 KEEPALIVE로 참조, mock/helper·빈 함수·undefined 억제 없음. 생산 libs 변경 없음.
+- 최초 configure(001) exit 1: shader-cache-path는 native 생성물. binary directory에 실제 템플릿 생성 후 002 configure/Core 333단계 및 30개 compile/nm 통과. 초기 링크 10/6개 미해결, 각각 exit 1.
+- 특이 사항: 초기 harness에서 GC된 native 경로를 추가 참조한 003 재진단. 새 Core 333단계·30개 compile/nm 각각 exit 0, 기본/FULL_ES3 strict 링크 각각 exit 1, 미해결 16/12개. map 미생성. Python exit 0은 결과 수집 성공만 의미.
+- EglGraphics RTTI/context 3개, NativeFence/EglSyncObject 3개, shader binary utility 5개, GL 5/1개 분류. FULL_ES3 매핑 4개 해소는 runtime/보존 근거가 아님. [결과](P2-a-RESULTS.md), [manifest](P2-a-MANIFEST.md), [P2-b 파일·적용 순서·회귀](P2-b-HANDOFF.md).
+- 원본/P0 Git·사용자 파일·P0/R2/P1 로그·증거·lock·기존 Core 산출물 전후 검사, 생산 diff 없음. SDK 재사용·빌드 최대 -j6. 산출물/전체 로그 ignored, 공개 증거는 작은 정규화 사본만 포함.
+- runtime·브라우저·실제 픽셀·Worker/OffscreenCanvas·Pages·native 회귀 미검증. 배포·서버 구축 없음. 실행한 빌드 종료, 남긴 서버/브라우저 없음.
+- P2-b 진행 근거 확보. 합의한 범위 내 진단 종료 후 STATE/PLAN/HANDOFF/다음 프롬프트 갱신, 이번에는 P2-b 구현 전 멈춤.

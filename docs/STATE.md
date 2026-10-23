@@ -1,29 +1,28 @@
 # DALi 브라우저 포팅 현재 상태
 
-갱신일: 2026-10-23 (Asia/Seoul). P0·R0·R1·R2-a·R2-b 및 상위 R2 완료. **현재 기록 기준은 dali-web/docs**, **P1 설계 완료, P2 미착수**입니다. [실행 계약](P1-EXECUTION-CONTRACT.md)의 D1~D4 설계 결정을 모두 확정했습니다. [R2-b 결과](R2-b-RESULTS.md), [이관·증거 위치](MIGRATION.md), [계획](PLAN.md).
+갱신일: 2026-10-23 (Asia/Seoul). **P1 설계 완료, P2-a 진단 완료, P2-b 미착수, 상위 P2 미완료.** 현재 기록은 `dali-web/docs`이며 P0·R0·R1·R2는 완료 상태를 유지한다.
 
-작업 repo는 `dali-web`, 원격은 https://github.com/dalihub/dali-web, branch main입니다. R2-a 기준 commit은 `728cf818d4db74890a4c37d01737c8eea3d9a14b`입니다. R2-b commit은 `ef6a1f545ff03df69c3297135048f545ee8dd352`이며 P1 시작 시 clean main과 원격 일치를 재확인했습니다. 시작할 때 실제 HEAD·status·원격을 다시 확인합니다.
+작업 repo `dali-web`, branch main, origin `https://github.com/dalihub/dali-web.git`. P2-a 시작 HEAD와 원격 main은 P1 완료 commit `3eb2c89ecad10f810d2ff064f2b4f3d43a42a426`, 작업 트리 clean이었다. 현재 HEAD/status는 매 작업 시작 시 다시 확인한다. upstream/toolchain lock 변경 없음.
 
-## 현재 고정 소스 검증
+## 현재 검증 결과
 
-| 항목 | 결과 | 범위 |
+| 대상 | 결과 | 판정 범위 |
 |---|---|---|
-| Core Wasm·Node (R2-a) | 빌드 375단계·linker-test·애니메이션 50/100, 모두 종료 0 | 현재 lock Core + 생성 헤더 경로 CMake 옵션 |
-| Firefox (R2-b) | 종료 0, 중간 50·최종 100 | R2-a 산출물, 모의 그래픽·단일 스레드 |
-| Adaptor (R2-b) | 6개 번역 단위 각각 종료 0 | 현재 lock 소스, 전체 라이브러리 아님 |
-| GL 탐색 (R2-b) | Python 종료 0, 두 링크 각각 종료 1 | 265개 심볼, 기본 7개/FULL_ES3 3개 미해결, P0와 동일 |
-| 실제 DALi 픽셀·생산 렌더러·UI 결합 | 미검증 | P2/P3/P6 이후 |
+| R2 Core Wasm·Node·Firefox | mock 애니메이션 50/100 통과 | 생산 픽셀 아님, 이번 재실행 없음 |
+| R2 Adaptor/GL 탐색 | 6개 compile 통과, 265 심볼 링크 기본 7/FULL_ES3 3 미해결 | 과거 비교 결과, 이번 manifest와 다름 |
+| P1 SDK map guard | WRITE-only 0으로 거부 | 실제 GL 실행 아님 |
+| P2-a Core | 새 pthread Debug 정적 빌드 333단계, exit 0 | mock helper 미포함, runtime 미실행 |
+| P2-a GLES/utility/harness | 30개 번역 단위 각각 compile/nm exit 0 | 생산 GLES 23개 전체 포함 |
+| P2-a strict 링크 | 기본/FULL_ES3 각각 exit 1, 16/12개 미해결 | 실패, map 미생성, 생산 링크 미완료 |
 
-[upstream lock](../upstreams.lock.json)과 [도구 lock](../toolchain.lock.json)은 변경하지 않았습니다. Core·Adaptor P0 tree는 현재와 다르며, P0는 역사적 비교 기준입니다. 브라우저는 Firefox 157.0.1·geckodriver 0.37.1입니다. 실제 도구 버전은 [증거](evidence/r2-b/versions.json)를 따릅니다.
+[상세 결과](P2-a-RESULTS.md), [manifest/재현](P2-a-MANIFEST.md), [증거](evidence/p2-a/README.md), [P2-b 계획](P2-b-HANDOFF.md).
 
-## 보존·특이 사항·미결
+## 설계·보존·특이 사항
 
-1. 원본 Core·Adaptor·UI, P0 복제본의 HEAD·status·diff와 기존 로그·UI 사용자 파일 hash를 전후 비교해 보존했습니다. SDK는 기존 설치를 재사용했습니다.
-2. sandbox 소켓·snap·DNS 제한은 호스트 실행으로 해결했습니다. 최초 실패도 새 `logs/r2-b/run-001/`에 보존합니다. 기존 P0·R2-a 로그는 이전 공간 그대로입니다.
-3. GL 두 링크는 여전히 실패합니다. FULL_ES3 링크 지원과 버퍼 보존 의미는 별개이며 생산 Adaptor 전체·스레드·컨텍스트·고급 blend·셰이더 바이너리·UI·성능·Windows·네이티브 install은 미검증입니다.
-4. SDK·산출물·프로필·대용량 로그는 commit 제외. 남긴 브라우저·서버·빌드 프로세스 없음. Pages 배포 없음.
-5. P1 초안에 현재 소스 호출 순서·웹 변경 경계·지원 정책·P2 source closure 후보를 기록했습니다. D1은 공통 GLES + Native/EGL·Web 환경별 파일을 빌드 시 선택하는 정식 포팅 구조로 사용자 승인됐습니다. Core 계약과 기존 GLES/Vulkan/DYNAMIC을 유지합니다. D2는 웹 전용 업로드 구현과 보존이 필요한 버퍼의 CPU shadow 소유로 승인됐습니다. D3는 메인 이벤트 + 업데이트·렌더 pthread Worker로 승인됐습니다. DOM/이벤트 경계 분리와 플레이그라운드 격리 조기 검증을 포함하며, 이벤트 Worker 지원은 아직 확정하지 않았습니다. D4는 GitHub Pages + SW 우선 검증, 실패 시 직접 호스팅 전환 검토로 확정했습니다. 타사 관리형 서비스는 제외하며 배포·서버 구축은 별도 승인 대상입니다.
-6. P1 특이 사항: Memory3의 WRITE-only 플래그는 lock SDK guard에서 0으로 거부됩니다. Memory2도 partial callback의 기존 byte를 자동 보존하지 않습니다. Controller/sync pool은 concrete EGL/native fence에 의존합니다. 생산 코드 수정 없이 설계에 반영했습니다.
-7. P1 검사는 SDK access guard 추출 실행(Node 24.19.0)과 소스·보존·문서 검사입니다. 실제 GL·pthread·SAB·OffscreenCanvas·호스팅 검증은 하지 않았습니다. [증거](evidence/p1/README.md).
+1. D1 공통 GLES + Native/EGL·Web 파일 선택, Core 계약 및 GLES/Vulkan/DYNAMIC 유지. D2 웹 메모리 + 필요한 버퍼 소유 CPU shadow, native Memory2/3 유지·Memory4 없음. D3 main 이벤트 + update/upload/render pthread Worker, DOM 경계 및 main blocking 제거. D4 Pages+SW 우선, 실패/과도한 비용 시 직접 호스팅 검토·다른 관리형 서비스 금지. [P1 계약](P1-EXECUTION-CONTRACT.md).
+2. 실제 링크에서 EglGraphics RTTI/context, native fence FD, shader cache의 FileLoader/version/error 의존을 확인했다. Controller·sync·shadow 분리 구현은 수행하지 않았다. FULL_ES3의 매핑 4개 해소는 runtime/데이터 보존 근거가 아니다.
+3. 특이 사항: native 생성 소스 shader-cache-path를 binary directory에 생성하도록 진단 CMake만 조정. 최초 configure 실패 보존. 초기 harness에서 GC된 native 경로를 명시 참조해 10/6 → 16/12 의존을 확인. 모두 링크 전용이며 host·Canvas 실행 없음.
+4. 원본/P0 HEAD·status·diff, 사용자 파일, 과거 P0/R2/P1 로그·증거, lock·기존 Core 산출물 보존 검사. 생산 `libs/` diff 없음. SDK 재사용, upstream 갱신·Pages 배포·서버 구축 없음. 빌드 최대 -j6, 새 프로세스는 종료.
+5. native build/install·GLES/Vulkan/DYNAMIC 회귀, 실제 픽셀·업로드 보존·Worker/SAB/OffscreenCanvas·Pages·전체 Adaptor/UI·성능·Windows·context loss 미검증. SDK·산출물·프로필·대용량 로그는 commit 제외.
 
-[HANDOFF](HANDOFF.md)의 P2-a 최소 생산 GLES 링크 대상·의존성 진단부터 이어갑니다. 미결 설계 결정은 없고 구현·실행 검증은 후속 게이트에 남습니다. [다음 프롬프트](NEXT-CONTEXT.md). 계획 항목은 자동 실행 지시나 작업큐가 아닙니다.
+**P2-b 진행 가능**하나 이번에는 구현하지 않고 멈춘다. 미결 설계 결정은 없으며 구체적인 구현 순서와 회귀 게이트는 [HANDOFF](HANDOFF.md)를 따른다. 생산 링크 성공 전 상위 P2 완료 선언 금지. [다음 요청문](NEXT-CONTEXT.md).

@@ -2,7 +2,7 @@
 
 갱신일: 2026-10-23. 목표는 C++ DALi 코드의 브라우저 직접 렌더링과 최종적인 코드 편집·실행 환경입니다. 컴파일 서버는 사용할 수 있지만 렌더링은 브라우저에서 수행합니다.
 
-P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. D1~D4 결정 확정으로 P1 실행 계약 설계를 완료했습니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. 다음은 P2-a 최소 생산 GLES 링크 대상·의존성 진단이며 이번에는 착수하지 않았습니다. 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 스레드는 D3의 메인 이벤트 + 업데이트·렌더 Worker로 정했으며 실행 검증은 후속 단계입니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
+P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. D1~D4 결정 확정으로 P1 실행 계약 설계를 완료했습니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. P2-a 생산 GLES source manifest·컴파일·strict 링크 진단을 완료했습니다. 기본/FULL_ES3 링크는 16/12개 미해결로 실패했고, 다음은 [P2-b 구현 인수인계](P2-b-HANDOFF.md)입니다. [진단 결과](P2-a-RESULTS.md). 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 스레드는 D3의 메인 이벤트 + 업데이트·렌더 Worker로 정했으며 실행 검증은 후속 단계입니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
 
 ## 작업 단계와 context 경계
 
@@ -13,7 +13,7 @@ P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-
 | R1 완료 | 단일 repo 뼈대와 Core·Adaptor·UI subtree 구성 | P0, R0 | 원본 URL·SHA·import 정책 기록, subtree 3개 구성, 라이선스 보존, 생성물 제외, 일반 clone으로 소스 확인 | repo 경로·commit, upstream 매핑, import 근거 |
 | R2 완료 | 기존 실험·문서 이관과 재현 | R1 | 새 경로에서 Core 빌드·Node·Firefox 테스트 재현, GL 탐색 결과 비교, 문서 링크와 시작점 갱신 | 새 repo의 STATE·HANDOFF, 검증 로그, 이전 공간 보존 위치 |
 | P1 완료 | 웹 실행 계약 설계. Core 초기화, GLES Controller, 표면·컨텍스트·프레임 호출 경로 | R2 | 실제 호출 순서, 구현 파일 범위, 미지원 기능 정책, 스레드 선택과 검증 방법 명시, D1~D4 설계 확정 및 후속 검증 게이트 기록 | 설계 결정과 P2에 필요한 최소 의존성 목록 |
-| P2 예정 | 실제 GLES 렌더러 링크. 실험 CMake와 Adaptor GLES·EGL 경로 | P1 | 모의 그래픽 없이 선택한 생산 GLES 경로를 포함한 Wasm 실행 파일 링크 성공 | 링크 대상, 수정 diff, 남은 런타임 가정 |
+| P2 진행 중 | 실제 GLES 렌더러 링크. 실험 CMake와 Adaptor GLES·EGL 경로 | P1 | 모의 그래픽 없이 선택한 생산 GLES 경로를 포함한 Wasm 실행 파일 링크 성공 | 링크 대상, 수정 diff, 남은 런타임 가정 |
 | P3 예정 | Canvas 컨텍스트·표면과 실제 DALi 도형 렌더링 | P2 | 실제 DALi Renderer로 사각형 표시, 배경과 도형의 픽셀 검사, GL 오류 확인 | 재현 페이지, 이미지·픽셀 증거, 초기화·해제 순서 |
 | P4 예정 | 브라우저 프레임 루프, 애니메이션, 포인터 입력, 리사이즈 | P3 | 시간 기반 움직임, 클릭 반응, 배율·크기 변경 후 좌표 일치, 반복 시작·종료 | 프레임·입력 계약과 회귀 검증 |
 | D1 예정 | 미리 빌드한 예제 배포. Pages 우선, 실패 시 직접 호스팅 검토 | P4, P1의 호스팅·스레드 조건 해결 | Actions 산출물로 예제 실행, 프로젝트 하위 경로의 Wasm·리소스 로딩 확인 | 서비스 URL·배포 commit·실행 증거 |
@@ -96,7 +96,7 @@ D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 
 
 ### 바로 적용할 context 단위
 
-R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조사·SDK guard 검사와 D1~D4 결정 반영으로 설계를 완료했습니다. runtime·호스팅 검증 완료를 뜻하지 않습니다. P2 이후는 미착수입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
+R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조사·SDK guard 검사와 D1~D4 결정 반영으로 설계를 완료했습니다. runtime·호스팅 검증 완료를 뜻하지 않습니다. P2-a 진단 완료·P2-b 미착수이며 생산 링크 실패로 상위 P2는 미완료입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
 
 | 단위 | 목표 | 완료 및 인수인계 조건 |
 |---|---|---|
@@ -104,6 +104,10 @@ R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조
 | R1-b 완료 | repo 뼈대·subtree 구성 | R1-a 결정을 적용하고 lock·remote 준비 스크립트·라이선스·제외 규칙 확인. 별도 로컬 clone으로 세 소스 포함 검증. 실제 commit과 push 여부 기록 |
 | R2-a 완료 | 빌드·실험 코드 경로 이관 | 새 경로에서 Core 빌드·Node 검사 통과. 기존 결과 보존과 변경 파일 기록. R2-a 당시 기록 기준은 기존 공간 유지, R2-b에서 전환 완료 |
 | R2-b 완료 | 브라우저 검증과 기록 기준 전환 | Firefox·GL 탐색 결과 비교, 문서 링크 점검, 새 repo docs를 기준으로 전환하고 기존 문서에 안내. 다음 시작점은 P1 |
+
+### P2 현재 실행 경계
+
+P2-a 완료: 생산 GLES 23개를 포함한 30개 번역 단위와 pthread Core 컴파일 통과, 두 strict 링크 실패(16/12). [Manifest](P2-a-MANIFEST.md)와 [결과](P2-a-RESULTS.md)를 보존합니다. P2-b는 [파일별 적용 순서·회귀 게이트](P2-b-HANDOFF.md)에 따라 별도 요청 후 실행합니다. Controller/context → sync → 웹 메모리 → GL wrapper/capability → binary cache 경계 → 실제 host 순서입니다. 이번에는 여기서 멈추며 P2 완료로 선언하지 않습니다.
 
 ### 이후 단계의 분할 후보
 

@@ -1,0 +1,1098 @@
+[
+  {
+    "name": "version-EMXX",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-LLVM_NM",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-CMAKE",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-NINJA",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-NODE",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-PYTHON",
+    "argv": [
+      "/usr/bin/python3",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "configure",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/emcmake",
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/cmake/p2-a",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003",
+      "-G",
+      "Ninja",
+      "-DCMAKE_BUILD_TYPE=Debug",
+      "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "core-build",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "--build",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003",
+      "--target",
+      "dali2-core",
+      "-j",
+      "6"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-shader-cache-path",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir/shader-cache-path.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/shader-cache-path.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-shader-cache-path",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir/shader-cache-path.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-egl-graphics-controller",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-egl-graphics-controller",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-egl-graphics-controller-debug",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller-debug.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller-debug.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-egl-graphics-controller-debug",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller-debug.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-egl-sync-object",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-sync-object.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-sync-object.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-egl-sync-object",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-sync-object.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-command-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-command-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-debug",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-debug",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-framebuffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-framebuffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles2-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles2-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles3-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles3-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-pipeline",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-pipeline",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-program",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-program",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-reflection",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-reflection",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-render-pass",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-render-pass",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-render-target",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-render-target",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-sampler",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-sampler",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-shader",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-shader",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-texture",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-texture",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-pipeline-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-pipeline-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-context",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-context",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-sync-object",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-sync-object",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-framebuffer-state-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-framebuffer-state-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-texture-dependency-checker",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-texture-dependency-checker",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gl-implementation",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-implementation.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-implementation.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gl-implementation",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-implementation.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gl-extensions",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gl-extensions",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gl-extensions-support",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions-support.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions-support.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gl-extensions-support",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions-support.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-shader-parser",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-shader-parser",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-environment-variable",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-environment-variable",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-link-diagnostic",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-a/run-003/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/tests/probes/gles-link-diagnostic.cpp.o",
+      "-c",
+      "${DALI_WEB_ROOT}/tests/probes/gles-link-diagnostic.cpp"
+    ],
+    "cwd": "${DALI_WEB_ROOT}/build/p2-a/run-003",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-link-diagnostic",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/tests/probes/gles-link-diagnostic.cpp.o"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-core",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/core/libdali2-core.a"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "link-webgl2",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-pthread",
+      "--no-entry",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir/shader-cache-path.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller-debug.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-sync-object.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-implementation.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions-support.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/tests/probes/gles-link-diagnostic.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/core/libdali2-core.a",
+      "-sMIN_WEBGL_VERSION=2",
+      "-sMAX_WEBGL_VERSION=2",
+      "-sASSERTIONS=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-Wl,--error-limit=0",
+      "-Wl,-Map=${DALI_WEB_ROOT}/logs/p2-a/diagnostic-003/webgl2.map",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/webgl2.js"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 1
+  },
+  {
+    "name": "link-full-es3",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-pthread",
+      "--no-entry",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir/shader-cache-path.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-graphics-controller-debug.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/egl-sync-object.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-implementation.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/gl-extensions-support.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/CMakeFiles/gles-diagnostic.dir${DALI_WEB_ROOT}/tests/probes/gles-link-diagnostic.cpp.o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/core/libdali2-core.a",
+      "-sMIN_WEBGL_VERSION=2",
+      "-sMAX_WEBGL_VERSION=2",
+      "-sASSERTIONS=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-Wl,--error-limit=0",
+      "-Wl,-Map=${DALI_WEB_ROOT}/logs/p2-a/diagnostic-003/full-es3.map",
+      "-sFULL_ES3=1",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-a/run-003/full-es3.js"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 1
+  }
+]

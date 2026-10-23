@@ -27,4 +27,4 @@ R2-b 재검증과 기록 전환을 완료했고, [P1 실행 계약](docs/P1-EXEC
 
 현재 Core의 Wasm·Node·Firefox 모의 애니메이션 50/100과 Adaptor 6개 파일 컴파일을 검증했습니다. GL 탐색은 265개 심볼 중 기본 7개/FULL_ES3 3개 미해결이며 실제 생산 링크·픽셀 렌더링은 미완료입니다. [R2-b 결과](docs/R2-b-RESULTS.md), [빌드·재현](docs/BUILDING.md).
 
-이전 `webassembly-probe`는 과거 증거·SDK·P0 복제본 보존 공간입니다. 문서 사본과 미이관 자료 위치는 [MIGRATION](docs/MIGRATION.md)에 있습니다. 계획은 자동 실행 지시가 아니며 다음 단계는 P2-a 최소 생산 GLES 링크 대상·의존성 진단입니다. P2 구현은 시작하지 않았습니다.
+이전 `webassembly-probe`는 과거 증거·SDK·P0 복제본 보존 공간입니다. 문서 사본과 미이관 자료 위치는 [MIGRATION](docs/MIGRATION.md)에 있습니다. 계획은 자동 실행 지시가 아니며 P2-a 생산 GLES 의존성 진단을 완료했습니다. 30개 번역 단위 컴파일은 통과했지만 strict 링크는 기본/FULL_ES3 각각 16/12개 미해결로 실패했습니다. [결과](docs/P2-a-RESULTS.md)와 [P2-b 인수인계](docs/P2-b-HANDOFF.md)를 남겼으며 상위 P2는 미완료입니다.

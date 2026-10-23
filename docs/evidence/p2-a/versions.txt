@@ -1,0 +1,26 @@
+version-CMAKE.log
+cmake version 3.22.1
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+
+version-EMXX.log
+emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.13 (e13ee988ce3d87a738dd8f3661d02223308c412a)
+Copyright (C) 2026 the Emscripten authors (see AUTHORS.txt)
+This is free and open source software under the MIT license.
+There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
+version-LLVM_NM.log
+llvm-nm, compatible with GNU nm
+LLVM (http://llvm.org/):
+  LLVM version 24.0.0git
+  Optimized build.
+
+version-NINJA.log
+1.10.1
+
+version-NODE.log
+v24.19.0
+
+version-PYTHON.log
+Python 3.10.12
