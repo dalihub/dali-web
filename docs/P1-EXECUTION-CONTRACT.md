@@ -1,6 +1,6 @@
 # P1 웹 실행 계약 설계
 
-2026-10-23 (Asia/Seoul). **설계 초안 작성, 결정 대기. P1 완료 아님.** 생산 코드 변경·생산 링크·Pages 배포는 수행하지 않았다. D1~D4 선택을 사용자가 승인해야 P1을 닫고 P2 구현을 시작할 수 있다. 아래 권장안은 채택된 결정이 아니다.
+2026-10-23 (Asia/Seoul). **D1 아키텍처 확정, D2~D4 결정 대기. P1 완료 아님.** 사용자가 공통 GLES 로직과 Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택하는 설계를 승인했다. 정식 포팅을 목표로 하며 생산 코드 변경·생산 링크·Pages 배포는 아직 수행하지 않았다. D2~D4 권장안은 미승인이다. 여기서 D1은 P1의 결정 ID이며 PLAN의 Pages 배포 단계 D1과 구별한다.
 
 기준 HEAD: `ef6a1f545ff03df69c3297135048f545ee8dd352`. 시작 main clean, 원격 main 일치 확인. [upstreams.lock.json](../upstreams.lock.json), [toolchain.lock.json](../toolchain.lock.json) 유지. Core `e2ce797a41cff49851361210491c8ed38bea46e9`, Adaptor `f0dd9b39d5a51ff0233ea50bf872dd6200e93981`, UI `f6c046d2a15ab7c6bad8d76612e667d66ed1f6d0`. [R2-b](R2-b-RESULTS.md)의 컴파일·mock 결과를 생산 실행 증거로 확장하지 않는다.
 
@@ -34,7 +34,7 @@
 
 ## 2. 제안 실행 계약
 
-초기 지원 범위는 데스크톱·단일 Canvas·WebGL 2·단일 GL 소유자, DALi 기본 geometry와 source shader, 일반 blending, RGBA8 CPU upload다. WebView·영상·카메라·다중 window·native image 공유는 제외 제안이며 D1 승인이 필요하다.
+초기 지원 범위는 데스크톱·단일 Canvas·WebGL 2·단일 GL 소유자, DALi 기본 geometry와 source shader, 일반 blending, RGBA8 CPU upload다. WebView·영상·카메라·다중 window·native image 공유는 초기 검증 범위 밖이다. 이 단계적 범위가 최종 제품의 영구 제외 목록이나 단일 스레드 확정을 뜻하지 않는다. 지원 확대에는 개별 기능 설계·검증이 필요하다.
 
 | 상태/작업 | 계약 | 실패·검증 |
 |---|---|---|
@@ -67,7 +67,34 @@ R2-b의 두 링크는 각각 exit 1이다. 265개는 두 object에서 수집한 
 
 SDK 근거는 `upstream/emscripten/src/lib/libegl.js`의 `eglCreateContext`(share 인자를 사용하지 않음), `eglCreateWindowSurface`(default ID), `eglSwapBuffers`(lost 여부 확인 후 성공), `libwebgl2.js:908`의 program binary 오류 경로다. [EGL 공식 설명](https://emscripten.org/docs/porting/multimedia_and_graphics/EGL-Support-in-Emscripten.html)도 부분 구현을 명시한다. 온라인 문서는 개발 버전이므로 이 설계의 세부 판정은 lock SDK 소스에 우선한다.
 
-컨텍스트 대안은 (a) Emscripten HTML5 context API + 얇은 웹 GraphicsInterface/RenderSurface, (b) 기존 EglGraphics/EglImplementation을 웹용 단일 EGL surface로 제한하는 방식이다. (a)를 권장하되 Controller의 concrete EGL sync·EglGraphics dynamic_cast 결합을 내부 capability/adapter로 분리해야 한다. (b)는 초기 변경량이 작을 가능성이 있으나 native window·extension·sync·공유 가정을 모두 감사해야 하므로 무수정 재사용안이 아니다. P2에서 갑자기 다른 렌더러/WebGPU로 대체하지 않는다.
+### D1 확정: 공통 GLES와 실행 환경의 파일 단위 분리
+
+2026-10-23 사용자 승인. 공통 GLES 렌더러를 유지하고 Native/EGL과 Web 환경 구현을 빌드 시 선택한다. 수정량 최소화나 단순 PoC 성공보다 책임 분리·의미 보존·기존 백엔드 회귀 검증을 우선한다. 앞선 HTML5 어댑터 우선안과 제한 EGL 재사용 비교를 이 결정으로 대체한다. HTML5 API는 Web 구현 내부의 컨텍스트 관리 수단이며, 전체 변경을 얇은 어댑터 하나로 끝낼 수 있다고 가정하지 않는다.
+
+```text
+Core → Graphics::Controller
+       ├─ VulkanGraphicsController
+       └─ 공통 GLES Controller·자원·명령 처리
+            ├─ Native/EGL 환경 구현 (네이티브 GLES 빌드)
+            └─ Web 환경 구현 (웹 GLES 빌드)
+```
+
+| 경계 | 공통 책임 | Native/EGL 구현 | Web 구현 |
+|---|---|---|---|
+| 컨텍스트·표면 | 논리 context 식별·상태 캐시·렌더 대상 수명 | EGL 생성·활성화·공유·surface present | HTML5 API로 Canvas/WebGL2 생성·활성화·제출·해제; 초기 resource/surface 역할은 같은 실제 context |
+| 버퍼 업로드 | 갱신 범위·보존 의미·자원 수명 | 기존 native mapping 전략 보존 | 웹에서 가능한 업로드 전략; shadow 여부·비용은 D2에서 결정 |
+| 동기화·외부 자원 | 작업 의존성과 완료 요구 | EGL/GL fence·native FD/image | 웹에서 의미를 지킬 수 있는 sync; 미지원 native interop은 명시 거부 |
+| GL 호출·기능 | 공통으로 유효한 GLES 명령·shader/resource 처리 | native GL wrapper 및 확장 | WebGL 호환 wrapper·기능 집합; 지원되지 않는 import를 파일 경계에서 분리 |
+
+1. Core의 `Graphics::Controller` 계약을 유지한다. 공통 GLES 코드에서 `EglGraphics`/`EglSyncImplementation`으로의 cast, EGL handle 및 native FD 접근을 환경별 파일로 이동한다. 실제 분리 후 `EglGraphicsController`를 `GlesGraphicsController` 등 역할에 맞게 정리하는 방향이며, 정확한 파일명은 P2 source manifest에서 확정한다.
+2. 기존 `GraphicsInterface`·`RenderSurfaceInterface`를 우선 활용하고 부족한 내부 경계만 추가한다. 컨텍스트·업로드·동기화를 한 거대한 platform 클래스에 몰아넣지 않는다. `GraphicsSyncAbstraction`의 blocking wait·native fence 계약을 웹에서 그대로 충족할 수 있다고 가정하지 않는다. 공통 계약 변경이 필요하면 영향과 대안을 먼저 보고한다.
+3. 빌드 조합은 공통 GLES source + 환경별 source 한 세트다. CMake target별 source·include·link dependency로 선택한다. 내부 virtual interface/factory 사용과 빌드 시 선택은 양립한다. 매 draw마다 환경을 검사하거나 공통 코드 전체에 `#ifdef`를 퍼뜨리는 방식, GLES Controller 전체 복제는 피한다.
+4. GLES/Vulkan/DYNAMIC 기존 선택을 보존한다. GLES 실행 환경 선택은 그 아래의 별도 축이다. 현재 근거는 `A/internal/graphics/file.list:30`의 GLES 소스 묶음과 `libs/dali-adaptor/build/tizen/CMakeLists.txt:453` 이후의 DYNAMIC/GLES/VULKAN 구성이다. 웹에서는 Native/EGL 구현이 선택되지 않고 잘못된 조합은 configure 오류로 처리한다. 새 옵션의 정확한 이름·기본값은 P2에서 정하되 기존 native 기본 동작을 바꾸지 않는다.
+5. 환경별 public/internal header가 네이티브 EGL 타입을 공통 GLES 헤더로 노출하지 않게 한다. 상태 캐시는 실제 context identity에 대응한다. 하나의 Web context를 두 개로 위장하지 않는다. EGL 및 native fence 타입은 native 구현에 둔다.
+6. 빌드 선택은 가능한 기능의 상한을 정하며 실제 context limits·extensions는 실행 시 확인한다. 필요한 기능의 빈 성공 구현, undefined-symbol 억제, 임의 GLES 버전 위장은 금지한다. unsupported 요청은 명시적으로 거부한다.
+7. 정식 구현의 수용 기준은 공통 GLES의 concrete EGL/native 의존 제거, 웹 link closure의 native 의존 배제, 업로드·sync·수명 의미 보존, native GLES/Vulkan 회귀, 실제 DALi 픽셀·반복 시작/종료·context loss 검증이다. P2 링크는 이 중간 마일스톤이며 최종 완료가 아니다.
+
+D1은 D2의 shadow 구현이나 D3 스레드 모델·D4 호스팅을 승인한 것이 아니다. 남은 논의가 끝나기 전에 구현을 시작하지 않는다.
 
 ## 4. Memory3 재확인과 데이터 보존
 
@@ -119,12 +146,12 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 
 | ID | 결정 요청 | 권장 / 대안 | 미결 영향 |
 |---|---|---|---|
-| D1 | 초기 기능과 컨텍스트 경계 | 단일 Canvas/WebGL2, HTML5 context adapter, native interop·binary·advanced blend 제외 / 제한 EGL wrapper | P2 source closure와 API 거부 정책 결정 필요 |
+| D1 확정 | 공통 GLES와 실행 환경 분리 | Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택. Core 계약·기존 GLES/Vulkan/DYNAMIC 유지 | 설계 승인 완료. 구현·회귀는 P2 이후, 상세 파일·인터페이스는 위 경계 준수 |
 | D2 | 업로드 의미·비용 | Memory2 계열 staging + CPU shadow 보존 / full overwrite 한정·callback 명시 미지원 | 버퍼 구현 경계와 지원 API 달라짐 |
 | D3 | 생산 실행 주체와 P2 진단 범위 | C를 목표로 별도 pthread 산출물, P2의 A 링크 harness는 진단 전용 / B를 목표로 non-pthread Worker | thread 선택이 P1 완료 조건. 현재 선택하지 않음 |
 | D4 | 격리 호스팅 우선순위 | C이면 별도 헤더 제어 origin 허용, Pages는 안내/UI / Pages 고정이면 B 또는 SW 검증 선행 | C+기본 Pages 가능으로 선언 불가. 실제 제공자 선택은 D1 배포 단계에서 가능 |
 
-게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D1~D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 이 네 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
+게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D2~D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 D2 업로드 의미부터 남은 세 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
 
 ## 8. P2 최소 링크 인수인계 (결정 후 실행)
 
@@ -138,7 +165,7 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 | Controller/렌더 자원 | `A/internal/graphics/gles-impl/file.list`의 cpp 23개를 출발 목록으로 사용 | controller/debug, context/state cache, command-buffer, buffer, Memory2/3, texture/sampler, framebuffer/render target/pass, shader/program/reflection/pipeline/cache, sync/dependency checker. 제외된 native sync/Memory3도 참조를 정리한 뒤 제외; 검증 없이 파일만 삭제하지 않음 |
 | GL wrapper | `A/internal/graphics/gles/gl-implementation.cpp`, `gles2/3-implementation.h`, GL extension cache 관련 소스 | wrapper vtable·GLES3 함수 참조, shader prefix, capabilities. 미지원 API import 분리 필요 |
 | host 경계 | 새 `A/internal/graphics/web/` 및 최소 `tests/probes/gles-link-smoke.cpp` 후보 | 실제 HTML5 context/GraphicsInterface/RenderSurface, host RenderController·PlatformAbstraction. 이름은 후보이며 public API 추가 아님 |
-| sync/플랫폼 보조 | `gles-sync-pool`, `gles-texture-dependency-checker`, `egl-sync-object`, `gles/egl-sync-implementation`, `graphics/common` | C++ static_cast/dynamic_cast·RTTI/typeinfo 의존까지 추적. web 내부 sync 경계 분리 시 native 파일 그대로 링크할 필요가 있는지 재산정 |
+| sync/플랫폼 보조 | `gles-sync-pool`, `gles-texture-dependency-checker`, `egl-sync-object`, `gles/egl-sync-implementation`, `graphics/common` | C++ cast·RTTI/typeinfo 의존까지 추적해 native 환경 파일로 분리. 공통 GLES와 Web target에 concrete EGL/native fence 의존이 남지 않도록 검증 |
 | shader/util | `graphics/common/shader-parser`, environment-variable, locale-numeric-guard, pixel-data, logging/trace, file-loader·program binary path·system-error | shader source compile/reflection에 필요한 실제 utility만. binary off여도 런타임 if만으로 file symbol 참조 제거가 보장되지 않으므로 compile boundary 필요 |
 | Emscripten | libc/libc++, GLES headers·WebGL2 JS library; C 선택 시 pthread/worker runtime | libEGL native·X11·Wayland·Ecore·TBM·FreeType/HarfBuzz·이미지 codec은 초기 target에 추가하지 않음 |
 
@@ -146,11 +173,11 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 
 ### 예상 변경 파일
 
-1. `cmake/CMakeLists.txt` 또는 새 `cmake/gles.cmake`: 독립 target, source 명시, `MIN_WEBGL_VERSION=2`, `MAX_WEBGL_VERSION=2`, assertions, linker map, undefined-symbol 오류 유지. FULL_ES3 기본 off. pthread 선택은 compile/link 전파.
-2. `A/internal/graphics/gles-impl/egl-graphics-controller.{h,cpp}`: upload capability, program-binary off, 단일 context/cache, concrete EGL sync 경계 분리.
-3. `A/internal/graphics/gles-impl/gles2-graphics-memory.{h,cpp}`, 필요 시 `gles-graphics-buffer.{h,cpp}`: bounds·shadow·lifetime. Memory3는 native에서 보존, 웹 선택 제외.
+1. `cmake/CMakeLists.txt` 또는 새 `cmake/gles.cmake`, Adaptor `internal/graphics/file.list`, `gles-impl/file.list` 및 `build/tizen/CMakeLists.txt`: 공통/Native-EGL/Web source 집합과 환경별 link dependency 분리, 기존 GLES/Vulkan/DYNAMIC 구성 보존, 잘못된 조합 거부. 독립 target, source 명시, `MIN_WEBGL_VERSION=2`, `MAX_WEBGL_VERSION=2`, assertions, linker map, undefined-symbol 오류 유지. FULL_ES3 기본 off. pthread 선택은 compile/link 전파.
+2. `A/internal/graphics/gles-impl/egl-graphics-controller.{h,cpp}` 및 관련 include: 공통 GLES Controller로 역할·이름 정리, concrete EGL cast/type 제거, context/cache와 환경별 계약 연결. native 구현을 별도 파일로 이동하며 Web 구현 추가. 공통 계약을 중복 생성하지 않음.
+3. `A/internal/graphics/gles-impl/gles2-graphics-memory.{h,cpp}`, 필요 시 `gles-graphics-buffer.{h,cpp}`와 환경별 업로드 파일: bounds·수명·데이터 보존 계약 분리. shadow 채택 여부는 D2 미결. Memory3는 native에서 보존, 웹 선택 제외.
 4. `A/internal/graphics/gles/gl-implementation.{h,cpp}`, `gles3-implementation.h`, `gles-impl/gles-context.cpp`, `gles-graphics-program.cpp`: web capability와 금지 경로, source shader 유지.
-5. `A/internal/graphics/gles-impl/gles-sync-pool.{h,cpp}`, `gles-texture-dependency-checker.{h,cpp}`, `egl-sync-object.{h,cpp}`: native fence 제외와 허용 GPU sync 의미. HTML5 adapter 선택에 따른 신규 web 파일.
+5. `A/internal/graphics/gles-impl/gles-sync-pool.{h,cpp}`, `gles-texture-dependency-checker.{h,cpp}`, `egl-sync-object.{h,cpp}`: native fence 제외와 허용 GPU sync 의미. native 환경 파일과 Web sync 파일을 분리. 현재 GL sync 경로도 의미·호출 가능성을 확인한 뒤 재사용.
 6. `tests/probes/gles-link-smoke.cpp`, 새 빌드/검증 script와 `docs/P2-RESULTS.md`: 재현·정확한 scope 기록. 기존 mock probe 보존. Core public API 변경은 현재 제안에 없음.
 
 ### P2 검증 절차와 이후 게이트
@@ -159,7 +186,7 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 2. 명시적 source 집합을 object로 컴파일, `llvm-nm -u`·linker map을 보존. 심볼을 Core/utility/GL/EGL/native로 분류. R2 placeholder symbol 선언을 실행 ABI로 재사용하지 않음.
 3. 실제 Controller를 생성·주입하고 Core 및 renderer/resource/command 경로를 참조하는 harness를 링크. unused archive만 붙이고 성공이라고 하지 않음. map에서 실제 GLES implementation 포함, mock 미포함 확인. undefined symbol suppression/빈 GL stub 금지.
 4. 예상 미해결 7개뿐 아니라 새로운 GLES3.1·EGL·file/trace symbol을 감사. 기본 WebGL2 링크 exit 0과 source manifest/map을 남긴다. FULL_ES3 비교는 별도 variant이며 성공 여부를 구분.
-5. P2 최소 인수는 **선택된 생산 GLES path Wasm 링크 성공**이다. context bootstrap 실행은 가능하면 별도 기록하되 DALi 픽셀 성공으로 승격하지 않음. 수정된 native 공통 경로는 native compile 회귀를 수행하거나 미검증으로 남겨 범위 승인을 받음.
+5. native GLES/Vulkan 및 기존 DYNAMIC 구성의 source 선택·빌드 회귀와 웹 native 의존 배제 검사를 계획에 포함한다. 실행 가능한 native 환경에서는 자원·render·종료 회귀도 수행하며 실행하지 못한 항목은 미검증으로 남긴다. P2 최소 인수는 **선택된 생산 GLES path Wasm 링크 성공**이다. context bootstrap 실행은 가능하면 별도 기록하되 DALi 픽셀 성공으로 승격하지 않음. 수정된 native 공통 경로는 native compile 회귀를 수행하거나 미검증으로 남겨 범위 승인을 받음.
 6. P3에서 실제 DALi shader/geometry로 배경+사각형 픽셀·GL error·업로드 보존·context 생성/해제 검증. P4에서 시간·입력·resize·프레임 재요청과 반복 start/stop. C/B의 실제 worker 검증이 없으면 생산 실행 완료 판정 불가.
 7. 전체 Adaptor, 폰트/UI, Windows, 성능, 자동 context 복구, 배포는 별도 단계. 링크 오류를 풀기 위해 이 범위로 확대해야 하면 중단·보고.
 

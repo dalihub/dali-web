@@ -28,3 +28,13 @@
 - 온라인 공식 문서와 SDK 소스로 pthread/SAB/격리 조건 및 EGL 제한 검토. Pages 실제 배포·응답 헤더/runtime 검증 없음. 기존 R2-b 결과 재실행 없음.
 - D1 기능/context, D2 upload 의미, D3 thread owner, D4 격리 hosting 미결. P1 완료 조건을 막으므로 완료 선언하지 않음. README·PLAN·STATE·HANDOFF·NEXT-CONTEXT 갱신. 다음은 사용자 설계 결정이며 P2 자동 실행 아님.
 - 원본/P0 Git·사용자 파일·과거 로그·R2-b 증거·lock·Core 산출물 전후 보존 검사와 문서 검사 결과를 P1 evidence에 기록. SDK·생산 소스·build 변경 없음. 남긴 서버·브라우저·빌드 프로세스 없음.
+
+## 011 P1 D1 아키텍처 결정 반영
+
+2026-10-23 (Asia/Seoul). 사용자 승인으로 D1 설계 확정, D2~D4 미결. P1 미완료·P2 미착수.
+
+- 공통 GLES 렌더러 + Native/EGL·Web 환경별 파일의 빌드 시 선택을 채택. 기존 HTML5 어댑터 우선 잠정안을 책임 분리 중심의 정식 포팅 설계로 구체화.
+- Core 계약과 기존 GLES/Vulkan/DYNAMIC 유지, concrete EGL cast·타입·native FD를 native 구현으로 이동하는 경계, 컨텍스트·업로드·sync 분리 및 실행 시 capability 확인 명시.
+- P2 source 선택·변경 파일·native GLES/Vulkan/DYNAMIC 회귀·웹 native 의존 배제 검증 보강. 실제 파일명·세부 내부 인터페이스는 구현 계획에서 확정하며 생산 코드 변경 없음.
+- PLAN·STATE·HANDOFF·NEXT-CONTEXT·README 동기화. 다음 논의는 D2의 버퍼 부분 쓰기 보존과 CPU shadow 비용. D3/D4 미결 보존, D1 승인으로 다른 항목이나 구현을 승인한 것으로 간주하지 않음.
+- 시작 clean main `d2964ae0910cc475992ed1c396247db150791b68`, 원격 일치 확인. 검증은 문서 링크·공백·변경 범위 검사이며 빌드/runtime 검증은 수행하지 않음. 기록: `logs/p1/d1-design-001/`. 기존 SDK·소스·lock·P0/R2/P1 실행 증거 보존, Pages 배포 없음.

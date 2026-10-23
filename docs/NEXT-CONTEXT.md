@@ -1,8 +1,8 @@
 # 다음 컨텍스트용 프롬프트
 
 ```text
-DALi 브라우저 포팅을 이어가자. 먼저 P1의 미결 결정을 정리해줘.
-P1은 설계 초안 작성·결정 대기이며 완료가 아니고 P2는 미착수야.
+DALi 브라우저 포팅을 이어가자. P1의 D1 확정 내용을 읽고 미결 항목 D2부터 논의를 이어가자.
+D1 아키텍처는 승인됐고 D2~D4가 미결이어서 P1은 미완료, P2는 미착수야.
 
 작업 repo: /home/jy/work/dali/dali-web
 기록 기준: dali-web/docs
@@ -14,12 +14,18 @@ P1-EXECUTION-CONTRACT.md, evidence/p1/README.md, R2-b-RESULTS.md,
 upstreams.lock.json, toolchain.lock.json, BUILDING.md, UPSTREAMS.md를 읽어줘.
 실제 HEAD/status/원격을 확인하고 기존 변경과 lock을 보존해줘.
 P1 시작은 ef6a1f545ff03df69c3297135048f545ee8dd352였고,
-설계 commit은 "Document P1 execution contract and pending decisions"야.
+최초 설계 commit은 d2964ae0910cc475992ed1c396247db150791b68이고,
+D1 후속은 "Record approved GLES platform separation design"이야.
 
-D1 기능/context adapter, D2 shadow 업로드와 partial write 보존,
-D3 생산 실행 주체(C pthread 또는 B 단일 Worker), D4 격리 호스팅 허용
-각 결정의 권장안과 대안을 짧게 설명해줘. 승인되지 않은 선택을 확정하지 마.
-내 결정과 진행 지시를 받은 뒤에만 문서 확정/P2 구현을 진행해줘.
+D1 확정: 공통 GLES 로직과 Native/EGL·Web 환경 구현을 파일 단위로 분리하고
+빌드 시 선택해줘. Core 계약과 기존 GLES/Vulkan/DYNAMIC을 유지하고,
+컨텍스트·표면 / 업로드 / sync·native interop의 책임을 분리하는 정식 포팅 방향이야.
+EGL concrete cast·타입은 native 구현에 두고 웹 미지원 기능을 빈 함수로 만들지 마.
+설계 3절의 D1 계약을 따라줘. 구현은 아직 시작하지 마.
+
+먼저 D2의 부분 쓰기 보존 방식과 CPU shadow 비용·대안을 설명해줘.
+D3 스레드, D4 호스팅도 미결로 유지해줘. D1 승인을 이 항목들의 승인으로 해석하지 마.
+남은 논의를 끝내고 명시적인 구현 지시를 받은 뒤에 P2를 시작해줘.
 
 Memory3 WRITE-only는 SDK 6.0.13 guard에서 거부되고,
 Memory2도 부분 callback의 기존 byte를 자동 보존하지 않아.
