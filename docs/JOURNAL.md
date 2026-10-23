@@ -38,3 +38,12 @@
 - P2 source 선택·변경 파일·native GLES/Vulkan/DYNAMIC 회귀·웹 native 의존 배제 검증 보강. 실제 파일명·세부 내부 인터페이스는 구현 계획에서 확정하며 생산 코드 변경 없음.
 - PLAN·STATE·HANDOFF·NEXT-CONTEXT·README 동기화. 다음 논의는 D2의 버퍼 부분 쓰기 보존과 CPU shadow 비용. D3/D4 미결 보존, D1 승인으로 다른 항목이나 구현을 승인한 것으로 간주하지 않음.
 - 시작 clean main `d2964ae0910cc475992ed1c396247db150791b68`, 원격 일치 확인. 검증은 문서 링크·공백·변경 범위 검사이며 빌드/runtime 검증은 수행하지 않음. 기록: `logs/p1/d1-design-001/`. 기존 SDK·소스·lock·P0/R2/P1 실행 증거 보존, Pages 배포 없음.
+
+## 012 P1 D2 웹 버퍼 업로드 결정 반영
+
+2026-10-23 (Asia/Seoul). 사용자 승인으로 D2 설계 확정. D1·D2 확정, D3·D4 미결, P1 미완료·P2 미착수.
+
+- 별도 웹 메모리 구현과 보존이 필요한 버퍼 소유 CPU shadow 채택. native Memory2/3 유지, Memory4 추가 없음. 임시 매핑 객체와 지속 저장소의 소유권 분리.
+- 명시적 구간 업로드와 callback 매핑을 구분하고 shadow 일관성, valid range·discard/recycle·확장·실패·GPU write 경계 및 메모리 비용 검증 명시. 전체 덮어쓰기만 허용하는 기능 축소안은 미채택.
+- P2 변경 범위와 PLAN·STATE·HANDOFF·NEXT-CONTEXT·README 갱신. 다음 논의는 D3 실행 주체. D3·D4 권장안은 미승인이고 생산 코드 구현은 시작하지 않음.
+- 시작 clean main `b5362821a3834c44b0a859bc9829a4e49717c349`, 원격 SHA 일치. 문서 링크·공백·변경 범위 검사만 수행, runtime/build 미실행. 실행 기록 `logs/p1/d2-design-001/`. 소스·lock·SDK·기존 증거·원본 사용자 변경은 수정하지 않음.

@@ -1,6 +1,6 @@
 # P1 웹 실행 계약 설계
 
-2026-10-23 (Asia/Seoul). **D1 아키텍처 확정, D2~D4 결정 대기. P1 완료 아님.** 사용자가 공통 GLES 로직과 Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택하는 설계를 승인했다. 정식 포팅을 목표로 하며 생산 코드 변경·생산 링크·Pages 배포는 아직 수행하지 않았다. D2~D4 권장안은 미승인이다. 여기서 D1은 P1의 결정 ID이며 PLAN의 Pages 배포 단계 D1과 구별한다.
+2026-10-23 (Asia/Seoul). **D1 아키텍처·D2 업로드 설계 확정, D3~D4 결정 대기. P1 완료 아님.** 사용자가 공통 GLES 로직과 Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택하는 설계를 승인했다. 정식 포팅을 목표로 하며 생산 코드 변경·생산 링크·Pages 배포는 아직 수행하지 않았다. D3~D4 권장안은 미승인이다. 여기서 D1은 P1의 결정 ID이며 PLAN의 Pages 배포 단계 D1과 구별한다.
 
 기준 HEAD: `ef6a1f545ff03df69c3297135048f545ee8dd352`. 시작 main clean, 원격 main 일치 확인. [upstreams.lock.json](../upstreams.lock.json), [toolchain.lock.json](../toolchain.lock.json) 유지. Core `e2ce797a41cff49851361210491c8ed38bea46e9`, Adaptor `f0dd9b39d5a51ff0233ea50bf872dd6200e93981`, UI `f6c046d2a15ab7c6bad8d76612e667d66ed1f6d0`. [R2-b](R2-b-RESULTS.md)의 컴파일·mock 결과를 생산 실행 증거로 확장하지 않는다.
 
@@ -58,7 +58,7 @@ R2-b의 두 링크는 각각 exit 1이다. 265개는 두 object에서 수집한 
 |---|---|---|
 | eglCopyBuffers / eglCreatePixmapSurface | native pixmap 제외, 함수 export로 성공을 위장하지 않음 | 웹 대상에서 해당 구현 분리/컴파일 제외. 호출 가능한 API는 unsupported 오류. native 소스는 유지 |
 | glBlendBarrier / advanced blend | advanced equation 거부, 일반 ADD/SUBTRACT/REVERSE_SUBTRACT 및 확인된 WebGL2 MIN/MAX만 | `gl-implementation.h`, `gles3-implementation.h`, `gles-context.cpp`의 capability·호출 경로 함께 차단. 불가능한 equation 요청은 draw 전 오류. fallback multipass는 별도 설계, 이번 제외 |
-| glMapBufferRange / glUnmapBuffer / glFlushMappedBufferRange / glGetBufferPointerv | 기본안은 명시적 CPU staging + BufferSubData | Memory2 계열 보완 및 wrapper에서 native map 참조 분리. 단순 unused 함수 제거에만 기대지 않음 |
+| glMapBufferRange / glUnmapBuffer / glFlushMappedBufferRange / glGetBufferPointerv | D2 확정: 웹 전용 CPU staging/shadow + BufferSubData | 별도 웹 메모리 구현과 버퍼 소유 shadow, wrapper에서 native map 참조 분리. 단순 unused 함수 제거에만 기대지 않음 |
 | ProgramBinary/GetProgramBinary/ShaderBinary | source compile/link만 지원, binary load/save/precompile cache 끄기 | `InitializeGLES`의 기본 true를 웹 capability false로 제한하고 ProgramImpl의 파일·binary 경로 빌드 분리. 링크되는 실패용 SDK 함수가 있다는 이유로 지원 표시 금지 |
 | resource/window context 공유 | 한 WebGL context에서 두 역할 직렬화 | Emscripten libegl의 share 인자 무시·단일 default surface 구조 확인. WebGL object를 별도 context로 전달하지 않음. Controller resource/surface cache 통합/무효화 검사 |
 | EGL native fence / EGLImage / external texture | native image/FD interop 제외 | GLES sync pool의 native 분기를 분리. GPU 완료가 필요한 허용 경로에는 WebGL2 sync 기반 의미 있는 구현. native fence 호출 시 오류 |
@@ -82,7 +82,7 @@ Core → Graphics::Controller
 | 경계 | 공통 책임 | Native/EGL 구현 | Web 구현 |
 |---|---|---|---|
 | 컨텍스트·표면 | 논리 context 식별·상태 캐시·렌더 대상 수명 | EGL 생성·활성화·공유·surface present | HTML5 API로 Canvas/WebGL2 생성·활성화·제출·해제; 초기 resource/surface 역할은 같은 실제 context |
-| 버퍼 업로드 | 갱신 범위·보존 의미·자원 수명 | 기존 native mapping 전략 보존 | 웹에서 가능한 업로드 전략; shadow 여부·비용은 D2에서 결정 |
+| 버퍼 업로드 | 갱신 범위·보존 의미·자원 수명 | 기존 native mapping 전략 보존 | D2의 웹 메모리 구현·버퍼 소유 shadow; 명시적 부분 업로드와 보존 의미 유지 |
 | 동기화·외부 자원 | 작업 의존성과 완료 요구 | EGL/GL fence·native FD/image | 웹에서 의미를 지킬 수 있는 sync; 미지원 native interop은 명시 거부 |
 | GL 호출·기능 | 공통으로 유효한 GLES 명령·shader/resource 처리 | native GL wrapper 및 확장 | WebGL 호환 wrapper·기능 집합; 지원되지 않는 import를 파일 경계에서 분리 |
 
@@ -94,7 +94,7 @@ Core → Graphics::Controller
 6. 빌드 선택은 가능한 기능의 상한을 정하며 실제 context limits·extensions는 실행 시 확인한다. 필요한 기능의 빈 성공 구현, undefined-symbol 억제, 임의 GLES 버전 위장은 금지한다. unsupported 요청은 명시적으로 거부한다.
 7. 정식 구현의 수용 기준은 공통 GLES의 concrete EGL/native 의존 제거, 웹 link closure의 native 의존 배제, 업로드·sync·수명 의미 보존, native GLES/Vulkan 회귀, 실제 DALi 픽셀·반복 시작/종료·context loss 검증이다. P2 링크는 이 중간 마일스톤이며 최종 완료가 아니다.
 
-D1은 D2의 shadow 구현이나 D3 스레드 모델·D4 호스팅을 승인한 것이 아니다. 남은 논의가 끝나기 전에 구현을 시작하지 않는다.
+D1과 별도로 D2 업로드 설계도 아래와 같이 승인됐다. D3 스레드 모델·D4 호스팅은 미승인이다. 남은 논의가 끝나기 전에 구현을 시작하지 않는다.
 
 ## 4. Memory3 재확인과 데이터 보존
 
@@ -104,9 +104,20 @@ D1은 D2의 shadow 구현이나 D3 스레드 모델·D4 호스팅을 승인한 �
 2. invalidate를 더하는 수정은 원래 내용을 읽거나 일부만 덮어쓰는 의미를 잃는다. SDK는 새 malloc staging을 만들고 Unmap 때 매핑 전체를 BufferSubData한다. 전체 overwrite에 한해 후보이며 기존 데이터 보존의 해결책이 아니다.
 3. Memory2 GPU 분기는 `malloc(LockRegion.size)` 후 `BufferSubData(mapInfo.offset,mapInfo.size,ptr)`다. 새 메모리는 초기화되지 않는다. 전체 overwrite는 후보지만 map 크기와 lock 크기가 다르면 경계 문제가 있고 offset 규칙도 명시해야 한다. 현재 CPU 분기는 기존 주소+LockRegion.offset을 반환하며 GPU staging과 다르다.
 4. `GpuBuffer::UpdateDataBufferWithCallback`은 전체를 매핑하되 callback이 일부만 쓸 수 있다. 반환된 bytesUpdatedCount가 실제 dirty 범위를 보장하지 않는다. Memory2로 바꿔도 나머지 byte는 보존되지 않는다. `UniformBufferV2::WriteGPU`도 capacity 매핑에 offset 쓰기이므로 모든 사용 byte가 해당 프레임에 초기화된다는 증거가 필요하다.
-5. 권장 업로드 계약: GPU buffer별 CPU shadow를 유지하고 최초 상태를 정의한 뒤 수정 byte를 반영한다. 전체 write는 그대로 복사, callback은 기존 shadow를 받아 수정하므로 나머지를 보존한다. map offset/length/lock 범위를 검사하고 필요한 영역을 BufferSubData. 비용은 CPU 메모리와 복사량 증가. P2는 작은 전체 write까지, callback·uniform partial 보존은 P3의 지원 판정 전에 필수 검증한다.
-6. 대안: 초기 기능을 full overwrite로만 제한하고 callback/partial update를 명시적으로 거부한다. 사용자 동의 없이 DALi callback 의미를 축소하지 않는다. GPU read mapping은 초기 미지원. shadow가 GPU가 변경한 내용을 반영한다고 가정하지 않는다.
-7. **GLES 버전을 2로 위장해서 Memory2를 선택하지 않는다.** `EglGraphicsController::MapBufferRange:1222`의 버전 분기를 upload capability로 분리하고 GL version·shader·UBO 지원은 WebGL2에 맞게 유지한다. Memory2 이름만 재사용하는 것과 수정 없는 재사용은 다르다.
+5. 확정 업로드 계약: 기존 내용 보존이 필요한 웹 GPU buffer별 CPU shadow를 유지하고 최초 상태를 정의한 뒤 수정 byte를 반영한다. 전체 write는 그대로 복사, callback은 기존 shadow를 받아 수정하므로 나머지를 보존한다. map offset/length/lock 범위를 검사하고 필요한 영역을 BufferSubData. 비용은 CPU 메모리와 복사량 증가. P2는 작은 전체 write까지, callback·uniform partial 보존은 P3의 지원 판정 전에 필수 검증한다.
+6. full overwrite만 허용해 callback/partial API를 제한하는 대안은 채택하지 않았다. 기존 API의 보존 의미를 유지한다. GPU read mapping은 초기 미지원. shadow가 GPU가 변경한 내용을 반영한다고 가정하지 않는다.
+7. **GLES 버전을 2로 위장해서 Memory2를 선택하지 않는다.** `EglGraphicsController::MapBufferRange:1222`의 버전 분기를 upload capability로 분리하고 GL version·shader·UBO 지원은 WebGL2에 맞게 유지한다. native Memory2/3는 유지하고 별도 웹 메모리 구현을 빌드 시 선택한다. Memory4라는 버전 번호 기반 클래스를 추가하지 않는다.
+
+### D2 확정: 웹 메모리 구현과 버퍼 소유 CPU shadow
+
+2026-10-23 사용자 승인. `Memory2`·`Memory3`는 DALi 내부 클래스명이다. 웹용 구현은 예를 들어 `WebBufferMemory`처럼 역할에 맞게 구분한다. 이 이름은 예시이며 파일·클래스 이름은 P2에서 확정한다. 공통 Controller는 기존 메모리 계약을 사용하고 환경별 생성 경로를 선택한다.
+
+1. **소유권:** 보존이 필요한 CPU shadow는 버퍼 또는 버퍼 수명에 종속된 웹 저장소가 소유한다. 임시 매핑 객체가 매번 새 shadow를 만드는 방식은 사용하지 않는다. 매핑 객체는 유효한 구간 접근과 업로드를 담당하며, 매핑 중에는 저장소가 이동·해제되지 않아야 한다.
+2. **적용 조건:** 기존 byte를 참조·보존해야 하는 callback/partial mapping 경로에 shadow를 적용한다. 명시적 offset/length와 완전한 새 데이터가 주어지는 부분 갱신은 해당 범위만 BufferSubData하여 GPU의 나머지를 보존할 수 있다. 모든 버퍼에 무조건 사본을 추가하지 않는다. shadow가 존재하면 직접 구간 갱신도 사본에 반영해 이후 callback과 일관성을 유지한다.
+3. **callback:** 기존의 유효한 내용을 제공하고 수정하지 않은 byte를 보존한다. 반환된 bytesUpdatedCount를 임의의 dirty 위치 정보로 해석하지 않는다. 정확한 변경 범위를 알 수 없으면 매핑 범위를 보수적으로 업로드한다. 기존 DISCARD/orphan 계약에서 보존을 보장하지 않은 데이터까지 유효하다고 가정하지 않는다.
+4. **수명·오류:** 최초/확장 영역의 초기화 정책과 유효 범위, discard/recycle 시 보존 범위를 명시한다. map/lock의 offset·size·정수 overflow·allocation 실패를 검사한다. 실패를 성공 포인터로 위장하지 않고 기존 호출부가 안전하게 처리할 수 있는지 검증한다. 구체적인 오류 전달에 공통 API 변경이 필요하면 영향과 대안을 보고한다.
+5. **경계:** GPU가 변경한 데이터는 shadow에 자동 반영되지 않는다. GPU write/readback과 context 복구는 별도 계약이다. CPU shadow를 보유한다고 자동 복구까지 완료한 것으로 취급하지 않는다. 웹 GL 소유자와 매핑 포인터의 thread 접근 규칙은 D3에서 확정한다.
+6. **비용:** 대상 버퍼의 CPU 메모리·복사량·업로드량을 측정한다. 전체 write·명시적 구간 write·callback·uniform 경로별로 결과를 기록하고, 최적화하더라도 보존 의미를 축소하지 않는다. native 구현에는 웹 shadow 비용을 강제로 추가하지 않는다.
 
 필수 데이터 검사: 알려진 16-byte 초기 패턴 → 중간 4-byte 갱신 후 앞/뒤 보존; callback 0/부분/전체 갱신; nonzero map offset; lock 범위 초과·malloc 실패; buffer grow/recycle; CPU uniform vs GPU uniform; 두 연속 frame; unmap/destructor 중복·종료 중 해제. WebGL2 readback 또는 그 buffer를 사용한 실제 픽셀로 검증한다. 단순 CPU shadow unit test만으로 GPU 업로드 통과 처리하지 않는다.
 
@@ -147,11 +158,11 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 | ID | 결정 요청 | 권장 / 대안 | 미결 영향 |
 |---|---|---|---|
 | D1 확정 | 공통 GLES와 실행 환경 분리 | Native/EGL·Web 구현을 파일 단위로 분리하고 빌드 시 선택. Core 계약·기존 GLES/Vulkan/DYNAMIC 유지 | 설계 승인 완료. 구현·회귀는 P2 이후, 상세 파일·인터페이스는 위 경계 준수 |
-| D2 | 업로드 의미·비용 | Memory2 계열 staging + CPU shadow 보존 / full overwrite 한정·callback 명시 미지원 | 버퍼 구현 경계와 지원 API 달라짐 |
+| D2 확정 | 업로드 의미·비용 | 별도 웹 메모리 구현 + 보존이 필요한 버퍼 소유 CPU shadow. native Memory2/3 유지, Memory4 추가 없음 | 설계 승인 완료. 보존·수명·오류·메모리 비용 검증은 P2 이후 |
 | D3 | 생산 실행 주체와 P2 진단 범위 | C를 목표로 별도 pthread 산출물, P2의 A 링크 harness는 진단 전용 / B를 목표로 non-pthread Worker | thread 선택이 P1 완료 조건. 현재 선택하지 않음 |
 | D4 | 격리 호스팅 우선순위 | C이면 별도 헤더 제어 origin 허용, Pages는 안내/UI / Pages 고정이면 B 또는 SW 검증 선행 | C+기본 Pages 가능으로 선언 불가. 실제 제공자 선택은 D1 배포 단계에서 가능 |
 
-게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D2~D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 D2 업로드 의미부터 남은 세 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
+게이트: 호출 경로·기능/버퍼 위험·후보·P2 계획은 기록됨. D3~D4 미결로 **P1 완료 조건 중 선택된 실행 계약이 충족되지 않았다**. P2 구현은 지금 시작 불가. 다음 작업은 D3 실행 주체부터 남은 두 결정을 확정하고 필요하면 작은 스레드 검증만 수행하는 P1 후속이다. 권장안을 문서화했다는 이유로 결정한 것으로 간주하지 않는다.
 
 ## 8. P2 최소 링크 인수인계 (결정 후 실행)
 
@@ -175,7 +186,7 @@ SAB 경로는 secure context, `crossOriginIsolated === true`, SharedArrayBuffer 
 
 1. `cmake/CMakeLists.txt` 또는 새 `cmake/gles.cmake`, Adaptor `internal/graphics/file.list`, `gles-impl/file.list` 및 `build/tizen/CMakeLists.txt`: 공통/Native-EGL/Web source 집합과 환경별 link dependency 분리, 기존 GLES/Vulkan/DYNAMIC 구성 보존, 잘못된 조합 거부. 독립 target, source 명시, `MIN_WEBGL_VERSION=2`, `MAX_WEBGL_VERSION=2`, assertions, linker map, undefined-symbol 오류 유지. FULL_ES3 기본 off. pthread 선택은 compile/link 전파.
 2. `A/internal/graphics/gles-impl/egl-graphics-controller.{h,cpp}` 및 관련 include: 공통 GLES Controller로 역할·이름 정리, concrete EGL cast/type 제거, context/cache와 환경별 계약 연결. native 구현을 별도 파일로 이동하며 Web 구현 추가. 공통 계약을 중복 생성하지 않음.
-3. `A/internal/graphics/gles-impl/gles2-graphics-memory.{h,cpp}`, 필요 시 `gles-graphics-buffer.{h,cpp}`와 환경별 업로드 파일: bounds·수명·데이터 보존 계약 분리. shadow 채택 여부는 D2 미결. Memory3는 native에서 보존, 웹 선택 제외.
+3. 새 웹 메모리 구현 파일(예: `web-buffer-memory.{h,cpp}`), 버퍼 소유 웹 저장소 및 필요 시 `gles-graphics-buffer.{h,cpp}`: D2의 bounds·수명·보존 계약 구현. 메모리 객체는 map/upload를 담당하고 shadow는 버퍼 수명에 귀속. native `gles2/3-graphics-memory`는 유지하며 웹에서는 선택하지 않는다.
 4. `A/internal/graphics/gles/gl-implementation.{h,cpp}`, `gles3-implementation.h`, `gles-impl/gles-context.cpp`, `gles-graphics-program.cpp`: web capability와 금지 경로, source shader 유지.
 5. `A/internal/graphics/gles-impl/gles-sync-pool.{h,cpp}`, `gles-texture-dependency-checker.{h,cpp}`, `egl-sync-object.{h,cpp}`: native fence 제외와 허용 GPU sync 의미. native 환경 파일과 Web sync 파일을 분리. 현재 GL sync 경로도 의미·호출 가능성을 확인한 뒤 재사용.
 6. `tests/probes/gles-link-smoke.cpp`, 새 빌드/검증 script와 `docs/P2-RESULTS.md`: 재현·정확한 scope 기록. 기존 mock probe 보존. Core public API 변경은 현재 제안에 없음.

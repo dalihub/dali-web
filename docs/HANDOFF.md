@@ -1,6 +1,6 @@
 # 다음 context 인수인계: P1 결정 → P2
 
-2026-10-23. **D1 아키텍처 확정, D2~D4 결정 대기. P1 완료 아님, P2 미착수.** 현재 기록은 `dali-web/docs`, 이전 `webassembly-probe`는 증거 보존 공간이다.
+2026-10-23. **D1 아키텍처·D2 업로드 설계 확정, D3~D4 결정 대기. P1 완료 아님, P2 미착수.** 현재 기록은 `dali-web/docs`, 이전 `webassembly-probe`는 증거 보존 공간이다.
 
 ## 먼저 읽을 것
 
@@ -11,7 +11,7 @@
 
 ## 기준과 결과
 
-작업 repo `/home/jy/work/dali/dali-web`, main, 원격 https://github.com/dalihub/dali-web. P1 시작 HEAD와 원격 main은 `ef6a1f545ff03df69c3297135048f545ee8dd352`로 일치했고 clean이었다. 최초 P1 문서 commit은 `d2964ae0910cc475992ed1c396247db150791b68`이다. D1 후속 문서 commit은 `Record approved GLES platform separation design`으로 식별한다. 실제 HEAD·status·remote를 다시 확인한다. upstream/lock은 갱신하지 않는다.
+작업 repo `/home/jy/work/dali/dali-web`, main, 원격 https://github.com/dalihub/dali-web. P1 시작 HEAD와 원격 main은 `ef6a1f545ff03df69c3297135048f545ee8dd352`로 일치했고 clean이었다. 최초 P1 문서 commit은 `d2964ae0910cc475992ed1c396247db150791b68`이다. D1 후속 문서 commit은 `Record approved GLES platform separation design`으로 식별한다. D2 후속 문서 commit은 `Record approved web buffer upload design`으로 식별한다. 실제 HEAD·status·remote를 다시 확인한다. upstream/lock은 갱신하지 않는다.
 
 R2-a Core Wasm·Node, R2-b Firefox mock 50/100 및 Adaptor 6개 compile 통과. GL 탐색 Python 0, 두 링크 각각 1, 기본 7개/FULL_ES3 3개 unresolved. P1에서 이 검사를 반복하거나 생산 렌더링으로 승격하지 않았다.
 
@@ -20,11 +20,11 @@ P1은 현재 Core→GLES→표면/컨텍스트→업로드→프레임→종료 
 ## 확정된 결정과 남은 논의
 
 1. D1 확정: 공통 GLES 로직과 Native/EGL·Web 환경 구현을 파일 단위로 분리해 빌드 시 선택한다. Core 계약과 기존 GLES/Vulkan/DYNAMIC 유지. 컨텍스트·표면, 업로드, sync/interop 책임을 분리하고 concrete EGL cast/타입을 native 파일로 이동한다. 단순 PoC보다 정식 포팅과 회귀 검증을 우선한다.
-2. D2: CPU shadow + BufferSubData로 partial write 보존, 또는 full overwrite만 지원하고 callback/partial API 명시 제외.
+2. D2 확정: 별도 웹 메모리 구현(예: WebBufferMemory), 보존이 필요한 버퍼 소유 CPU shadow + BufferSubData. native Memory2/3 유지, Memory4 추가 없음. 명시적 구간 갱신과 callback을 구분하고 shadow 일관성·수명·오류·비용 검증. full overwrite만 허용하는 기능 축소안은 미채택.
 3. D3: 생산 event Worker + update/render pthread(C) 권장, non-pthread 단일 Worker(B) 대안. main 단일 harness(A)는 링크 진단용으로만 제한하는 안.
 4. D4: C이면 별도 격리 실행 origin을 허용할지, Pages 고정이면 B/SW 검증 중 어느 방향인지.
 
-D1은 사용자 승인 완료이며 D2~D4는 미승인이다. 다음 논의는 D2의 부분 쓰기 보존과 CPU shadow 비용이다. D1 설계 승인만으로 생산 코드 구현을 시작하지 않는다. P1의 스레드 선택 완료 조건을 없애고 완료 처리하지 않는다. 실제 호스팅 사업자 선택은 배포 단계에 미룰 수 있지만 헤더 제어 허용 여부는 thread 결정과 함께 정해야 한다.
+D1·D2는 사용자 승인 완료이며 D3~D4는 미승인이다. 다음 논의는 D3의 이벤트·업데이트·렌더 소유자다. D1·D2 설계 승인만으로 생산 코드 구현을 시작하지 않는다. P1의 스레드 선택 완료 조건을 없애고 완료 처리하지 않는다. 실제 호스팅 사업자 선택은 배포 단계에 미룰 수 있지만 헤더 제어 허용 여부는 thread 결정과 함께 정해야 한다.
 
 ## 특이 사항과 P2 경계
 
