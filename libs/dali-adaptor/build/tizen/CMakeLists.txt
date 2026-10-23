@@ -8,6 +8,11 @@ ENDIF()
 SET(CMAKE_C_STANDARD 99)
 SET(CMAKE_CXX_STANDARD 17)
 PROJECT(dali2-adaptor CXX C)
+# Validate before platform package discovery or source generation.
+INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/../../dali/internal/graphics/gles-environment.cmake)
+IF(DALI_GLES_ENVIRONMENT STREQUAL "WEB")
+  MESSAGE(FATAL_ERROR "Full Adaptor Web profile is not implemented; use the standalone P2-b boundary probe")
+ENDIF()
 SET(name "dali2-adaptor")
 SET(PKG_NAME ${name})
 

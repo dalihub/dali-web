@@ -25,7 +25,7 @@ namespace DALI_NAMESPACE::Graphics
 #if defined(DEBUG_ENABLED)
 /**
  * Struct to manage dumping N command buffers. In this file, "frame" really
- * means each call to EglGraphicsController::Flush(), and doesn't necessarily
+ * means each call to GlesGraphicsController::Flush(), and doesn't necessarily
  * correspond to a complete render frame.
  */
 struct GraphicsFrameDump

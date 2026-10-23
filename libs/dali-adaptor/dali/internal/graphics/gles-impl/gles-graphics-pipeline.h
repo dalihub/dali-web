@@ -49,7 +49,7 @@ public:
    * @param[in] controller Reference to the Controller
    * @param[in] pipelineCache Reference to valid pipeline cache
    */
-  PipelineImpl(const Graphics::PipelineCreateInfo& createInfo, Graphics::EglGraphicsController& controller, PipelineCache& pipelineCache);
+  PipelineImpl(const Graphics::PipelineCreateInfo& createInfo, Graphics::GlesGraphicsController& controller, PipelineCache& pipelineCache);
 
   /**
    * @brief Destructor
@@ -129,7 +129,7 @@ private:
   struct PipelineState;
   std::unique_ptr<PipelineState> mPipelineState;
 
-  EglGraphicsController& mController;
+  GlesGraphicsController& mController;
   PipelineCreateInfo     mCreateInfo;
 
   uint32_t mRefCount{0u};
@@ -181,7 +181,7 @@ public:
    *
    * @return reference to Controller
    */
-  [[nodiscard]] EglGraphicsController& GetController() const;
+  [[nodiscard]] GlesGraphicsController& GetController() const;
 
   bool operator==(const PipelineImpl* impl) const
   {

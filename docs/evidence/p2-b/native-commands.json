@@ -1,0 +1,131 @@
+[
+  {
+    "name": "native-configure-GLES",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/GLES",
+      "-G",
+      "Ninja",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DENABLE_GRAPHICS_BACKEND=GLES",
+      "-DENABLE_PKG_CONFIGURE=OFF"
+    ],
+    "exitCode": 1
+  },
+  {
+    "name": "native-configure-VULKAN",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/VULKAN",
+      "-G",
+      "Ninja",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DENABLE_GRAPHICS_BACKEND=VULKAN",
+      "-DENABLE_PKG_CONFIGURE=OFF"
+    ],
+    "exitCode": 1
+  },
+  {
+    "name": "native-configure-DYNAMIC",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/DYNAMIC",
+      "-G",
+      "Ninja",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DENABLE_GRAPHICS_BACKEND=DYNAMIC",
+      "-DENABLE_PKG_CONFIGURE=OFF"
+    ],
+    "exitCode": 1
+  },
+  {
+    "name": "cross-compile-native-gles-context",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/context-web-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-context.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/native-gles-context.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-context",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/native-gles-context.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-rendering",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/context-web-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-rendering.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/native-gles-rendering.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-rendering",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/native-gles-rendering.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-egl-graphics",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/context-web-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/egl-graphics.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/egl-graphics.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-egl-graphics",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/native-001/egl-graphics.o"
+    ],
+    "exitCode": 0
+  }
+]

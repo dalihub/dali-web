@@ -20,12 +20,12 @@
 
 // INTERNAL INCLUDES
 #include <dali/integration-api/adaptor-framework/render-surface-interface.h>
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-framebuffer.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
-RenderTarget::RenderTarget(const Graphics::RenderTargetCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+RenderTarget::RenderTarget(const Graphics::RenderTargetCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : RenderTargetResource(createInfo, controller)
 {
   if(createInfo.surface)

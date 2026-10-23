@@ -28,15 +28,15 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 namespace GLES
 {
 class Memory2 : public Dali::Graphics::Memory
 {
 public:
-  Memory2(const Graphics::MapBufferInfo& mapInfo, EglGraphicsController& controller);
+  Memory2(const Graphics::MapBufferInfo& mapInfo, GlesGraphicsController& controller);
 
-  Memory2(const Graphics::MapTextureInfo& mapInfo, EglGraphicsController& controller);
+  Memory2(const Graphics::MapTextureInfo& mapInfo, GlesGraphicsController& controller);
 
   ~Memory2() override;
 
@@ -46,7 +46,7 @@ public:
 
   void Flush() override;
 
-  EglGraphicsController& mController;
+  GlesGraphicsController& mController;
 
   enum class MapObjectType
   {

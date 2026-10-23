@@ -22,7 +22,7 @@
 #include <dali/public-api/common/dali-utility.h>
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-buffer.h"
 #include "gles-graphics-framebuffer.h"
 #include "gles-graphics-pipeline.h"
@@ -304,7 +304,7 @@ private:
   uint32_t mCachedValues[MAX_STATE_FLAGS]{0u};
 };
 
-CommandBuffer::CommandBuffer(const Graphics::CommandBufferCreateInfo& createInfo, EglGraphicsController& controller)
+CommandBuffer::CommandBuffer(const Graphics::CommandBufferCreateInfo& createInfo, GlesGraphicsController& controller)
 : CommandBufferResource(createInfo, controller)
 {
   mCommandPool         = std::make_unique<CommandPool>(createInfo.fixedCapacity);

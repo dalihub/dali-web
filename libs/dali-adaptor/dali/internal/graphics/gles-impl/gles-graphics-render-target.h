@@ -38,7 +38,7 @@ public:
    * @param[in] createInfo Valid createInfo structure
    * @param[in] controller Reference to the controller
    */
-  RenderTarget(const Graphics::RenderTargetCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  RenderTarget(const Graphics::RenderTargetCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

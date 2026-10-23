@@ -17,7 +17,7 @@
 
 #include "gles-graphics-pipeline-cache.h"
 #include <algorithm>
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-pipeline.h"
 #include "gles-graphics-program.h"
 #include "gles-graphics-shader.h"
@@ -40,7 +40,7 @@ struct CachedObjectDeleter
   void operator()(T* object)
   {
     // Discard resource (add it to discard queue) if controller is not shutting down
-    if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+    if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
     {
       object->DiscardResource();
     }
@@ -221,7 +221,7 @@ struct PipelineCache::Impl
   /**
    * @brief Constructor
    */
-  explicit Impl(EglGraphicsController& _controller)
+  explicit Impl(GlesGraphicsController& _controller)
   : controller(_controller),
     flushEnabled(true),
     pipelineEntriesFlushRequired(false),
@@ -287,7 +287,7 @@ struct PipelineCache::Impl
     UniquePtr<ShaderImpl> shaderImpl{nullptr};
   };
 
-  EglGraphicsController&         controller;
+  GlesGraphicsController&         controller;
   std::vector<CacheEntry>        entries;
   std::vector<ProgramCacheEntry> programEntries;
   std::vector<ShaderCacheEntry>  shaderEntries;
@@ -298,7 +298,7 @@ struct PipelineCache::Impl
   bool shaderEntriesFlushRequired : 1;
 };
 
-PipelineCache::PipelineCache(EglGraphicsController& controller)
+PipelineCache::PipelineCache(GlesGraphicsController& controller)
 {
   mImpl = std::make_unique<Impl>(controller);
 }

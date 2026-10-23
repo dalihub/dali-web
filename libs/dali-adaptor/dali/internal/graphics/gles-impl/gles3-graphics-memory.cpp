@@ -24,18 +24,18 @@
 
 // INTERNAL INCLUDES
 #include <dali/internal/graphics/common/graphics-interface.h>
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
-Memory3::Memory3(const Graphics::MapBufferInfo& mapInfo, EglGraphicsController& controller)
+Memory3::Memory3(const Graphics::MapBufferInfo& mapInfo, GlesGraphicsController& controller)
 : mController(controller)
 {
   mMapBufferInfo = mapInfo;
   mMapObjectType = MapObjectType::BUFFER;
 }
 
-Memory3::Memory3(const Graphics::MapTextureInfo& mapInfo, EglGraphicsController& controller)
+Memory3::Memory3(const Graphics::MapTextureInfo& mapInfo, GlesGraphicsController& controller)
 : mController(controller)
 {
   mMapTextureInfo = mapInfo;
@@ -49,7 +49,7 @@ Memory3::~Memory3()
 
 void* Memory3::LockRegion(uint32_t offset, uint32_t size)
 {
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     auto* gl = mController.GetGL();
     if(DALI_LIKELY(gl))
@@ -79,7 +79,7 @@ void* Memory3::LockRegion(uint32_t offset, uint32_t size)
 
 void Memory3::Unlock(bool flush)
 {
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     auto* gl = mController.GetGL();
     if(DALI_LIKELY(gl))
@@ -108,7 +108,7 @@ void Memory3::Unlock(bool flush)
 void Memory3::Flush()
 {
   // Notify to buffer that data has been changed.
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     auto buffer = static_cast<GLES::Buffer*>(mMapBufferInfo.buffer);
     buffer->IncreaseBufferChangedCount();

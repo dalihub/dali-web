@@ -49,7 +49,7 @@ public:
    * @param[in] createInfo valid TextureCreateInfo structure
    * @param[in] controller Reference to the Controller
    */
-  Texture(const Graphics::TextureCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  Texture(const Graphics::TextureCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

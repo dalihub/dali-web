@@ -31,7 +31,7 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 namespace GLES
 {
 class Pipeline;
@@ -51,7 +51,7 @@ public:
   /**
    * @brief Constructor
    */
-  explicit PipelineCache(EglGraphicsController& controller);
+  explicit PipelineCache(GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

@@ -19,7 +19,7 @@
 
 // EXTERNAL INCLUDES
 #include <dali/integration-api/debug.h>
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <dali/internal/graphics/gles/egl-sync-implementation.h>
 #include <algorithm>
 
@@ -31,16 +31,16 @@ namespace
 Debug::Filter* gLogSyncFilter = Debug::Filter::New(Debug::NoLogging, false, "LOG_FENCE_SYNC");
 #endif
 
-SyncPool::SyncContext GetTextureDependencySyncContext(EglGraphicsController& controller)
+SyncPool::SyncContext GetTextureDependencySyncContext(GlesGraphicsController& controller)
 {
-  return controller.GetEglSyncImplementation().UseGlSyncForTextureDependencies()
+  return static_cast<Internal::Adaptor::EglSyncImplementation&>(controller.GetSyncImplementation()).UseGlSyncForTextureDependencies()
            ? SyncPool::SyncContext::GL
            : SyncPool::SyncContext::EGL;
 }
 
-void FreeAllBackwardSyncObjectSyncs(EglGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies)
+void FreeAllBackwardSyncObjectSyncs(GlesGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies)
 {
-  if(DALI_LIKELY(!Dali::Graphics::EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!Dali::Graphics::GlesGraphicsController::IsShuttingDown()))
   {
     std::unordered_set<TextureDependencyChecker::SyncObjectId> called;
     for(auto& item : dependencies)
@@ -58,9 +58,9 @@ void FreeAllBackwardSyncObjectSyncs(EglGraphicsController& controller, TextureDe
     dependencies.clear();
   }
 }
-void FreeBackwardSyncObjectSyncs(EglGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies, const GLES::Texture* texture)
+void FreeBackwardSyncObjectSyncs(GlesGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies, const GLES::Texture* texture)
 {
-  if(DALI_LIKELY(!Dali::Graphics::EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!Dali::Graphics::GlesGraphicsController::IsShuttingDown()))
   {
     auto iter = dependencies.find(texture);
     if(iter != dependencies.end())
@@ -79,9 +79,9 @@ void FreeBackwardSyncObjectSyncs(EglGraphicsController& controller, TextureDepen
     }
   }
 }
-void WaitBackwardSyncObjectSyncs(EglGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies, const Context* writeContext, const GLES::Texture* texture)
+void WaitBackwardSyncObjectSyncs(GlesGraphicsController& controller, TextureDependencyChecker::BackwardDependenciesMap& dependencies, const Context* writeContext, const GLES::Texture* texture)
 {
-  if(DALI_LIKELY(!Dali::Graphics::EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!Dali::Graphics::GlesGraphicsController::IsShuttingDown()))
   {
     auto iter = dependencies.find(texture);
     if(iter != dependencies.end())
@@ -113,7 +113,7 @@ void WaitBackwardSyncObjectSyncs(EglGraphicsController& controller, TextureDepen
 
 TextureDependencyChecker::~TextureDependencyChecker()
 {
-  if(DALI_LIKELY(!Dali::Graphics::EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!Dali::Graphics::GlesGraphicsController::IsShuttingDown()))
   {
     for(auto& forwardDependency : mForwardDependencies)
     {
@@ -130,7 +130,7 @@ TextureDependencyChecker::~TextureDependencyChecker()
 void TextureDependencyChecker::Reset()
 {
   // Free sync objects for FBO texture dependencies
-  if(DALI_LIKELY(!Dali::Graphics::EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!Dali::Graphics::GlesGraphicsController::IsShuttingDown()))
   {
     for(auto& forwardDependency : mForwardDependencies)
     {

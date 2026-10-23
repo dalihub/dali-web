@@ -18,7 +18,7 @@
 #include <dali/dali.h>
 #include <dali/devel-api/object/property-map-devel.h>
 
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <test-actor-utils.h>
 #include <test-graphics-egl-application.h>
 #include <test-graphics-framebuffer.h>

@@ -23,7 +23,7 @@
 #include <dali/internal/graphics/common/graphics-interface.h>
 #include <dali/public-api/math/math-utils.h>
 
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-buffer.h"
 #include "gles-graphics-pipeline.h"
 #include "gles-graphics-program.h"
@@ -31,7 +31,7 @@
 #include "gles-graphics-render-target.h"
 #include "gles-texture-dependency-checker.h"
 
-#include <dali/internal/graphics/common/egl-include.h>
+#include <dali/internal/graphics/gles-impl/gles-native-rendering.h>
 
 #include <cstdint>
 #include <limits>
@@ -82,9 +82,10 @@ namespace DALI_NAMESPACE::Graphics::GLES
 {
 struct Context::Impl
 {
-  explicit Impl(EglGraphicsController& controller, Integration::GlAbstraction* gl)
+  explicit Impl(GlesGraphicsController& controller, Integration::GlAbstraction* gl)
   : mController(controller),
-    mGL(gl)
+    mGL(gl),
+    mNativeRendering(CreateNativeRendering(controller))
   {
   }
 
@@ -413,7 +414,7 @@ struct Context::Impl
     return mGlContextCreated ? mGL : nullptr;
   }
 
-  EglGraphicsController&      mController;
+  GlesGraphicsController&      mController;
   Integration::GlAbstraction* mGL{nullptr};
 
   const GLES::PipelineImpl* mCurrentPipeline{nullptr}; ///< Currently bound pipeline
@@ -464,27 +465,16 @@ struct Context::Impl
   bool mGlContextCreated{false};    ///< True if the OpenGL context has been created
   bool mVertexBuffersChanged{true}; ///< True if BindVertexBuffers changed any buffer bindings
 
-  EGLContext mNativeDrawContext{0u}; ///< Native rendering EGL context compatible with window context
+  std::unique_ptr<NativeRendering> mNativeRendering;
 
-  EGLSurface mCacheDrawReadSurface{0u};    ///< cached 'read' surface
-  EGLSurface mCacheDrawWriteSurface{0u};   ///< cached 'write' surface
-  EGLContext mCacheEGLGraphicsContext{0u}; ///< cached window context
 };
 
-Context::Context(EglGraphicsController& controller, Integration::GlAbstraction* glAbstraction)
+Context::Context(GlesGraphicsController& controller, Integration::GlAbstraction* glAbstraction)
 {
   mImpl = std::make_unique<Impl>(controller, glAbstraction);
 }
 
-Context::~Context()
-{
-  // Destroy native rendering context if one exists
-  if(mImpl->mNativeDrawContext)
-  {
-    eglDestroyContext(eglGetCurrentDisplay(), mImpl->mNativeDrawContext);
-    mImpl->mNativeDrawContext = EGL_NO_CONTEXT;
-  }
-}
+Context::~Context() = default;
 
 void Context::Flush(bool reset, const GLES::DrawCallDescriptor& drawCall, GLES::TextureDependencyChecker& dependencyChecker)
 {
@@ -1265,7 +1255,7 @@ void Context::ClearVertexBufferCache()
   mImpl->mVertexBuffersChanged   = true;
   mImpl->mProgramVAOCurrentState = 0;
   ++mImpl->mVertexBufferChangedCount;
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     if(!(mImpl->mController.GetGLESVersion() >= GLESVersion::GLES_30))
     {
@@ -1630,71 +1620,7 @@ void Context::DiscardNonShareableCache()
 
 void Context::PrepareForNativeRendering()
 {
-  DALI_TIME_CHECKER_BEGIN(gTimeCheckerFilter);
-
-  // this should be pretty much constant
-  auto display     = eglGetCurrentDisplay();
-  auto drawSurface = eglGetCurrentSurface(EGL_DRAW);
-  auto readSurface = eglGetCurrentSurface(EGL_READ);
-  auto context     = eglGetCurrentContext();
-
-  // push the surface and context data to the impl
-  // It's needed to restore context
-  if(!mImpl->mCacheEGLGraphicsContext)
-  {
-    mImpl->mCacheDrawWriteSurface   = drawSurface;
-    mImpl->mCacheDrawReadSurface    = readSurface;
-    mImpl->mCacheEGLGraphicsContext = context;
-  }
-
-  if(!mImpl->mNativeDrawContext)
-  {
-    EGLint configId{0u};
-
-    {
-      DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "eglQueryContext(Native)");
-      eglQueryContext(display, mImpl->mController.GetSharedContext(), EGL_CONFIG_ID, &configId);
-    }
-
-    EGLint configAttribs[3];
-    configAttribs[0] = EGL_CONFIG_ID;
-    configAttribs[1] = configId;
-    configAttribs[2] = EGL_NONE;
-
-    EGLConfig config;
-    EGLint    numConfigs;
-    {
-      DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "eglChooseConfig(Native)");
-      if(eglChooseConfig(display, configAttribs, &config, 1, &numConfigs) != EGL_TRUE)
-      {
-        DALI_LOG_ERROR("eglChooseConfig failed!\n");
-        return;
-      }
-    }
-
-    auto version = int(mImpl->mController.GetGLESVersion());
-
-    std::vector<EGLint> attribs;
-    attribs.push_back(EGL_CONTEXT_MAJOR_VERSION_KHR);
-    attribs.push_back(version / 10);
-    attribs.push_back(EGL_CONTEXT_MINOR_VERSION_KHR);
-    attribs.push_back(version % 10);
-    attribs.push_back(EGL_NONE);
-
-    {
-      DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "eglCreateContext(Native)");
-      mImpl->mNativeDrawContext = eglCreateContext(display, config, mImpl->mController.GetSharedContext(), attribs.data());
-      if(mImpl->mNativeDrawContext == EGL_NO_CONTEXT)
-      {
-        DALI_LOG_ERROR("eglCreateContext failed!\n");
-        return;
-      }
-    }
-  }
-
-  eglMakeCurrent(display, drawSurface, readSurface, mImpl->mNativeDrawContext);
-
-  DALI_TIME_CHECKER_END_WITH_MESSAGE(gTimeCheckerFilter, "PrepareForNativeRendering");
+  mImpl->mNativeRendering->Prepare();
 }
 
 void Context::ResetBufferCache()
@@ -1719,11 +1645,7 @@ void Context::ResetGLESState(bool callGlFunction)
 
 void Context::RestoreFromNativeRendering()
 {
-  DALI_TIME_CHECKER_SCOPE(gTimeCheckerFilter, "RestoreFromNativeRendering");
-  auto display = eglGetCurrentDisplay();
-
-  // bring back original context
-  eglMakeCurrent(display, mImpl->mCacheDrawWriteSurface, mImpl->mCacheDrawReadSurface, mImpl->mCacheEGLGraphicsContext);
+  mImpl->mNativeRendering->Restore();
 }
 
 } //namespace DALI_NAMESPACE::Graphics::GLES

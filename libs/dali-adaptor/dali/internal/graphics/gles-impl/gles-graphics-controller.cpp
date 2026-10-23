@@ -15,9 +15,10 @@
  */
 
 // CLASS HEADER
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 
 // EXTERNAL INCLUDES
+#include <dali/devel-api/adaptor-framework/environment-variable.h>
 #include <dali/graphics-api/graphics-types.h>
 #include <dali/integration-api/trace.h>
 #include <dali/public-api/common/dali-common.h>
@@ -42,14 +43,12 @@
 #include <dali/internal/graphics/gles-impl/gles-graphics-types.h>
 #include <dali/internal/graphics/gles-impl/gles-sync-object.h>
 #include <dali/internal/graphics/gles-impl/gles3-graphics-memory.h>
-#include <dali/internal/graphics/gles/egl-graphics.h>
-#include <dali/internal/graphics/gles/egl-sync-implementation.h>
 #include <dali/internal/system/common/environment-variables.h>
 #include <any>
 
 // Uncomment the following define to turn on frame dumping
 // #define ENABLE_COMMAND_BUFFER_FRAME_DUMP 1
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller-debug.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller-debug.h>
 DUMP_FRAME_INIT();
 
 namespace DALI_NAMESPACE::Graphics
@@ -73,7 +72,7 @@ struct GLESDeleter
   void operator()(T* object)
   {
     // GLES object deleter should skip discard queue if controller shutting down
-    if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+    if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
     {
       // Discard resource (add it to discard queue)
       object->DiscardResource();
@@ -130,7 +129,7 @@ struct GLESDeleter<EGL::SyncObject>
  * @param[out] out Unique pointer to the return object
  */
 template<class GLESType, class GfxCreateInfo, class T>
-auto NewObject(const GfxCreateInfo& info, EglGraphicsController& controller, T&& oldObject)
+auto NewObject(const GfxCreateInfo& info, GlesGraphicsController& controller, T&& oldObject)
 {
   // Use allocator
   using Type = typename T::element_type;
@@ -183,12 +182,12 @@ DALI_INIT_TRACE_FILTER(gTraceFilter, DALI_TRACE_EGL, false);
 bool gIsShuttingDown = true; ///< Global static flag to ensure that we have single graphics controller instance per each UpdateRender thread loop.
 } // namespace
 
-bool EglGraphicsController::IsShuttingDown()
+bool GlesGraphicsController::IsShuttingDown()
 {
   return gIsShuttingDown;
 }
 
-EglGraphicsController::EglGraphicsController()
+GlesGraphicsController::GlesGraphicsController()
 : mTextureDependencyChecker(*this),
   mSyncPool(*this),
   mResourceInitializeFailed(false),
@@ -197,7 +196,7 @@ EglGraphicsController::EglGraphicsController()
 {
 }
 
-EglGraphicsController::~EglGraphicsController()
+GlesGraphicsController::~GlesGraphicsController()
 {
   while(!mPresentationCommandBuffers.empty())
   {
@@ -207,7 +206,7 @@ EglGraphicsController::~EglGraphicsController()
   }
 }
 
-void EglGraphicsController::InitializeGLES(Integration::GlAbstraction& glAbstraction)
+void GlesGraphicsController::InitializeGLES(Integration::GlAbstraction& glAbstraction)
 {
   DALI_LOG_RELEASE_INFO("Initializing Graphics Controller Phase 1\n");
 
@@ -222,30 +221,29 @@ void EglGraphicsController::InitializeGLES(Integration::GlAbstraction& glAbstrac
   mUseProgramBinary                              = enableShaderUseProgramBinaryString ? std::atoi(enableShaderUseProgramBinaryString) : true; // change default
 }
 
-void EglGraphicsController::Initialize(Integration::GraphicsSyncAbstraction& syncImplementation,
+void GlesGraphicsController::Initialize(Integration::GraphicsSyncAbstraction& syncImplementation,
                                        Graphics::GraphicsInterface&          graphicsInterface)
 {
   DALI_LOG_RELEASE_INFO("Initializing Graphics Controller Phase 2\n");
-  auto* syncImplPtr = static_cast<Internal::Adaptor::EglSyncImplementation*>(&syncImplementation);
 
-  DALI_ASSERT_ALWAYS(gIsShuttingDown && "Don't initialize Phase 2 EglGraphicsController twice");
+  DALI_ASSERT_ALWAYS(gIsShuttingDown && "Don't initialize Phase 2 GlesGraphicsController twice");
   gIsShuttingDown = false;
 
-  mEglSyncImplementation = syncImplPtr;
+  mSyncImplementation = &syncImplementation;
   mGraphics              = &graphicsInterface;
 }
 
-void EglGraphicsController::FrameStart()
+void GlesGraphicsController::FrameStart()
 {
   mCapacity = 0; // Reset the command buffer capacity at the start of the frame.
 }
 
-void EglGraphicsController::SetResourceBindingHints(const std::vector<SceneResourceBinding>& resourceBindings)
+void GlesGraphicsController::SetResourceBindingHints(const std::vector<SceneResourceBinding>& resourceBindings)
 {
   // Do nothing.
 }
 
-void EglGraphicsController::SubmitCommandBuffers(const SubmitInfo& submitInfo)
+void GlesGraphicsController::SubmitCommandBuffers(const SubmitInfo& submitInfo)
 {
   for(auto& cmdbuf : submitInfo.cmdBuffer)
   {
@@ -264,14 +262,14 @@ void EglGraphicsController::SubmitCommandBuffers(const SubmitInfo& submitInfo)
   }
 }
 
-void EglGraphicsController::WaitIdle()
+void GlesGraphicsController::WaitIdle()
 {
   Flush();
 }
 
-void EglGraphicsController::Shutdown()
+void GlesGraphicsController::Shutdown()
 {
-  DALI_ASSERT_ALWAYS(!gIsShuttingDown && "Don't call EglGraphicsController::Shutdown twice");
+  DALI_ASSERT_ALWAYS(!gIsShuttingDown && "Don't call GlesGraphicsController::Shutdown twice");
   gIsShuttingDown = true;
 
   // Final flush
@@ -294,7 +292,7 @@ void EglGraphicsController::Shutdown()
   }
 }
 
-void EglGraphicsController::PresentRenderTarget(RenderTarget* renderTarget)
+void GlesGraphicsController::PresentRenderTarget(RenderTarget* renderTarget)
 {
   GLES::CommandBuffer* presentCommandBuffer{nullptr};
   if(mPresentationCommandBuffers.empty())
@@ -317,7 +315,7 @@ void EglGraphicsController::PresentRenderTarget(RenderTarget* renderTarget)
   SubmitCommandBuffers(submitInfo);
 }
 
-void EglGraphicsController::ResolvePresentRenderTarget(GLES::RenderTarget* renderTarget)
+void GlesGraphicsController::ResolvePresentRenderTarget(GLES::RenderTarget* renderTarget)
 {
   if(DALI_LIKELY(renderTarget) && renderTarget->GetCreateInfo().surface)
   {
@@ -353,7 +351,7 @@ void EglGraphicsController::ResolvePresentRenderTarget(GLES::RenderTarget* rende
   }
 }
 
-void EglGraphicsController::PostRender()
+void GlesGraphicsController::PostRender()
 {
   mTextureDependencyChecker.Reset();
   mSyncPool.AgeSyncObjects();
@@ -363,55 +361,55 @@ void EglGraphicsController::PostRender()
   mSyncPool.ProcessDiscardSyncObjects(mCurrentContext);
 }
 
-Integration::GlAbstraction& EglGraphicsController::GetGlAbstraction()
+Integration::GlAbstraction& GlesGraphicsController::GetGlAbstraction()
 {
   DALI_ASSERT_DEBUG(mGlAbstraction && "Graphics controller not initialized");
   return *mGlAbstraction;
 }
 
-Integration::GraphicsConfig& EglGraphicsController::GetGraphicsConfig()
+Integration::GraphicsConfig& GlesGraphicsController::GetGraphicsConfig()
 {
   DALI_ASSERT_DEBUG(mGlAbstraction && "Graphics controller not initialized");
   return *mGlAbstraction;
 }
 
-Internal::Adaptor::EglSyncImplementation& EglGraphicsController::GetEglSyncImplementation()
+Integration::GraphicsSyncAbstraction& GlesGraphicsController::GetSyncImplementation()
 {
-  DALI_ASSERT_DEBUG(mEglSyncImplementation && "Sync implementation not initialized");
-  return *mEglSyncImplementation;
+  DALI_ASSERT_DEBUG(mSyncImplementation && "Sync implementation not initialized");
+  return *mSyncImplementation;
 }
 
-Graphics::UniquePtr<CommandBuffer> EglGraphicsController::CreateCommandBuffer(
+Graphics::UniquePtr<CommandBuffer> GlesGraphicsController::CreateCommandBuffer(
   const CommandBufferCreateInfo&       commandBufferCreateInfo,
   Graphics::UniquePtr<CommandBuffer>&& oldCommandBuffer)
 {
   return NewObject<GLES::CommandBuffer>(commandBufferCreateInfo, *this, std::move(oldCommandBuffer));
 }
 
-Graphics::UniquePtr<RenderPass> EglGraphicsController::CreateRenderPass(const RenderPassCreateInfo& renderPassCreateInfo, Graphics::UniquePtr<RenderPass>&& oldRenderPass)
+Graphics::UniquePtr<RenderPass> GlesGraphicsController::CreateRenderPass(const RenderPassCreateInfo& renderPassCreateInfo, Graphics::UniquePtr<RenderPass>&& oldRenderPass)
 {
   return NewObject<GLES::RenderPass>(renderPassCreateInfo, *this, std::move(oldRenderPass));
 }
 
 Graphics::UniquePtr<Texture>
-EglGraphicsController::CreateTexture(const TextureCreateInfo& textureCreateInfo, Graphics::UniquePtr<Texture>&& oldTexture)
+GlesGraphicsController::CreateTexture(const TextureCreateInfo& textureCreateInfo, Graphics::UniquePtr<Texture>&& oldTexture)
 {
   return NewObject<GLES::Texture>(textureCreateInfo, *this, std::move(oldTexture));
 }
 
-Graphics::UniquePtr<Buffer> EglGraphicsController::CreateBuffer(
+Graphics::UniquePtr<Buffer> GlesGraphicsController::CreateBuffer(
   const BufferCreateInfo& bufferCreateInfo, Graphics::UniquePtr<Buffer>&& oldBuffer)
 {
   return NewObject<GLES::Buffer>(bufferCreateInfo, *this, std::move(oldBuffer));
 }
 
-Graphics::UniquePtr<Framebuffer> EglGraphicsController::CreateFramebuffer(
+Graphics::UniquePtr<Framebuffer> GlesGraphicsController::CreateFramebuffer(
   const FramebufferCreateInfo& framebufferCreateInfo, Graphics::UniquePtr<Framebuffer>&& oldFramebuffer)
 {
   return NewObject<GLES::Framebuffer>(framebufferCreateInfo, *this, std::move(oldFramebuffer));
 }
 
-void EglGraphicsController::UpdateFramebufferRenderbufferUsage(Framebuffer& framebuffer, const DepthStencilState& depthStencilState)
+void GlesGraphicsController::UpdateFramebufferRenderbufferUsage(Framebuffer& framebuffer, const DepthStencilState& depthStencilState)
 {
   // Cast to GLES::Framebuffer and update
   auto* glesFramebuffer = static_cast<GLES::Framebuffer*>(&framebuffer);
@@ -421,7 +419,7 @@ void EglGraphicsController::UpdateFramebufferRenderbufferUsage(Framebuffer& fram
   }
 }
 
-Graphics::UniquePtr<Pipeline> EglGraphicsController::CreatePipeline(
+Graphics::UniquePtr<Pipeline> GlesGraphicsController::CreatePipeline(
   const PipelineCreateInfo& pipelineCreateInfo, Graphics::UniquePtr<Graphics::Pipeline>&& oldPipeline)
 {
   // Create pipeline cache if needed
@@ -433,7 +431,7 @@ Graphics::UniquePtr<Pipeline> EglGraphicsController::CreatePipeline(
   return mPipelineCache->GetPipeline(pipelineCreateInfo, std::move(oldPipeline));
 }
 
-Graphics::UniquePtr<Program> EglGraphicsController::CreateProgram(
+Graphics::UniquePtr<Program> GlesGraphicsController::CreateProgram(
   const ProgramCreateInfo& programCreateInfo, UniquePtr<Program>&& oldProgram)
 {
   // Create pipeline cache if needed
@@ -445,7 +443,7 @@ Graphics::UniquePtr<Program> EglGraphicsController::CreateProgram(
   return mPipelineCache->GetProgram(programCreateInfo, std::move(oldProgram));
 }
 
-Graphics::UniquePtr<Shader> EglGraphicsController::CreateShader(const ShaderCreateInfo& shaderCreateInfo, Graphics::UniquePtr<Shader>&& oldShader)
+Graphics::UniquePtr<Shader> GlesGraphicsController::CreateShader(const ShaderCreateInfo& shaderCreateInfo, Graphics::UniquePtr<Shader>&& oldShader)
 {
   // Create pipeline cache if needed
   if(!mPipelineCache)
@@ -455,17 +453,17 @@ Graphics::UniquePtr<Shader> EglGraphicsController::CreateShader(const ShaderCrea
   return mPipelineCache->GetShader(shaderCreateInfo, std::move(oldShader));
 }
 
-Graphics::UniquePtr<Sampler> EglGraphicsController::CreateSampler(const SamplerCreateInfo& samplerCreateInfo, Graphics::UniquePtr<Sampler>&& oldSampler)
+Graphics::UniquePtr<Sampler> GlesGraphicsController::CreateSampler(const SamplerCreateInfo& samplerCreateInfo, Graphics::UniquePtr<Sampler>&& oldSampler)
 {
   return NewObject<GLES::Sampler>(samplerCreateInfo, *this, std::move(oldSampler));
 }
 
-Graphics::UniquePtr<RenderTarget> EglGraphicsController::CreateRenderTarget(const RenderTargetCreateInfo& renderTargetCreateInfo, Graphics::UniquePtr<RenderTarget>&& oldRenderTarget)
+Graphics::UniquePtr<RenderTarget> GlesGraphicsController::CreateRenderTarget(const RenderTargetCreateInfo& renderTargetCreateInfo, Graphics::UniquePtr<RenderTarget>&& oldRenderTarget)
 {
   return NewObject<GLES::RenderTarget>(renderTargetCreateInfo, *this, std::move(oldRenderTarget));
 }
 
-Graphics::UniquePtr<SyncObject> EglGraphicsController::CreateSyncObject(const SyncObjectCreateInfo& syncObjectCreateInfo,
+Graphics::UniquePtr<SyncObject> GlesGraphicsController::CreateSyncObject(const SyncObjectCreateInfo& syncObjectCreateInfo,
                                                                         UniquePtr<SyncObject>&&     oldSyncObject)
 {
   if(GetGLESVersion() < GLES::GLESVersion::GLES_30)
@@ -478,7 +476,7 @@ Graphics::UniquePtr<SyncObject> EglGraphicsController::CreateSyncObject(const Sy
   }
 }
 
-MemoryRequirements EglGraphicsController::GetBufferMemoryRequirements(Buffer& buffer) const
+MemoryRequirements GlesGraphicsController::GetBufferMemoryRequirements(Buffer& buffer) const
 {
   MemoryRequirements requirements{};
 
@@ -492,7 +490,7 @@ MemoryRequirements EglGraphicsController::GetBufferMemoryRequirements(Buffer& bu
   return requirements;
 }
 
-TextureProperties EglGraphicsController::GetTextureProperties(const Texture& texture)
+TextureProperties GlesGraphicsController::GetTextureProperties(const Texture& texture)
 {
   const GLES::Texture* glesTexture = static_cast<const GLES::Texture*>(&texture);
   const auto&          createInfo  = glesTexture->GetCreateInfo();
@@ -507,113 +505,30 @@ TextureProperties EglGraphicsController::GetTextureProperties(const Texture& tex
   return properties;
 }
 
-const Graphics::Reflection& EglGraphicsController::GetProgramReflection(const Graphics::Program& program)
+const Graphics::Reflection& GlesGraphicsController::GetProgramReflection(const Graphics::Program& program)
 {
   return static_cast<const Graphics::GLES::Program*>(&program)->GetReflection();
 }
 
-void EglGraphicsController::CreateSurfaceContext(Dali::Integration::RenderSurfaceInterface* surface)
-{
-  std::unique_ptr<GLES::Context> context = std::make_unique<GLES::Context>(*this, mGlAbstraction);
-  mSurfaceContexts.push_back(std::make_pair(surface, std::move(context)));
-}
-
-void EglGraphicsController::DeleteSurfaceContext(Dali::Integration::RenderSurfaceInterface* surface)
-{
-  auto       iter       = mSurfaceContexts.begin();
-  auto       newEndIter = mSurfaceContexts.begin();
-  const auto endIter    = mSurfaceContexts.end();
-  for(; iter != endIter; ++iter)
-  {
-    if(iter->first != surface)
-    {
-      if(newEndIter != iter)
-      {
-        *newEndIter = std::move(*iter);
-      }
-      newEndIter++;
-      continue;
-    }
-    else
-    {
-      const auto* invalidatedContext = iter->second.get();
-
-      // Mark as given context will be deleted soon.
-      // It will make sync object id that created by given context
-      // become invalidated.
-      mSyncPool.InvalidateContext(invalidatedContext);
-
-      // Remove cached info about given context from texture dependency checker.
-      // It will guard several cache-miss issues if new context is created with same pointer as given context.
-      mTextureDependencyChecker.InvalidateContext(invalidatedContext);
-    }
-  }
-
-  mSurfaceContexts.erase(newEndIter, endIter);
-}
-
-void EglGraphicsController::ActivateResourceContext()
-{
-  mCurrentContext = mContext.get();
-  mCurrentContext->GlContextCreated();
-  if(!mSharedContext)
-  {
-    auto eglGraphics = dynamic_cast<Dali::Internal::Adaptor::EglGraphics*>(mGraphics);
-    if(eglGraphics)
-    {
-      mSharedContext = eglGraphics->GetEglImplementation().GetContext();
-    }
-  }
-}
-
-void EglGraphicsController::ActivateSurfaceContext(Dali::Integration::RenderSurfaceInterface* surface)
-{
-  if(surface && mGraphics->IsResourceContextSupported())
-  {
-    auto* context = GetSurfaceContext(surface);
-
-    if(context)
-    {
-      mCurrentContext = context;
-      mCurrentContext->GlContextCreated();
-    }
-  }
-}
-
-GLES::Context* EglGraphicsController::GetSurfaceContext(Dali::Integration::RenderSurfaceInterface* surface) const
-{
-  if(DALI_LIKELY(surface))
-  {
-    auto iter = std::find_if(mSurfaceContexts.begin(), mSurfaceContexts.end(), [surface](const SurfaceContextPair& iter)
-    { return (iter.first == surface); });
-
-    if(iter != mSurfaceContexts.end())
-    {
-      return iter->second.get();
-    }
-  }
-  return nullptr;
-}
-
-void EglGraphicsController::AddTexture(GLES::Texture& texture)
+void GlesGraphicsController::AddTexture(GLES::Texture& texture)
 {
   // Assuming we are on the correct context
   mCreateTextureQueue.push(&texture);
 }
 
-void EglGraphicsController::AddBuffer(GLES::Buffer& buffer)
+void GlesGraphicsController::AddBuffer(GLES::Buffer& buffer)
 {
   // Assuming we are on the correct context
   mCreateBufferQueue.push(&buffer);
 }
 
-void EglGraphicsController::AddFramebuffer(GLES::Framebuffer& framebuffer)
+void GlesGraphicsController::AddFramebuffer(GLES::Framebuffer& framebuffer)
 {
   // Assuming we are on the correct context
   mCreateFramebufferQueue.push(&framebuffer);
 }
 
-void EglGraphicsController::ProcessDiscardQueues()
+void GlesGraphicsController::ProcessDiscardQueues()
 {
   DALI_TRACE_SCOPE(gTraceFilter, "DALI_EGL_CONTROLLER_DISCARD_QUEUE");
 
@@ -664,7 +579,7 @@ void EglGraphicsController::ProcessDiscardQueues()
   ProcessDiscardQueue<GLES::CommandBuffer>(mDiscardCommandBufferQueue);
 }
 
-void EglGraphicsController::ProcessCreateQueues()
+void GlesGraphicsController::ProcessCreateQueues()
 {
   DALI_TRACE_SCOPE(gTraceFilter, "DALI_EGL_CONTROLLER_CREATE_QUEUE");
   // Process textures
@@ -677,7 +592,7 @@ void EglGraphicsController::ProcessCreateQueues()
   ProcessCreateQueue(mCreateFramebufferQueue);
 }
 
-void EglGraphicsController::ProcessCommandBuffer(const GLES::CommandBuffer& commandBuffer)
+void GlesGraphicsController::ProcessCommandBuffer(const GLES::CommandBuffer& commandBuffer)
 {
   auto       count    = 0u;
   const auto commands = commandBuffer.GetCommands(count);
@@ -932,7 +847,7 @@ void EglGraphicsController::ProcessCommandBuffer(const GLES::CommandBuffer& comm
   DALI_TRACE_END(gTraceFilter, "DALI_EGL_CONTROLLER_PROCESS");
 }
 
-void EglGraphicsController::ProcessCommandQueues()
+void GlesGraphicsController::ProcessCommandQueues()
 {
   DUMP_FRAME_START();
 
@@ -948,7 +863,7 @@ void EglGraphicsController::ProcessCommandQueues()
   DUMP_FRAME_END();
 }
 
-void EglGraphicsController::ProcessTextureUpdateQueue()
+void GlesGraphicsController::ProcessTextureUpdateQueue()
 {
   if(mTextureUpdateRequests.empty())
   {
@@ -1115,7 +1030,7 @@ void EglGraphicsController::ProcessTextureUpdateQueue()
   }
 }
 
-void EglGraphicsController::UpdateTextures(const std::vector<TextureUpdateInfo>&       updateInfoList,
+void GlesGraphicsController::UpdateTextures(const std::vector<TextureUpdateInfo>&       updateInfoList,
                                            const std::vector<TextureUpdateSourceInfo>& sourceList)
 {
   // Store updates
@@ -1180,7 +1095,7 @@ void EglGraphicsController::UpdateTextures(const std::vector<TextureUpdateInfo>&
   }
 }
 
-void EglGraphicsController::ProcessTextureMipmapGenerationQueue()
+void GlesGraphicsController::ProcessTextureMipmapGenerationQueue()
 {
   if(mTextureMipmapGenerationRequests.empty())
   {
@@ -1203,12 +1118,12 @@ void EglGraphicsController::ProcessTextureMipmapGenerationQueue()
   }
 }
 
-void EglGraphicsController::GenerateTextureMipmaps(const Graphics::Texture& texture)
+void GlesGraphicsController::GenerateTextureMipmaps(const Graphics::Texture& texture)
 {
   mTextureMipmapGenerationRequests.push(static_cast<const GLES::Texture*>(&texture));
 }
 
-Graphics::UniquePtr<Memory> EglGraphicsController::MapBufferRange(const MapBufferInfo& mapInfo)
+Graphics::UniquePtr<Memory> GlesGraphicsController::MapBufferRange(const MapBufferInfo& mapInfo)
 {
   // Mapping buffer requires the object to be created NOW
   // Workaround - flush now, otherwise there will be given a staging buffer
@@ -1229,17 +1144,17 @@ Graphics::UniquePtr<Memory> EglGraphicsController::MapBufferRange(const MapBuffe
   }
 }
 
-bool EglGraphicsController::GetProgramParameter(Graphics::Program& program, uint32_t parameterId, void* outData)
+bool GlesGraphicsController::GetProgramParameter(Graphics::Program& program, uint32_t parameterId, void* outData)
 {
   return static_cast<GLES::Program*>(&program)->GetImplementation()->GetParameter(parameterId, outData);
 }
 
-GLES::PipelineCache& EglGraphicsController::GetPipelineCache() const
+GLES::PipelineCache& GlesGraphicsController::GetPipelineCache() const
 {
   return *mPipelineCache;
 }
 
-Graphics::Texture* EglGraphicsController::CreateTextureByResourceId(uint32_t resourceId, const Graphics::TextureCreateInfo& createInfo)
+Graphics::Texture* GlesGraphicsController::CreateTextureByResourceId(uint32_t resourceId, const Graphics::TextureCreateInfo& createInfo)
 {
   Graphics::Texture*                     ret = nullptr;
   Graphics::UniquePtr<Graphics::Texture> texture;
@@ -1256,7 +1171,7 @@ Graphics::Texture* EglGraphicsController::CreateTextureByResourceId(uint32_t res
   return ret;
 }
 
-void EglGraphicsController::DiscardTextureFromResourceId(uint32_t resourceId)
+void GlesGraphicsController::DiscardTextureFromResourceId(uint32_t resourceId)
 {
   auto iter = mExternalTextureResources.find(resourceId);
   if(iter != mExternalTextureResources.end())
@@ -1265,7 +1180,7 @@ void EglGraphicsController::DiscardTextureFromResourceId(uint32_t resourceId)
   }
 }
 
-Graphics::Texture* EglGraphicsController::GetTextureFromResourceId(uint32_t resourceId)
+Graphics::Texture* GlesGraphicsController::GetTextureFromResourceId(uint32_t resourceId)
 {
   Graphics::Texture* ret = nullptr;
 
@@ -1278,7 +1193,7 @@ Graphics::Texture* EglGraphicsController::GetTextureFromResourceId(uint32_t reso
   return ret;
 }
 
-Graphics::UniquePtr<Graphics::Texture> EglGraphicsController::ReleaseTextureFromResourceId(uint32_t resourceId)
+Graphics::UniquePtr<Graphics::Texture> GlesGraphicsController::ReleaseTextureFromResourceId(uint32_t resourceId)
 {
   Graphics::UniquePtr<Graphics::Texture> texture;
 
@@ -1292,19 +1207,19 @@ Graphics::UniquePtr<Graphics::Texture> EglGraphicsController::ReleaseTextureFrom
   return texture;
 }
 
-const Matrix& EglGraphicsController::GetClipMatrix(const RenderTarget* renderTarget) const
+const Matrix& GlesGraphicsController::GetClipMatrix(const RenderTarget* renderTarget) const
 {
   return Matrix::IDENTITY;
 }
 
-uint32_t EglGraphicsController::GetDeviceLimitation(Dali::Graphics::DeviceCapability capability)
+uint32_t GlesGraphicsController::GetDeviceLimitation(Dali::Graphics::DeviceCapability capability)
 {
   switch(capability)
   {
     case DeviceCapability::MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT:
     {
       GLint i = 0;
-      glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &i);
+      GetGlAbstraction().GetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &i);
       return i;
     }
     case DeviceCapability::SUPPORTED_GRAPHICS_FEATURE_FLAGS:
@@ -1319,12 +1234,12 @@ uint32_t EglGraphicsController::GetDeviceLimitation(Dali::Graphics::DeviceCapabi
   }
 }
 
-bool EglGraphicsController::IsCompatible(const Graphics::RenderTarget& renderTargetA, const Graphics::RenderTarget& renderTargetB, const Graphics::RenderPass& renderPassA, const Graphics::RenderPass& renderPassB)
+bool GlesGraphicsController::IsCompatible(const Graphics::RenderTarget& renderTargetA, const Graphics::RenderTarget& renderTargetB, const Graphics::RenderPass& renderPassA, const Graphics::RenderPass& renderPassB)
 {
   return true;
 }
 
-void EglGraphicsController::UpdateRenderTarget(Graphics::RenderTarget& renderTarget, const Graphics::RenderTargetCreateInfo& renderTargetCreateInfo)
+void GlesGraphicsController::UpdateRenderTarget(Graphics::RenderTarget& renderTarget, const Graphics::RenderTargetCreateInfo& renderTargetCreateInfo)
 {
   auto glesRenderTarget     = static_cast<GLES::RenderTarget*>(&renderTarget);
   auto createInfo           = const_cast<RenderTargetCreateInfo*>(&glesRenderTarget->GetCreateInfo());

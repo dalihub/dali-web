@@ -25,7 +25,7 @@
 
 // Internal headers
 #include <dali/internal/graphics/gles-impl/gles-graphics-texture.h>
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-context.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
@@ -90,7 +90,7 @@ void Framebuffer::SetSharedContext(Context* context)
   gSharedContext = context;
 }
 
-Framebuffer::Framebuffer(const Graphics::FramebufferCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+Framebuffer::Framebuffer(const Graphics::FramebufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : FramebufferResource(createInfo, controller),
   mInitialized(false),
   mDepthBufferUsed(false),
@@ -184,7 +184,7 @@ bool Framebuffer::InitializeResource()
 
 void Framebuffer::DestroyResource()
 {
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     auto* gl = mController.GetGL();
     if(DALI_LIKELY(gl) && mInitialized)

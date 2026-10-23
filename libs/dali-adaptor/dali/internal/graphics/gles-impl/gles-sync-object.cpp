@@ -20,11 +20,11 @@
 // EXTERNAL HEADERS
 
 // INTERNAL HEADERS
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
-SyncObject::SyncObject(const Graphics::SyncObjectCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+SyncObject::SyncObject(const Graphics::SyncObjectCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : SyncObjectResource(createInfo, controller),
   mGlSyncObject(0)
 {
@@ -36,7 +36,7 @@ SyncObject::~SyncObject()
 
 void SyncObject::DestroyResource()
 {
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     auto* gl = mController.GetGL();
     if(DALI_LIKELY(gl))

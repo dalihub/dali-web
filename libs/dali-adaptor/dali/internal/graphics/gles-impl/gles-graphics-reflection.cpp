@@ -21,7 +21,7 @@
 #include <dali/integration-api/gl-abstraction.h>
 #include <dali/integration-api/gl-defines.h>
 
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 
 #include <GLES3/gl3.h>
 #include <GLES3/gl31.h>
@@ -218,7 +218,7 @@ void ParseShaderSamplers(const std::string_view& shaderSource, std::vector<Dali:
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
-Reflection::Reflection(GLES::ProgramImpl& program, Graphics::EglGraphicsController& controller)
+Reflection::Reflection(GLES::ProgramImpl& program, Graphics::GlesGraphicsController& controller)
 : Graphics::Reflection(),
   mController(controller),
   mProgram(program)

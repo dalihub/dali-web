@@ -23,7 +23,7 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 
 namespace GLES
 {
@@ -39,7 +39,7 @@ public:
    * @param[in] createInfo CreateInfo structure for the resource
    * @param[in] controller Reference to the controller
    */
-  Resource(const CreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+  Resource(const CreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
   : mCreateInfo(createInfo),
     mController(controller)
   {
@@ -56,7 +56,7 @@ public:
    * @param[in] controller Reference to the controller
    * @return True on success, False otherwise
    */
-  virtual bool TryRecycle(const CreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+  virtual bool TryRecycle(const CreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
   {
     return false;
   }
@@ -79,7 +79,7 @@ public:
    * @brief Retrieves controller
    * @return Reference to the controller object
    */
-  [[nodiscard]] Graphics::EglGraphicsController& GetController() const
+  [[nodiscard]] Graphics::GlesGraphicsController& GetController() const
   {
     return mController;
   }
@@ -118,7 +118,7 @@ public:
 
 protected:
   CreateInfo                       mCreateInfo; ///< CreateInfo structure
-  Graphics::EglGraphicsController& mController; ///< Reference to the Controller object
+  Graphics::GlesGraphicsController& mController; ///< Reference to the Controller object
 };
 } // namespace GLES
 } //namespace DALI_NAMESPACE::Graphics

@@ -27,7 +27,7 @@
 #include <vector>
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-sampler.h"
 #include "gles-graphics-types.h"
 
@@ -104,7 +104,7 @@ const std::vector<ColorConversion>& GetColorConversionTable()
 /**
  * Constructor
  */
-Texture::Texture(const Graphics::TextureCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+Texture::Texture(const Graphics::TextureCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : TextureResource(createInfo, controller)
 {
   // If there is any data, move it into staging buffer
@@ -320,7 +320,7 @@ bool Texture::InitializeTexture()
 
 void Texture::DestroyResource()
 {
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     auto* gl = mController.GetGL();
     if(DALI_UNLIKELY(!gl))

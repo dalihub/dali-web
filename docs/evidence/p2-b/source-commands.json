@@ -1,0 +1,104 @@
+[
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=GLES",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/sources-002/GLES-baseline.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=GLES",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/sources-002/GLES-current.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=VULKAN",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/sources-002/VULKAN-baseline.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=VULKAN",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/sources-002/VULKAN-current.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=DYNAMIC",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/sources-002/DYNAMIC-baseline.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=DYNAMIC",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/sources-002/DYNAMIC-current.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=VULKAN",
+      "-DDALI_GLES_ENVIRONMENT=WEB",
+      "-DEMSCRIPTEN=ON",
+      "-P",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake"
+    ],
+    "exitCode": 1,
+    "output": "CMake Error at libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake:13 (message):\n  WEB requires ENABLE_GRAPHICS_BACKEND=GLES\n\n\n"
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=DYNAMIC",
+      "-DDALI_GLES_ENVIRONMENT=WEB",
+      "-DEMSCRIPTEN=ON",
+      "-P",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake"
+    ],
+    "exitCode": 1,
+    "output": "CMake Error at libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake:13 (message):\n  WEB requires ENABLE_GRAPHICS_BACKEND=GLES\n\n\n"
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=GLES",
+      "-DDALI_GLES_ENVIRONMENT=WEB",
+      "-DEMSCRIPTEN=OFF",
+      "-P",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake"
+    ],
+    "exitCode": 1,
+    "output": "CMake Error at libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake:16 (message):\n  WEB requires the Emscripten toolchain\n\n\n"
+  },
+  {
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-DENABLE_GRAPHICS_BACKEND=GLES",
+      "-DDALI_GLES_ENVIRONMENT=BAD",
+      "-DEMSCRIPTEN=ON",
+      "-P",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake"
+    ],
+    "exitCode": 1,
+    "output": "CMake Error at libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake:4 (message):\n  Invalid DALI_GLES_ENVIRONMENT: BAD\n\n\n"
+  }
+]

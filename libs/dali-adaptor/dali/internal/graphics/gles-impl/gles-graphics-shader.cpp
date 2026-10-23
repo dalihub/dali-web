@@ -24,7 +24,7 @@
 #include <locale>
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
@@ -57,7 +57,7 @@ static std::string AddLineNumbers(const char* source)
 
 struct ShaderImpl::Impl
 {
-  explicit Impl(Graphics::EglGraphicsController& _controller, const Graphics::ShaderCreateInfo& _createInfo)
+  explicit Impl(Graphics::GlesGraphicsController& _controller, const Graphics::ShaderCreateInfo& _createInfo)
   : controller(_controller)
   {
     createInfo.pipelineStage  = _createInfo.pipelineStage;
@@ -228,7 +228,7 @@ struct ShaderImpl::Impl
     }
   }
 
-  EglGraphicsController& controller;
+  GlesGraphicsController& controller;
   ShaderCreateInfo       createInfo;
   std::vector<uint8_t>   source{};
   std::vector<uint8_t>   sourcePreprocessed{};
@@ -243,14 +243,14 @@ struct ShaderImpl::Impl
   uint32_t glslVersion{0u}; ///< 0 - unknown, otherwise valid #version like 130, 300, etc.
 };
 
-ShaderImpl::ShaderImpl(const Graphics::ShaderCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+ShaderImpl::ShaderImpl(const Graphics::ShaderCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 {
   mImpl = std::make_unique<Impl>(controller, createInfo);
 }
 
 ShaderImpl::~ShaderImpl()
 {
-  if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+  if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
   {
     mImpl->Destroy();
   }
@@ -324,7 +324,7 @@ std::string_view ShaderImpl::GetPreprocessedCode() const
   return {reinterpret_cast<const char*>(mImpl->sourcePreprocessed.data()), mImpl->sourcePreprocessed.size()};
 }
 
-[[nodiscard]] EglGraphicsController& ShaderImpl::GetController() const
+[[nodiscard]] GlesGraphicsController& ShaderImpl::GetController() const
 {
   return mImpl->controller;
 }
@@ -400,7 +400,7 @@ Shader::~Shader()
 {
   if(!mShader->Release())
   {
-    if(DALI_UNLIKELY(EglGraphicsController::IsShuttingDown()))
+    if(DALI_UNLIKELY(GlesGraphicsController::IsShuttingDown()))
     {
       return; // Early out if shutting down
     }

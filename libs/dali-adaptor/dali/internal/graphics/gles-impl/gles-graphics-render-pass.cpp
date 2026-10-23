@@ -19,7 +19,7 @@
 #include "gles-graphics-render-pass.h"
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
@@ -31,7 +31,7 @@ struct RenderPass::Impl
   std::vector<AttachmentDescription> attachments{};
 };
 
-RenderPass::RenderPass(const Graphics::RenderPassCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+RenderPass::RenderPass(const Graphics::RenderPassCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : RenderPassResource(createInfo, controller)
 {
   mImpl = std::make_unique<Impl>();

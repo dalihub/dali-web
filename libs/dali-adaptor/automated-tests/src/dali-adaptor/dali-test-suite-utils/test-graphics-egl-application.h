@@ -24,7 +24,7 @@
 #include <dali/integration-api/trace.h>
 
 #include <dali/internal/graphics/common/graphics-interface.h>
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <dali/public-api/common/dali-common.h>
 
 #include <test-gl-abstraction.h>
@@ -414,7 +414,7 @@ private:
 protected:
   TestPlatformAbstraction                     mPlatformAbstraction;
   TestRenderController                        mRenderController;
-  Graphics::EglGraphicsController             mGraphicsController; // Use real controller in Adaptor
+  Graphics::GlesGraphicsController             mGraphicsController; // Use real controller in Adaptor
   TestGlAbstraction                           mGlAbstraction;
   TestGraphicsSyncImplementation              mGraphicsSyncImplementation;
   TestGraphicsImpl                            mGraphics;

@@ -24,7 +24,7 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 namespace GLES
 {
 class Pipeline;
@@ -39,7 +39,7 @@ class TextureDependencyChecker;
 class Context
 {
 public:
-  explicit Context(EglGraphicsController& controller, Integration::GlAbstraction* glAbstraction);
+  explicit Context(GlesGraphicsController& controller, Integration::GlAbstraction* glAbstraction);
 
   ~Context();
 

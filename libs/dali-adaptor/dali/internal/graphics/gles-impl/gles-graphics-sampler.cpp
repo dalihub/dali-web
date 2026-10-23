@@ -19,11 +19,11 @@
 #include "gles-graphics-sampler.h"
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
-Sampler::Sampler(const Graphics::SamplerCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+Sampler::Sampler(const Graphics::SamplerCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : SamplerResource(createInfo, controller)
 {
 }

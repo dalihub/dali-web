@@ -37,7 +37,7 @@ public:
    * @param[in] createInfo Valid createInfo structure
    * @param[in] controller Reference to the controller
    */
-  RenderPass(const Graphics::RenderPassCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  RenderPass(const Graphics::RenderPassCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

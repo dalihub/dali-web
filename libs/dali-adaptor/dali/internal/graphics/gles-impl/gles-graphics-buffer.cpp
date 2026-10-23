@@ -23,11 +23,11 @@
 #include <dali/integration-api/gl-defines.h>
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 
 namespace DALI_NAMESPACE::Graphics::GLES
 {
-Buffer::Buffer(const Graphics::BufferCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+Buffer::Buffer(const Graphics::BufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 : BufferResource(createInfo, controller),
   mCpuAllocated(false),
   mTransient(false)
@@ -63,9 +63,9 @@ Buffer::Buffer(const Graphics::BufferCreateInfo& createInfo, Graphics::EglGraphi
   controller.AddBuffer(*this);
 }
 
-bool Buffer::TryRecycle(const Graphics::BufferCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+bool Buffer::TryRecycle(const Graphics::BufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 {
-  if(DALI_UNLIKELY(EglGraphicsController::IsShuttingDown()))
+  if(DALI_UNLIKELY(GlesGraphicsController::IsShuttingDown()))
   {
     // Cannot recycle buffer if shutting down.
     return false;
@@ -153,7 +153,7 @@ void Buffer::InitializeCPUBuffer()
 
 void Buffer::InitializeGPUBuffer()
 {
-  if(DALI_UNLIKELY(EglGraphicsController::IsShuttingDown()))
+  if(DALI_UNLIKELY(GlesGraphicsController::IsShuttingDown()))
   {
     return;
   }
@@ -193,7 +193,7 @@ void Buffer::DestroyResource()
   // Deestroy GPU allocation
   else
   {
-    if(DALI_LIKELY(!EglGraphicsController::IsShuttingDown()))
+    if(DALI_LIKELY(!GlesGraphicsController::IsShuttingDown()))
     {
       auto* gl = mController.GetGL();
       if(DALI_LIKELY(gl))

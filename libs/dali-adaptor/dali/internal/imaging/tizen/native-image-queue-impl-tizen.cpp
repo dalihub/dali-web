@@ -114,7 +114,7 @@ NativeImageQueueTizen::NativeImageQueueTizen(uint32_t queueCount, uint32_t width
   auto graphics = &(Adaptor::GetImplementation(Adaptor::Get()).GetGraphicsInterface());
   mEglGraphics  = static_cast<EglGraphics*>(graphics);
 
-  auto controller = static_cast<Graphics::EglGraphicsController*>(&mEglGraphics->GetController());
+  auto controller = static_cast<Graphics::GlesGraphicsController*>(&mEglGraphics->GetController());
   mSyncPool       = &controller->GetSyncPool();
 
   mTbmQueue = GetSurfaceFromAny(nativeImageQueue);

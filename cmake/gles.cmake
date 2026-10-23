@@ -1,0 +1,7 @@
+include("${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake")
+set(dali_gles_graphics_dir "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics")
+if(DALI_GLES_ENVIRONMENT STREQUAL "WEB")
+  set(dali_gles_context_source "${dali_gles_graphics_dir}/web/web-gles-context.cpp" "${dali_gles_graphics_dir}/web/web-gles-rendering.cpp")
+else()
+  set(dali_gles_context_source "${dali_gles_graphics_dir}/gles/native-gles-context.cpp" "${dali_gles_graphics_dir}/gles/native-gles-rendering.cpp")
+endif()

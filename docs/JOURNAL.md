@@ -80,3 +80,16 @@
 - 원본/P0 Git·사용자 파일·P0/R2/P1 로그·증거·lock·기존 Core 산출물 전후 검사, 생산 diff 없음. SDK 재사용·빌드 최대 -j6. 산출물/전체 로그 ignored, 공개 증거는 작은 정규화 사본만 포함.
 - runtime·브라우저·실제 픽셀·Worker/OffscreenCanvas·Pages·native 회귀 미검증. 배포·서버 구축 없음. 실행한 빌드 종료, 남긴 서버/브라우저 없음.
 - P2-b 진행 근거 확보. 합의한 범위 내 진단 종료 후 STATE/PLAN/HANDOFF/다음 프롬프트 갱신, 이번에는 P2-b 구현 전 멈춤.
+
+## 016 P2-b source/context 중간 구현과 검증
+
+2026-10-23 (Asia/Seoul). **P2-b 진행 중·상위 P2 미완료.** 요청된 전체 P2-b 중 source/context 단위의 중간 인수인계다.
+
+- 시작 clean main HEAD/원격 `a68e3f00f0c7752561137c179500b004b930285e`. sandbox 원격 조회 DNS 실패 후 읽기 전용 호스트 조회로 일치 확인. upstream/toolchain lock 불변.
+- GlesGraphicsController rename 및 모든 production/test/probe 참조 갱신. alias/중복 Controller 없음. 공통 초기화는 기존 GraphicsSyncAbstraction 보관, context/RTTI는 native 파일로 이동. Core 공통 public 계약 변경 없음.
+- native 기본 source 선택과 WEB 조합 검증 추가. 미완성 production WEB closure는 configure 거부, cmake/p2-b만 context 경계 진단. Web은 단일 cache/identity 경계만 구현하고 실제 host는 아직 없음.
+- 특이 사항: 공통 Context에도 EGL context API 8개 존재. NativeRendering 내부 파일 경계로 생성·복원·삭제 이동, Web의 해당 EGL 요청 명시 거부. 별도 native rendering context 수명 회귀는 미검증.
+- 최종 context-web-003: 새 pthread Core 333단계 및 32개 compile/nm 각각 exit 0. strict 기본/FULL_ES3 각각 exit 1, 미해결 13/9개, map 없음. 이전 001 전이 include 실패와 002 결과도 보존. mock/빈 GL·EGL·sync/undefined 억제 없음.
+- GLES/VULKAN/DYNAMIC source 보존 및 잘못된 조합 거부 검사 통과. native configure는 C/C++ compiler 부재로 각각 exit 1. native context/rendering/egl-graphics는 Emscripten 교차 compile/nm 각각 exit 0이며 host-native build/runtime 성공으로 해석하지 않음.
+- 원본/P0 Git 상태 및 과거 보존 스냅샷 일치, 추가 보존 대상 1,370개 hash 불변. 전체 입력 hash와 최종 compile 입력 일치. SDK·산출물·큰 로그 commit 제외, 최대 -j6. 원격 push·upstream 갱신·서버·브라우저·Pages 배포 없음.
+- [중간 결과](P2-b-RESULTS.md)·[증거](evidence/p2-b/README.md), STATE/PLAN/HANDOFF/NEXT-CONTEXT 갱신. 다음은 sync 분리 → 웹 메모리 → wrapper/capability → cache → 실제 host/strict 링크. native runtime·P3 픽셀·D3/D4 초기 probe·P3/P4 격리 게이트 유지.

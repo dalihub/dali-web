@@ -44,7 +44,7 @@ public:
    * @param[in] createInfo Valid createInfo structure
    * @param[in] controller Reference to the controller
    */
-  Framebuffer(const Graphics::FramebufferCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  Framebuffer(const Graphics::FramebufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

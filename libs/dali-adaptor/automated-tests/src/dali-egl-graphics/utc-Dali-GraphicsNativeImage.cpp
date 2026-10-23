@@ -17,7 +17,7 @@
 #include <dali-test-suite-utils.h>
 #include <dali/dali.h>
 
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <test-actor-utils.h>
 #include <test-graphics-egl-application.h>
 #include <test-native-image.h>

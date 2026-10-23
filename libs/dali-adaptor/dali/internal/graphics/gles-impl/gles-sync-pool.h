@@ -32,7 +32,7 @@ class EglSyncObject;
 
 namespace Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 
 namespace GLES
 {
@@ -75,7 +75,7 @@ public:
      * @param[in] useNativeFenceFd If true, use native fence FD for synchronization.
      *                              If false, use EGL sync object for synchronization.
      */
-    SharedSyncObject(Graphics::EglGraphicsController& controller, const Context* context, uint32_t frameCount, bool useNativeFenceFd);
+    SharedSyncObject(Graphics::GlesGraphicsController& controller, const Context* context, uint32_t frameCount, bool useNativeFenceFd);
 
     /**
      * Destructor
@@ -136,7 +136,7 @@ public:
   };
 
 public:
-  explicit SyncPool(Graphics::EglGraphicsController& graphicsController)
+  explicit SyncPool(Graphics::GlesGraphicsController& graphicsController)
   : mController(graphicsController)
   {
   }
@@ -212,7 +212,7 @@ public: /// Contexts relative API
 private:
   struct AgingSyncObject
   {
-    AgingSyncObject(Graphics::EglGraphicsController& controller, const Context* writeContext, bool _egl);
+    AgingSyncObject(Graphics::GlesGraphicsController& controller, const Context* writeContext, bool _egl);
     ~AgingSyncObject();
 
     void Wait();
@@ -220,7 +220,7 @@ private:
 
     uint8_t Age();
 
-    EglGraphicsController& controller;
+    GlesGraphicsController& controller;
     const Context*         writeContext;
 
     union
@@ -259,7 +259,7 @@ private:
   using SharedSyncObjectContainer = std::vector<std::shared_ptr<SharedSyncObject>>;
   SharedSyncObjectContainer mSharedSyncObjects;
 
-  EglGraphicsController& mController;
+  GlesGraphicsController& mController;
 
   SyncObjectId mSyncObjectId{INVALID_SYNC_OBJECT_ID};
   uint32_t     mFrameCount{0u};

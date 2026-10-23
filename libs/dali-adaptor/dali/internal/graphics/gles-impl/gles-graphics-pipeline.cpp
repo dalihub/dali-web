@@ -23,7 +23,7 @@
 #include <memory>
 
 // INTERNAL INCLUDES
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-pipeline-cache.h"
 #include "gles-graphics-program.h"
 
@@ -52,7 +52,7 @@ struct PipelineImpl::PipelineState
   PipelineCache* pipelineCache{};
 };
 
-PipelineImpl::PipelineImpl(const Graphics::PipelineCreateInfo& createInfo, Graphics::EglGraphicsController& controller, PipelineCache& pipelineCache)
+PipelineImpl::PipelineImpl(const Graphics::PipelineCreateInfo& createInfo, Graphics::GlesGraphicsController& controller, PipelineCache& pipelineCache)
 : mController(controller)
 {
   // the creation is deferred so it's needed to copy certain parts of the CreateInfo structure
@@ -91,7 +91,7 @@ auto& PipelineImpl::GetController() const
 
 void PipelineImpl::Bind(const uint32_t glProgram) const
 {
-  if(DALI_UNLIKELY(EglGraphicsController::IsShuttingDown()))
+  if(DALI_UNLIKELY(GlesGraphicsController::IsShuttingDown()))
   {
     return; // Early out if shutting down
   }
@@ -127,7 +127,7 @@ const PipelineCreateInfo& Pipeline::GetCreateInfo() const
   return mPipeline.GetCreateInfo();
 }
 
-EglGraphicsController& Pipeline::GetController() const
+GlesGraphicsController& Pipeline::GetController() const
 {
   return mPipeline.GetController();
 }

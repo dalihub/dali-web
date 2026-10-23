@@ -46,7 +46,7 @@ public:
    * @param[in] createInfo Valid createInfo structure
    * @param[in] controller Reference to the controller
    */
-  SyncObject(const Graphics::SyncObjectCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  SyncObject(const Graphics::SyncObjectCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

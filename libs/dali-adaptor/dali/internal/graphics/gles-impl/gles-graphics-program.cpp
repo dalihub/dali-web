@@ -34,7 +34,7 @@
 #include <dali/internal/graphics/common/shader-parser.h>
 #include <dali/internal/system/common/system-error-print.h>
 #include <dali/public-api/dali-adaptor-version.h>
-#include "egl-graphics-controller.h"
+#include "gles-graphics-controller.h"
 #include "gles-graphics-reflection.h"
 #include "gles-graphics-shader.h"
 
@@ -111,7 +111,7 @@ struct UniformSetter
 
 struct ProgramImpl::Impl
 {
-  explicit Impl(EglGraphicsController& _controller, const ProgramCreateInfo& info)
+  explicit Impl(GlesGraphicsController& _controller, const ProgramCreateInfo& info)
   : controller(_controller)
   {
     createInfo = info;
@@ -130,7 +130,7 @@ struct ProgramImpl::Impl
     delete createInfo.shaderState;
   }
 
-  EglGraphicsController& controller;
+  GlesGraphicsController& controller;
   ProgramCreateInfo      createInfo;
   std::string            name;
   uint32_t               glProgram{};
@@ -145,7 +145,7 @@ struct ProgramImpl::Impl
   std::vector<UniformSetter> uniformSetters;
 };
 
-ProgramImpl::ProgramImpl(const Graphics::ProgramCreateInfo& createInfo, Graphics::EglGraphicsController& controller)
+ProgramImpl::ProgramImpl(const Graphics::ProgramCreateInfo& createInfo, Graphics::GlesGraphicsController& controller)
 {
   // Create implementation
   mImpl = std::make_unique<Impl>(controller, createInfo);
@@ -158,7 +158,7 @@ ProgramImpl::~ProgramImpl() = default;
 
 bool ProgramImpl::Destroy()
 {
-  if(DALI_UNLIKELY(EglGraphicsController::IsShuttingDown()))
+  if(DALI_UNLIKELY(GlesGraphicsController::IsShuttingDown()))
   {
     return false; // Early out if shutting down
   }
@@ -425,7 +425,7 @@ bool ProgramImpl::GetParameter(uint32_t parameterId, void* out)
   return false;
 }
 
-EglGraphicsController& ProgramImpl::GetController() const
+GlesGraphicsController& ProgramImpl::GetController() const
 {
   return mImpl->controller;
 }
@@ -441,7 +441,7 @@ void ProgramImpl::UpdateStandaloneUniformBlock(const char* ptr)
 
   const auto& extraInfos = reflection.GetStandaloneUniformExtraInfo();
 
-  if(DALI_UNLIKELY(EglGraphicsController::IsShuttingDown()))
+  if(DALI_UNLIKELY(GlesGraphicsController::IsShuttingDown()))
   {
     return; // Early out if shutting down
   }
@@ -809,7 +809,7 @@ const GLES::Reflection& Program::GetReflection() const
   return mProgram->GetReflection();
 }
 
-EglGraphicsController& Program::GetController() const
+GlesGraphicsController& Program::GetController() const
 {
   return GetImplementation()->GetController();
 }

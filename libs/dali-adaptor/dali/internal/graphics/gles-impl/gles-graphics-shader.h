@@ -36,7 +36,7 @@ public:
    * @param[in] createInfo Valid createInfo structure
    * @param[in] controller Reference to the controller
    */
-  ShaderImpl(const Graphics::ShaderCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  ShaderImpl(const Graphics::ShaderCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief destructor
@@ -103,7 +103,7 @@ public:
    * @brief Returns reference to the graphics controller
    * @return Valid reference to the graphics controller
    */
-  [[nodiscard]] EglGraphicsController& GetController() const;
+  [[nodiscard]] GlesGraphicsController& GetController() const;
 
   /**
    * Strips legacy prefix fromt he GLSL source code if necessary

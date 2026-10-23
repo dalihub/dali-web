@@ -37,7 +37,7 @@ public:
    * @param[in] createInfo Valid createInfo structure
    * @param[in] controller Reference to the controller
    */
-  Sampler(const Graphics::SamplerCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  Sampler(const Graphics::SamplerCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor

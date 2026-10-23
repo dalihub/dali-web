@@ -16,7 +16,7 @@
 
 #include <dali/devel-api/adaptor-framework/environment-variable.h>
 #include <dali/integration-api/locale-numeric-guard.h>
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller-debug.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller-debug.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-render-target.h>
 
 #include <unistd.h>

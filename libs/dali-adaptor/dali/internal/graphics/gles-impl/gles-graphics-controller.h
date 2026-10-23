@@ -1,5 +1,5 @@
-#ifndef DALI_EGL_GRAPHICS_CONTROLLER_H
-#define DALI_EGL_GRAPHICS_CONTROLLER_H
+#ifndef DALI_GLES_GRAPHICS_CONTROLLER_H
+#define DALI_GLES_GRAPHICS_CONTROLLER_H
 
 /*
  * Copyright (c) 2026 Samsung Electronics Co., Ltd.
@@ -62,11 +62,11 @@ class TextureDependencyChecker;
 } // namespace GLES
 
 /**
- * EGL Implementation of the graphics controller.
+ * Common GLES graphics controller with build-selected context handling.
  *
  * Temporarily holds the old GL abstractions whilst dali-core is migrated to the new API.
  */
-class EglGraphicsController : public Graphics::Controller
+class GlesGraphicsController : public Graphics::Controller
 {
 public:
   /**
@@ -77,12 +77,12 @@ public:
   /**
    * @brief Constructor
    */
-  EglGraphicsController();
+  GlesGraphicsController();
 
   /**
    * @brief Destructor
    */
-  ~EglGraphicsController() override;
+  ~GlesGraphicsController() override;
 
   /**
    * Initialize the GLES abstraction. This can be called from the main thread.
@@ -107,7 +107,7 @@ public:
    */
   Integration::GraphicsConfig& GetGraphicsConfig() override;
 
-  Internal::Adaptor::EglSyncImplementation& GetEglSyncImplementation();
+  Integration::GraphicsSyncAbstraction& GetSyncImplementation();
 
   /**
    * Mark the start of the frame.
@@ -119,7 +119,7 @@ public:
   /**
    * @brief Reset the DidPresent flag to false at the start of each frame.
    * It will be set to true when the render target is presented.
-   * More detail, EglGraphicsController::ResolvePresentRenderTarget() and RenderSurfaceInterface::PostRender().
+   * More detail, GlesGraphicsController::ResolvePresentRenderTarget() and RenderSurfaceInterface::PostRender().
    */
   void ResetDidPresent()
   {
@@ -944,7 +944,7 @@ private:
 private:
   Integration::GlAbstraction* mGlAbstraction{nullptr};
 
-  Internal::Adaptor::EglSyncImplementation* mEglSyncImplementation{nullptr};
+  Integration::GraphicsSyncAbstraction* mSyncImplementation{nullptr};
   Graphics::GraphicsInterface*              mGraphics{nullptr}; // Pointer to owning structure via interface.
 
   std::queue<GLES::Texture*>               mCreateTextureQueue; ///< Create queue for texture resource
@@ -984,6 +984,8 @@ private:
 
   std::queue<const GLES::CommandBuffer*> mPresentationCommandBuffers{}; ///< Queue of reusable command buffers used by presentation engine
 
+  Integration::RenderSurfaceInterface* mSingleSurface{nullptr}; ///< Web single-surface registration
+  int mWebContextHandle{0}; ///< Web context identity; set on the GL owner
   void* mSharedContext{nullptr}; ///< Shared EGL context
 
   GLES::TextureDependencyChecker mTextureDependencyChecker; // Checks if FBO textures need syncing
@@ -1000,4 +1002,4 @@ private:
 
 } //namespace DALI_NAMESPACE
 
-#endif // DALI_EGL_GRAPHICS_CONTROLLER_H
+#endif // DALI_GLES_GRAPHICS_CONTROLLER_H

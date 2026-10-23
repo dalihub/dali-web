@@ -1,22 +1,36 @@
 # 다음 컨텍스트용 프롬프트
 
 ```text
-DALi 브라우저 포팅을 이어가자. P2-b 공통 GLES/Native-EGL/Web 분리와 생산 링크 구현을 진행해줘.
-P1 D1~D4는 확정됐고 P2-a 진단은 완료됐어. 상위 P2는 아직 미완료야.
+DALi 브라우저 포팅을 이어가자. P2-b sync 환경 분리부터 생산 링크 구현을 이어가줘.
+P1 D1~D4·P2-a는 완료됐고 P2-b source/context 중간 구현을 남겼어. 상위 P2는 아직 미완료야.
 
 작업 repo: /home/jy/work/dali/dali-web
 현재 기록: dali-web/docs
 과거 증거·SDK 보존 공간: /home/jy/work/dali/webassembly-probe
 원격: https://github.com/dalihub/dali-web
-P1 완료 commit: 3eb2c89ecad10f810d2ff064f2b4f3d43a42a426
+P2-a 완료 commit: a68e3f00f0c7752561137c179500b004b930285e
+P2-b checkpoint는 실제 HEAD/git log로 확인해줘. 이번 원격 push는 하지 않았어.
 
 상위 AGENTS.md, README, docs/STATE.md, HANDOFF.md, PLAN.md,
 P1-EXECUTION-CONTRACT.md, P2-a-MANIFEST.md, P2-a-RESULTS.md,
-P2-b-HANDOFF.md, evidence/p2-a/README.md, NEXT-CONTEXT.md,
+P2-b-HANDOFF.md, P2-b-RESULTS.md, evidence/p2-a/README.md,
+evidence/p2-b/README.md, NEXT-CONTEXT.md,
 upstreams.lock.json, toolchain.lock.json, BUILDING.md, UPSTREAMS.md,
 MIGRATION.md를 먼저 읽어줘. 실제 HEAD/status/원격을 확인하고 기존 변경·lock을 보존해줘.
 
-P2-a 결과:
+P2-b 중간 결과:
+- Controller는 GlesGraphicsController로 rename. native context/RTTI와 native rendering EGL 경계 분리.
+- Web 단일 surface/resource cache 경계만 구현. 실제 host·WebGL context 생성/Worker 실행은 없음.
+- DALI_GLES_ENVIRONMENT=NATIVE_EGL 기본값. WEB production closure는 아직 configure 거부.
+  cmake/p2-b는 native sync/memory/wrapper를 포함하는 context 경계 진단이야.
+- logs/p2-b/context-web-003: Core 333단계·32개 compile/nm 각각 0.
+  strict 기본/FULL_ES3 각각 1, 미해결 13/9개, map 없음.
+- native GLES/VULKAN/DYNAMIC source 목록 보존 검사 통과.
+  native configure는 host C/C++ compiler 부재로 각각 1.
+  native context/rendering/egl-graphics Emscripten 교차 compile/nm 각각 0이며 native 실행 증거 아님.
+- 기존 P2-a probe 참조는 rename/native 추출 반영. 과거 증거·산출물은 불변.
+
+P2-a 과거 결과:
 - 별도 pthread Core Debug build 333단계 통과.
 - 생산 GLES 23개 포함 30개 번역 단위 compile/nm 각각 exit 0.
 - 최종 strict WebGL2/FULL_ES3 링크 각각 exit 1, 미해결 16/12개. map 미생성.
@@ -38,7 +52,9 @@ P2-a 결과:
    다른 관리형 호스팅은 금지. D3 임의 변경 금지. 이번 배포·서버 구축 금지.
 
 P2-b-HANDOFF.md의 변경 파일·선행 관계·회귀 계획대로 진행해줘.
-첫 작업은 source 선택과 Controller/context 분리야.
+첫 작업은 SyncPool·texture dependency policy·Controller sync 생성의 native/Web 분리야.
+GetSyncImplementation 호출부 일부는 아직 concrete native cast이므로 Web에 그대로 쓰지 마.
+정식 source closure와 native generated source 정리는 아직 미완성이야.
 sync → 웹 메모리 → GL wrapper/capability → shader cache 경계 → 실제 host 순서로 이어가되,
 구현 단위가 커지면 검증 가능한 지점에서 중간 인수인계를 남겨줘.
 Core/GraphicsInterface/GraphicsSyncAbstraction 공통 계약 변경이 필요하거나

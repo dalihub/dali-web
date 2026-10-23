@@ -6,7 +6,7 @@ result=0
 for relative_source in \
   dali/internal/graphics/gles/gl-implementation.cpp \
   dali/internal/graphics/gles/egl-implementation.cpp \
-  dali/internal/graphics/gles-impl/egl-graphics-controller.cpp \
+  dali/internal/graphics/gles-impl/gles-graphics-controller.cpp \
   dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp \
   dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp \
   dali/internal/adaptor/common/combined-update-render-controller.cpp; do

@@ -22,7 +22,7 @@
 #include <dali/integration-api/adaptor-framework/egl-interface.h>
 #include <dali/internal/graphics/common/egl-image-extensions.h>
 #include <dali/internal/graphics/common/graphics-interface.h>
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <dali/internal/graphics/gles/egl-implementation.h>
 #include <dali/internal/graphics/gles/egl-sync-implementation.h>
 #include <dali/internal/graphics/gles/gl-implementation.h>
@@ -360,7 +360,7 @@ private:
   ///<@todo Should SurfaceId be sequential from here, or just a hash of the surface ptr?
   std::unordered_map<Graphics::SurfaceId, EglSurfaceContext> mSurfaceMap;
   Graphics::SurfaceId                                        mBaseSurfaceId{0u};
-  Graphics::EglGraphicsController                            mGraphicsController; ///< Graphics Controller for Dali Core
+  Graphics::GlesGraphicsController                            mGraphicsController; ///< Graphics Controller for Dali Core
   std::unique_ptr<GlImplementation>                          mGLES;               ///< GL implementation
   std::unique_ptr<EglImplementation>                         mEglImplementation;  ///< EGL implementation
   std::unique_ptr<EglImageExtensions>                        mEglImageExtensions; ///< EGL image extension

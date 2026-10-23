@@ -26,7 +26,7 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 
 namespace GLES
 {
@@ -47,7 +47,7 @@ constexpr uint32_t ERROR_ATTRIBUTE_NOT_FOUND = std::numeric_limits<uint32_t>::ma
 class Reflection : public Dali::Graphics::Reflection
 {
 public:
-  explicit Reflection(GLES::ProgramImpl& program, Graphics::EglGraphicsController& controller);
+  explicit Reflection(GLES::ProgramImpl& program, Graphics::GlesGraphicsController& controller);
 
   ~Reflection() override;
 
@@ -252,7 +252,7 @@ protected:
   Reflection& operator=(Reflection&&) noexcept = delete;
 
 private:
-  Graphics::EglGraphicsController& mController; ///< The Graphics controller
+  Graphics::GlesGraphicsController& mController; ///< The Graphics controller
   GLES::ProgramImpl&               mProgram;    ///< The Program object
 
   struct AttributeInfo

@@ -28,7 +28,7 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 
 namespace GLES
 {
@@ -56,7 +56,7 @@ class Texture;
 class TextureDependencyChecker
 {
 public:
-  explicit TextureDependencyChecker(EglGraphicsController& controller)
+  explicit TextureDependencyChecker(GlesGraphicsController& controller)
   : mController(controller)
   {
   }
@@ -185,7 +185,7 @@ private:
 
   NativeTextureDependenciesList mNativeTextureDependencies;
 
-  EglGraphicsController& mController;
+  GlesGraphicsController& mController;
 
   uint8_t mCurrentFrameIndex{0u}; ///< Index into mBackwardDependencies for current frame
   uint8_t mPrevFrameIndex{1u};    ///< Index into mBackwardDependencies for previous frame

@@ -2,16 +2,16 @@
 // context. This is deliberately not a browser bootstrap or executable test.
 #include <emscripten/emscripten.h>
 #include <dali/integration-api/core.h>
-#include <dali/internal/graphics/gles-impl/egl-graphics-controller.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <dali/internal/graphics/gles/gl-implementation.h>
 
 extern "C" EMSCRIPTEN_KEEPALIVE Dali::Integration::Core* createDiagnosticCore(
   Dali::Integration::RenderController* renderController,
   Dali::Integration::PlatformAbstraction* platform,
   Dali::Internal::Adaptor::GlImplementation* gl,
-  Dali::Graphics::EglGraphicsController** graphics)
+  Dali::Graphics::GlesGraphicsController** graphics)
 {
-  *graphics = new Dali::Graphics::EglGraphicsController;
+  *graphics = new Dali::Graphics::GlesGraphicsController;
   (*graphics)->InitializeGLES(*gl);
   return Dali::Integration::Core::New(*renderController, *platform, **graphics,
     static_cast<Dali::Integration::CorePolicyFlags>(0));
@@ -24,7 +24,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE Dali::Internal::Adaptor::GlImplementation* creat
 
 // Separate link roots, not a valid frame loop. No function here is executed.
 extern "C" EMSCRIPTEN_KEEPALIVE void initializeDiagnosticGraphics(
-  Dali::Graphics::EglGraphicsController* graphics,
+  Dali::Graphics::GlesGraphicsController* graphics,
   Dali::Integration::GraphicsSyncAbstraction* sync,
   Dali::Graphics::GraphicsInterface* interface)
 {

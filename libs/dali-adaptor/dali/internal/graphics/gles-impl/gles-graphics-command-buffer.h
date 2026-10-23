@@ -232,7 +232,7 @@ using CommandBufferResource = Resource<Graphics::CommandBuffer, Graphics::Comman
 class CommandBuffer : public CommandBufferResource
 {
 public:
-  CommandBuffer(const Graphics::CommandBufferCreateInfo& createInfo, EglGraphicsController& controller);
+  CommandBuffer(const Graphics::CommandBufferCreateInfo& createInfo, GlesGraphicsController& controller);
 
   ~CommandBuffer() override;
 

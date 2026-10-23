@@ -44,7 +44,7 @@ public:
    * @param[in] createInfo  Valid create info structure
    * @param[in] controller Valid reference to the controller object
    */
-  ProgramImpl(const Graphics::ProgramCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  ProgramImpl(const Graphics::ProgramCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   /**
    * @brief Destructor
@@ -109,7 +109,7 @@ public:
    *
    * @return Valid Controller object
    */
-  [[nodiscard]] EglGraphicsController& GetController() const;
+  [[nodiscard]] GlesGraphicsController& GetController() const;
 
   /**
    * @brief Returns create info structure
@@ -237,7 +237,7 @@ public:
    *
    * @return controller
    */
-  [[nodiscard]] EglGraphicsController& GetController() const;
+  [[nodiscard]] GlesGraphicsController& GetController() const;
 
   /**
    * @brief Returns create info structure

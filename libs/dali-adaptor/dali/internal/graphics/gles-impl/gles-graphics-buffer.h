@@ -30,7 +30,7 @@
 
 namespace DALI_NAMESPACE::Graphics
 {
-class EglGraphicsController;
+class GlesGraphicsController;
 
 namespace GLES
 {
@@ -44,7 +44,7 @@ using BufferResource = Resource<Graphics::Buffer, Graphics::BufferCreateInfo>;
 class Buffer : public BufferResource
 {
 public:
-  Buffer(const Graphics::BufferCreateInfo& createInfo, Graphics::EglGraphicsController& controller);
+  Buffer(const Graphics::BufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller);
 
   ~Buffer() override = default;
 
@@ -59,7 +59,7 @@ public:
 
   void Bind(Graphics::BufferUsage bindingTarget) const;
 
-  bool TryRecycle(const Graphics::BufferCreateInfo& createInfo, Graphics::EglGraphicsController& controller) override;
+  bool TryRecycle(const Graphics::BufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller) override;
 
   [[nodiscard]] uint32_t GetBufferChangedCount() const
   {
