@@ -18,6 +18,7 @@
 #include <dali/internal/graphics/gles-impl/gles-sync-policy.h>
 #include <dali/internal/graphics/gles-impl/gles-sync-object.h>
 #include <dali/internal/graphics/web/web-gles-fence.h>
+#include <dali/internal/graphics/web/web-gles-failure.h>
 
 namespace DALI_NAMESPACE::Graphics
 {
@@ -65,5 +66,6 @@ Graphics::UniquePtr<SyncObject> GlesGraphicsController::CreateSyncObject(const S
 void GlesGraphicsController::ShutdownSyncObjects()
 {
   GLES::WebFence::Shutdown();
+  GLES::WebFailure::Stop();
 }
 } // namespace DALI_NAMESPACE::Graphics

@@ -33,6 +33,7 @@
 #include <dali/integration-api/graphics-sync-abstraction.h>
 #include <dali/integration-api/pixel-data-integ.h>
 #include <dali/internal/graphics/gles-impl/gles-resource-factory.h>
+#include <dali/internal/graphics/gles-impl/gles-program-binary-cache.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-command-buffer.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-pipeline.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-program.h>
@@ -42,7 +43,6 @@
 #include <dali/internal/graphics/gles-impl/gles-graphics-texture.h>
 #include <dali/internal/graphics/gles-impl/gles-graphics-types.h>
 #include <dali/internal/graphics/gles-impl/gles-sync-object.h>
-#include <dali/internal/graphics/gles-impl/gles3-graphics-memory.h>
 #include <dali/internal/system/common/environment-variables.h>
 #include <any>
 
@@ -83,6 +83,14 @@ struct GLESDeleter
       if(DALI_LIKELY(object))
       {
         object->DestroyResource();
+        const auto* callbacks = object->GetCreateInfo().allocationCallbacks;
+        if(callbacks)
+        {
+          const auto allocator = *callbacks;
+          object->~T();
+          allocator.freeCallback(object, allocator.userData);
+          return;
+        }
       }
       delete object;
     }
@@ -141,7 +149,7 @@ void GlesGraphicsController::InitializeGLES(Integration::GlAbstraction& glAbstra
   GLES::Framebuffer::SetSharedContext(mCurrentContext);
 
   static auto enableShaderUseProgramBinaryString = Dali::EnvironmentVariable::GetEnvironmentVariable(DALI_ENV_SHADER_USE_PROGRAM_BINARY);
-  mUseProgramBinary                              = enableShaderUseProgramBinaryString ? std::atoi(enableShaderUseProgramBinaryString) : true; // change default
+  mUseProgramBinary                              = GLES::ProgramBinaryCache::IsSupported() && (enableShaderUseProgramBinaryString ? std::atoi(enableShaderUseProgramBinaryString) : true);
 }
 
 void GlesGraphicsController::Initialize(Integration::GraphicsSyncAbstraction& syncImplementation,
@@ -168,6 +176,10 @@ void GlesGraphicsController::SetResourceBindingHints(const std::vector<SceneReso
 
 void GlesGraphicsController::SubmitCommandBuffers(const SubmitInfo& submitInfo)
 {
+  if(!CanSubmit())
+  {
+    return;
+  }
   for(auto& cmdbuf : submitInfo.cmdBuffer)
   {
     // Push command buffers
@@ -324,6 +336,10 @@ GlesGraphicsController::CreateTexture(const TextureCreateInfo& textureCreateInfo
 Graphics::UniquePtr<Buffer> GlesGraphicsController::CreateBuffer(
   const BufferCreateInfo& bufferCreateInfo, Graphics::UniquePtr<Buffer>&& oldBuffer)
 {
+  if(!RetryResourceCreation())
+  {
+    return nullptr;
+  }
   return NewObject<GLES::Buffer, GLESDeleter>(bufferCreateInfo, *this, std::move(oldBuffer));
 }
 
@@ -443,8 +459,8 @@ void GlesGraphicsController::ProcessDiscardQueues()
 {
   DALI_TRACE_SCOPE(gTraceFilter, "DALI_EGL_CONTROLLER_DISCARD_QUEUE");
 
-  // Remove items which initialize failed and discard.
-  if(DALI_UNLIKELY(mResourceInitializeFailed))
+  // Discard can run after an earlier failed create or before a flush.
+  // Remove every queued reference before freeing the object.
   {
     InvalidateDiscardResourceSet(mDiscardTextureSet, mCreateTextureQueue);
     InvalidateDiscardResourceQueue(mDiscardBufferQueue, mCreateBufferQueue);
@@ -513,6 +529,10 @@ void GlesGraphicsController::ProcessCommandBuffer(const GLES::CommandBuffer& com
 
   for(auto i = 0u; i < count; ++i)
   {
+    if(!CanSubmit())
+    {
+      break;
+    }
     auto& cmd = commands[i];
     // process command
     switch(cmd.type)
@@ -774,6 +794,25 @@ void GlesGraphicsController::ProcessCommandQueues()
   DUMP_FRAME_END();
 }
 
+void GlesGraphicsController::CancelTextureUpdates()
+{
+  while(!mTextureUpdateRequests.empty())
+  {
+    auto& request = mTextureUpdateRequests.front();
+    auto& source = request.second;
+    if(source.sourceType == Graphics::TextureUpdateSourceInfo::Type::MEMORY)
+    {
+      free(source.memorySource.memory);
+    }
+    else if(source.sourceType == Graphics::TextureUpdateSourceInfo::Type::PIXEL_DATA &&
+            request.first.srcOffset == 0u && Dali::Integration::IsPixelDataReleaseAfterUpload(source.pixelDataSource.pixelData))
+    {
+      Dali::Integration::ReleasePixelDataBuffer(source.pixelDataSource.pixelData);
+    }
+    mTextureUpdateRequests.pop();
+  }
+}
+
 void GlesGraphicsController::ProcessTextureUpdateQueue()
 {
   if(mTextureUpdateRequests.empty())
@@ -1032,27 +1071,6 @@ void GlesGraphicsController::ProcessTextureMipmapGenerationQueue()
 void GlesGraphicsController::GenerateTextureMipmaps(const Graphics::Texture& texture)
 {
   mTextureMipmapGenerationRequests.push(static_cast<const GLES::Texture*>(&texture));
-}
-
-Graphics::UniquePtr<Memory> GlesGraphicsController::MapBufferRange(const MapBufferInfo& mapInfo)
-{
-  // Mapping buffer requires the object to be created NOW
-  // Workaround - flush now, otherwise there will be given a staging buffer
-  // in case when the buffer is not there yet
-  if(!mCreateBufferQueue.empty())
-  {
-    mGraphics->ActivateResourceContext();
-    ProcessCreateQueues();
-  }
-
-  if(GetGLESVersion() < GLES::GLESVersion::GLES_30)
-  {
-    return Graphics::UniquePtr<Memory>(new GLES::Memory2(mapInfo, *this));
-  }
-  else
-  {
-    return Graphics::UniquePtr<Memory>(new GLES::Memory3(mapInfo, *this));
-  }
 }
 
 bool GlesGraphicsController::GetProgramParameter(Graphics::Program& program, uint32_t parameterId, void* outData)

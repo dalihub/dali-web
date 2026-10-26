@@ -522,6 +522,11 @@ public:
    * Function flushes all pending resource constructions,
    * executes command buffers and empties discard queues.
    */
+  void CancelTextureUpdates();
+  bool CanSubmit();
+  bool RetryResourceCreation();
+  void ResourceCreationFailed();
+
   void Flush()
   {
     if(!mCreateTextureQueue.empty() ||
@@ -539,14 +544,24 @@ public:
     // Process creations
     ProcessCreateQueues();
 
-    // Process updates
-    ProcessTextureUpdateQueue();
-
-    // Process texture mipmap generation requests
-    ProcessTextureMipmapGenerationQueue();
-
-    // Process main command queue
-    ProcessCommandQueues();
+    if(CanSubmit())
+    {
+      ProcessTextureUpdateQueue();
+      ProcessTextureMipmapGenerationQueue();
+      ProcessCommandQueues();
+    }
+    else
+    {
+      while(!mCommandQueue.empty())
+      {
+        mCommandQueue.pop();
+      }
+      CancelTextureUpdates();
+      while(!mTextureMipmapGenerationRequests.empty())
+      {
+        mTextureMipmapGenerationRequests.pop();
+      }
+    }
 
     if(!mDiscardBufferQueue.empty())
     {
@@ -583,23 +598,29 @@ public:
   template<class T>
   void ProcessCreateQueue(T& queue)
   {
-    static T failedQueue; // Very very rarely used.
+    T failedQueue; // Retry state belongs to this controller and this invocation.
     while(!queue.empty())
     {
       auto* object = queue.front();
       queue.pop();
 
-      // Initialize texture
+      if(!RetryResourceCreation())
+      {
+        continue;
+      }
+
+      // Initialize resource
       if(DALI_UNLIKELY(!object->InitializeResource()))
       {
         mResourceInitializeFailed = true;
-        failedQueue.push(object);
+        ResourceCreationFailed();
+        if(RetryResourceCreation())
+        {
+          failedQueue.push(object);
+        }
       }
     }
-    if(DALI_UNLIKELY(mResourceInitializeFailed))
-    {
-      queue.swap(failedQueue);
-    }
+    queue.swap(failedQueue);
   }
 
   /**

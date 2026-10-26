@@ -1,0 +1,21 @@
+{
+  "preservedCoreEvidenceLockCount": 89,
+  "preservedHashesMatch": true,
+  "finalBoundaryInputDrift": [],
+  "nativeExtractedBufferMethodsByteEqual": true,
+  "nativeMemorySourcesByteEqual": {
+    "libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp": true,
+    "libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp": true
+  },
+  "runtimeNotTested": [
+    "Controller submit gates",
+    "Buffer factory/recycle/shutdown integration",
+    "Core uniforms with Web backend",
+    "native build/install/runtime",
+    "browser/GPU preservation",
+    "host async failure/stop"
+  ],
+  "markdownLocalLinksValid": true,
+  "pythonSyntaxValid": true,
+  "gitDiffCheckExitCode": 0
+}

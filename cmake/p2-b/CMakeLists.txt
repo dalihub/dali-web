@@ -17,24 +17,24 @@ add_subdirectory("${DALI_WEB_ROOT}/libs/dali-core/build/tizen" core)
 set(adaptor_graphics_dir "${dali_gles_graphics_dir}")
 include("${adaptor_graphics_dir}/gles-impl/file.list")
 if(DALI_GLES_ENVIRONMENT STREQUAL "WEB")
-  set(sync_sources ${adaptor_graphics_gles_sync_web_src_files})
+  set(sync_sources ${adaptor_graphics_gles_sync_web_src_files} ${adaptor_graphics_gles_memory_web_src_files} ${adaptor_graphics_gles_cache_web_src_files})
+  set(wrapper_sources "${adaptor_graphics_dir}/web/web-gl-implementation.cpp")
+  set(probe "${DALI_WEB_ROOT}/tests/probes/gles-web-boundary.cpp")
 else()
-  set(sync_sources ${adaptor_graphics_gles_sync_native_src_files})
+  set(sync_sources ${adaptor_graphics_gles_sync_native_src_files} ${adaptor_graphics_gles_memory_native_src_files} ${adaptor_graphics_gles_cache_native_src_files})
+  set(wrapper_sources "${adaptor_graphics_dir}/gles/gl-implementation.cpp" "${adaptor_graphics_dir}/gles/gl-extensions.cpp" "${adaptor_graphics_dir}/gles/gl-extensions-support.cpp" "${CMAKE_CURRENT_BINARY_DIR}/shader-cache-path.cpp")
+  set(probe "${DALI_WEB_ROOT}/tests/probes/gles-context-boundary.cpp")
 endif()
 set(cachePath "/diagnostic-only")
 configure_file("${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen/shader-cache-path.in" "${CMAKE_CURRENT_BINARY_DIR}/shader-cache-path.cpp" @ONLY)
 add_library(gles-boundary OBJECT
   ${adaptor_graphics_gles_common_src_files}
-  ${adaptor_graphics_gles_pending_src_files}
   ${dali_gles_context_source}
   ${sync_sources}
-  "${adaptor_graphics_dir}/gles/gl-implementation.cpp"
-  "${adaptor_graphics_dir}/gles/gl-extensions.cpp"
-  "${adaptor_graphics_dir}/gles/gl-extensions-support.cpp"
+  ${wrapper_sources}
   "${adaptor_graphics_dir}/common/shader-parser.cpp"
   "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/shader-cache-path.cpp"
-  "${DALI_WEB_ROOT}/tests/probes/gles-context-boundary.cpp")
+  ${probe})
 target_compile_features(gles-boundary PRIVATE cxx_std_17)
 target_compile_definitions(gles-boundary PRIVATE DEBUG_ENABLED)
 target_include_directories(gles-boundary PRIVATE

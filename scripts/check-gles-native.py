@@ -29,10 +29,11 @@ for backend in ['GLES', 'VULKAN', 'DYNAMIC']:
     execute('native-configure-' + backend, [os.environ['CMAKE'], '-S', str(root / 'libs/dali-adaptor/build/tizen'),
         '-B', str(build / backend), '-G', 'Ninja', '-DCMAKE_MAKE_PROGRAM=' + os.environ['NINJA'],
         '-DENABLE_GRAPHICS_BACKEND=' + backend, '-DENABLE_PKG_CONFIGURE=OFF'])
-for name in ['native-gles-context', 'native-gles-rendering', 'native-gles-sync', 'native-gles-sync-pool', 'egl-graphics']:
+for name in ['native-gles-context', 'native-gles-rendering', 'native-gles-sync', 'native-gles-sync-pool', 'egl-graphics', 'native-gles-memory', 'native-gles-buffer', 'gles-graphics-controller', 'gles-graphics-buffer', 'gles2-graphics-memory', 'gles3-graphics-memory', 'native-gles-program-cache', 'gles-graphics-program']:
+    folder = 'gles-impl' if name.startswith(('gles-', 'gles2-', 'gles3-')) else 'gles'
     obj = build / (name + '.o')
     args = [os.environ['EMXX'], '-std=c++17', '-pthread', '-DDEBUG_ENABLED', '-I' + str(include),
             '-I' + str(root / 'libs/dali-core'), '-I' + str(root / 'libs/dali-adaptor'),
-            '-c', str(root / 'libs/dali-adaptor/dali/internal/graphics/gles' / (name + '.cpp')), '-o', str(obj)]
+            '-c', str(root / 'libs/dali-adaptor/dali/internal/graphics' / folder / (name + '.cpp')), '-o', str(obj)]
     if not execute('cross-compile-' + name, args):
         execute('nm-' + name, [os.environ['LLVM_NM'], '-u', '-C', str(obj)])

@@ -28,6 +28,14 @@ struct SyncDeleter
     if(object)
     {
       object->DestroyResource();
+      const auto* callbacks = object->GetCreateInfo().allocationCallbacks;
+      if(callbacks)
+      {
+        const auto allocator = *callbacks;
+        object->~T();
+        allocator.freeCallback(object, allocator.userData);
+        return;
+      }
     }
     delete object;
   }

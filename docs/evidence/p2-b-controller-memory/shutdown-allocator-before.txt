@@ -1,0 +1,18 @@
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:10:56)
+gles-graphics-controller.cpp: InitializeGLES(133) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(149) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+Aborted(Assertion failed: objectFrees == 2, at: ${DALI_WEB_ROOT}/tests/unit/web-buffer-controller.cpp,173,main)
+${DALI_WEB_ROOT}/build/p2-b/controller-004/controller-test.js:821
+  throw new WebAssembly.RuntimeError(what);
+        ^
+
+RuntimeError: Aborted(Assertion failed: objectFrees == 2, at: ${DALI_WEB_ROOT}/tests/unit/web-buffer-controller.cpp,173,main)
+    at abort (${DALI_WEB_ROOT}/build/p2-b/controller-004/controller-test.js:821:9)
+    at ___assert_fail (${DALI_WEB_ROOT}/build/p2-b/controller-004/controller-test.js:1678:7)
+    at wasm://wasm/004ee7a6:wasm-function[79]:0x57d8
+    at ${DALI_WEB_ROOT}/build/p2-b/controller-004/controller-test.js:830:12
+    at callMain (${DALI_WEB_ROOT}/build/p2-b/controller-004/controller-test.js:6306:15)
+    at run (${DALI_WEB_ROOT}/build/p2-b/controller-004/controller-test.js:6363:22)
+
+Node.js v24.19.0

@@ -17,6 +17,7 @@
 #include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
 #include <emscripten/html5_webgl.h>
 #include <dali/internal/graphics/web/web-gles-fence.h>
+#include <dali/internal/graphics/web/web-gles-failure.h>
 
 namespace DALI_NAMESPACE::Graphics
 {
@@ -31,6 +32,7 @@ void GlesGraphicsController::DeleteSurfaceContext(Integration::RenderSurfaceInte
 {
   DALI_ASSERT_ALWAYS(GetSurfaceContext(surface) && "Unknown Web GLES surface");
   GLES::WebFence::Shutdown();
+  GLES::WebFailure::Stop();
   mSyncPool.InvalidateContext(mContext.get());
   mTextureDependencyChecker.InvalidateContext(mContext.get());
   mSingleSurface = nullptr;
@@ -38,6 +40,7 @@ void GlesGraphicsController::DeleteSurfaceContext(Integration::RenderSurfaceInte
 
 void GlesGraphicsController::ActivateResourceContext()
 {
+  if(!GLES::WebFailure::CheckContext()) return;
   const auto handle = emscripten_webgl_get_current_context();
   DALI_ASSERT_ALWAYS(handle > 0 && "WebGL context must be current on the render owner");
   DALI_ASSERT_ALWAYS((mWebContextHandle == 0 || mWebContextHandle == handle) && "WebGL context replacement requires a new controller");

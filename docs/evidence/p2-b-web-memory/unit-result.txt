@@ -1,0 +1,56 @@
+node-allocation.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer shadow allocation failed
+Web memory CPU contract: allocation PASS (not GPU evidence)
+injected upload calls=0 bytes=0 (CPU accounting only)
+
+node-bounds.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer lock bounds or duplicate lock
+Web memory CPU contract: bounds PASS (not GPU evidence)
+injected upload calls=1 bytes=16 (CPU accounting only)
+
+node-context.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: context missing, replaced or lost
+Web memory CPU contract: context PASS (not GPU evidence)
+injected upload calls=1 bytes=16 (CPU accounting only)
+
+node-cpu.log
+Web memory CPU contract: cpu PASS (not GPU evidence)
+injected upload calls=0 bytes=0 (CPU accounting only)
+
+node-duplicate-map.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer map bounds, lifetime or duplicate map
+Web memory CPU contract: duplicate-map PASS (not GPU evidence)
+injected upload calls=1 bytes=16 (CPU accounting only)
+
+node-fence.log
+web-gles-fence.cpp: Insert(115) > Web fence creation failed
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: fence failure
+Web memory CPU contract: fence PASS (not GPU evidence)
+injected upload calls=1 bytes=16 (CPU accounting only)
+
+node-generations.log
+Web memory CPU contract: generations PASS (not GPU evidence)
+injected upload calls=3 bytes=80 (CPU accounting only)
+
+node-map-bounds.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer map bounds, lifetime or duplicate map
+Web memory CPU contract: map-bounds PASS (not GPU evidence)
+injected upload calls=1 bytes=16 (CPU accounting only)
+
+node-overflow.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer lock bounds or duplicate lock
+Web memory CPU contract: overflow PASS (not GPU evidence)
+injected upload calls=1 bytes=16 (CPU accounting only)
+
+node-preserve.log
+Web memory CPU contract: preserve PASS (not GPU evidence)
+injected upload calls=8 bytes=120 (CPU accounting only)
+
+node-stop.log
+Web memory CPU contract: stop PASS (not GPU evidence)
+injected upload calls=8 bytes=120 (CPU accounting only)
+
+node-upload.log
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: GL operation failed
+Web memory CPU contract: upload PASS (not GPU evidence)
+injected upload calls=9 bytes=136 (CPU accounting only)

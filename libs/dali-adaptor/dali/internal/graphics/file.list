@@ -1,3 +1,6 @@
+IF(NOT DEFINED DALI_SHADER_CACHE_SOURCE)
+  SET(DALI_SHADER_CACHE_SOURCE "${adaptor_graphics_dir}/common/shader-cache-path.cpp")
+ENDIF()
 
 # module: graphics, common
 SET( adaptor_graphics_common_src_files
@@ -43,9 +46,10 @@ SET(adaptor_graphics_gles_native_src_files
     ${adaptor_graphics_dir}/gles/native-gles-context.cpp
     ${adaptor_graphics_dir}/gles/native-gles-rendering.cpp
     ${adaptor_graphics_dir}/gles/egl-surface-factory.cpp
-    ${adaptor_graphics_dir}/common/shader-cache-path.cpp
+    ${DALI_SHADER_CACHE_SOURCE}
 )
 SET(adaptor_graphics_gles_web_src_files
+    ${adaptor_graphics_dir}/web/web-gl-implementation.cpp
     ${adaptor_graphics_dir}/web/web-gles-context.cpp
     ${adaptor_graphics_dir}/web/web-gles-rendering.cpp
 )
@@ -55,16 +59,20 @@ IF(DALI_GLES_ENVIRONMENT STREQUAL "NATIVE_EGL")
       ${adaptor_graphics_gles_common_src_files}
       ${adaptor_graphics_gles_native_src_files}
       ${adaptor_graphics_gles_sync_native_src_files}
-      ${adaptor_graphics_gles_pending_src_files})
+      ${adaptor_graphics_gles_memory_native_src_files}
+      ${adaptor_graphics_gles_cache_native_src_files})
 ELSE()
-  # Only the context boundary is implemented so far. Do not expose an incomplete
-  # production renderer as a supported Web build.
-  MESSAGE(FATAL_ERROR "WEB production source closure is incomplete: memory, wrapper and shader cache remain; use the P2-b boundary probe")
+  SET(adaptor_graphics_gles_src_files
+      ${adaptor_graphics_gles_common_src_files}
+      ${adaptor_graphics_gles_web_src_files}
+      ${adaptor_graphics_gles_sync_web_src_files}
+      ${adaptor_graphics_gles_memory_web_src_files}
+      ${adaptor_graphics_gles_cache_web_src_files})
 ENDIF()
 
 SET( adaptor_graphics_vulkan_src_files
     ${adaptor_graphics_dir}/common/shader-parser.cpp
-    ${adaptor_graphics_dir}/common/shader-cache-path.cpp
+    ${DALI_SHADER_CACHE_SOURCE}
     ${adaptor_graphics_dir}/vulkan/vulkan-graphics-impl.cpp
     ${adaptor_graphics_dir}/vulkan/vulkan-graphics-factory.cpp
     ${adaptor_graphics_dir}/vulkan/vulkan-memory-allocation.cpp

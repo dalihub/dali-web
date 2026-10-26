@@ -34,6 +34,8 @@ class GlesGraphicsController;
 
 namespace GLES
 {
+class WebBufferStorage;
+
 using BufferResource = Resource<Graphics::Buffer, Graphics::BufferCreateInfo>;
 
 /**
@@ -61,10 +63,7 @@ public:
 
   bool TryRecycle(const Graphics::BufferCreateInfo& createInfo, Graphics::GlesGraphicsController& controller) override;
 
-  [[nodiscard]] uint32_t GetBufferChangedCount() const
-  {
-    return mBufferChangedCount;
-  }
+  [[nodiscard]] uint32_t GetBufferChangedCount() const;
 
   void IncreaseBufferChangedCount()
   {
@@ -96,7 +95,13 @@ public:
     return mBufferTarget;
   }
 
+  WebBufferStorage* GetWebStorage() const
+  {
+    return mWebStorage;
+  }
+
 private:
+  WebBufferStorage* mWebStorage{nullptr}; // Null on native; no shadow allocation.
   void InitializeCPUBuffer();
 
   void InitializeGPUBuffer();

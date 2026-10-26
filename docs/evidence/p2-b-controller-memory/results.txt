@@ -1,0 +1,70 @@
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: resource initialization failed
+PASS production Buffer/Controller buffer-object (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: test submission failure
+PASS production Buffer/Controller discard (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: resource initialization failed
+PASS production Buffer/Controller factory-allocation (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: test submission failure
+PASS production Buffer/Controller factory (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: GL buffer allocation failed
+PASS production Buffer/Controller gl-allocation (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: GL operation failed
+PASS production Buffer/Controller gl-data (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: mapping allocation failed
+PASS production Buffer/Controller memory-object (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+PASS shutdown with live Memory
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+PASS shutdown with live Memory
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer storage allocation failed
+PASS production Buffer/Controller storage-object (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: test submission failure
+PASS production Buffer/Controller uniform-cpu (CPU GL injection only)
+DALi Adaptor:   2.5.44 (Oct 23 2026 19:11:54)
+gles-graphics-controller.cpp: InitializeGLES(141) > Initializing Graphics Controller Phase 1
+gles-graphics-controller.cpp: Initialize(157) > Initializing Graphics Controller Phase 2
+gles-context.cpp: InitializeGlState(257) > GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16
+web-gles-failure.cpp: Latch(44) > Web GLES stopped: test submission failure
+PASS production Buffer/Controller uniform-gpu (CPU GL injection only)

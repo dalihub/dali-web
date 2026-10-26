@@ -30,3 +30,6 @@ libs/dali-adaptor/dali/internal/graphics/gles/native-gles-context.cpp
 libs/dali-adaptor/dali/internal/graphics/gles/native-gles-rendering.cpp
 libs/dali-adaptor/dali/internal/graphics/gles/native-gles-sync.cpp
 libs/dali-adaptor/dali/internal/graphics/gles/native-gles-sync-pool.cpp
+libs/dali-adaptor/dali/internal/graphics/gles/native-gles-memory.cpp
+libs/dali-adaptor/dali/internal/graphics/gles/native-gles-buffer.cpp
+libs/dali-adaptor/dali/internal/graphics/gles/native-gles-program-cache.cpp

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
+#include <new>
 
 namespace DALI_NAMESPACE::Graphics
 {
@@ -28,10 +29,20 @@ auto NewObject(const GfxCreateInfo& info, GlesGraphicsController& controller, T&
   using UPtr = Graphics::UniquePtr<Type>;
   if(info.allocationCallbacks)
   {
+    if(!info.allocationCallbacks->allocCallback || !info.allocationCallbacks->freeCallback)
+    {
+      controller.ResourceCreationFailed();
+      return UPtr(nullptr);
+    }
     auto* memory = info.allocationCallbacks->allocCallback(
       sizeof(GLESType),
       0,
       info.allocationCallbacks->userData);
+    if(!memory)
+    {
+      controller.ResourceCreationFailed();
+      return UPtr(nullptr);
+    }
     return UPtr(new(memory) GLESType(info, controller), Deleter<GLESType>());
   }
   else // Use standard allocator
@@ -54,7 +65,12 @@ auto NewObject(const GfxCreateInfo& info, GlesGraphicsController& controller, T&
     }
 
     // Create brand new object
-    return UPtr(new GLESType(info, controller), Deleter<GLESType>());
+    auto* object = new(std::nothrow) GLESType(info, controller);
+    if(!object)
+    {
+      controller.ResourceCreationFailed();
+    }
+    return UPtr(object, Deleter<GLESType>());
   }
 }
 

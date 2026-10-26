@@ -59,7 +59,7 @@ execute('nm-core', [os.environ['LLVM_NM'], '-u', '-C', archive])
 for variant, extra in [('webgl2', []), ('full-es3', ['-sFULL_ES3=1'])]:
     execute('link-' + variant, [os.environ['EMXX'], '-pthread', '--no-entry', *objects, archive,
         '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sASSERTIONS=1',
-        '-sERROR_ON_UNDEFINED_SYMBOLS=1', '-Wl,--error-limit=0',
+        '-sERROR_ON_UNDEFINED_SYMBOLS=1', '-sABORTING_MALLOC=0', '-Wl,--error-limit=0',
         '-Wl,-Map=' + str(run / (variant + '.map')), *extra,
         '-o', str(build / (variant + '.js'))])
 (run / 'collection.json').write_text(json.dumps({'compileFailures': failed, 'objects': objects,

@@ -33,7 +33,7 @@ for backend in ['GLES', 'VULKAN', 'DYNAMIC']:
         assert result.returncode == 0
     before = (run / (backend + '-baseline.json.txt')).read_text().replace('egl-graphics-controller', 'gles-graphics-controller').splitlines()
     after = (run / (backend + '-current.json.txt')).read_text().splitlines()
-    assert set(after[0].split(';')) == set(before[0].split(';')) | {str(graphics / 'gles/native-gles-context.cpp'), str(graphics / 'gles/native-gles-rendering.cpp'), str(graphics / 'gles/native-gles-sync.cpp'), str(graphics / 'gles/native-gles-sync-pool.cpp')}
+    assert set(after[0].split(';')) == set(before[0].split(';')) | {str(graphics / 'gles/native-gles-context.cpp'), str(graphics / 'gles/native-gles-rendering.cpp'), str(graphics / 'gles/native-gles-sync.cpp'), str(graphics / 'gles/native-gles-sync-pool.cpp'), str(graphics / 'gles/native-gles-memory.cpp'), str(graphics / 'gles/native-gles-buffer.cpp'), str(graphics / 'gles/native-gles-program-cache.cpp')}
     assert after[1] == before[1], 'Vulkan closure changed'
 # Validation runs before package discovery. All these combinations must fail.
 for backend, environment, emscripten in [('VULKAN', 'WEB', True), ('DYNAMIC', 'WEB', True), ('GLES', 'WEB', False), ('GLES', 'BAD', True)]:

@@ -11,7 +11,7 @@ PROJECT(dali2-adaptor CXX C)
 # Validate before platform package discovery or source generation.
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/../../dali/internal/graphics/gles-environment.cmake)
 IF(DALI_GLES_ENVIRONMENT STREQUAL "WEB")
-  MESSAGE(FATAL_ERROR "Full Adaptor Web profile is not implemented; use the standalone P2-b boundary probe")
+  MESSAGE(FATAL_ERROR "Full Adaptor Web profile is not implemented; use the standalone cmake/web production target")
 ENDIF()
 SET(name "dali2-adaptor")
 SET(PKG_NAME ${name})
@@ -296,6 +296,12 @@ SET(ADAPTOR_ROOT ${ROOT_SRC_DIR})
 SET(PACKAGE_DOXY_SRC_DIR "${ROOT_SRC_DIR}/doc")
 SET(SOURCES "")
 
+# Generated implementation files belong to this build tree, including DYNAMIC
+# backend targets. Source trees and simultaneous configurations stay independent.
+SET(DALI_GENERATED_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/platform")
+SET(DALI_SYSTEM_CACHE_SOURCE "${DALI_GENERATED_SOURCE_DIR}/system-cache-path.cpp")
+SET(DALI_SHADER_CACHE_SOURCE "${DALI_GENERATED_SOURCE_DIR}/shader-cache-path.cpp")
+
 # Include list of modules
 INCLUDE( module-list.cmake )
 
@@ -313,14 +319,14 @@ IF( ENABLE_PKG_CONFIGURE )
   # Requires the following variables to be setup:
   # @PREFIX@ @EXEC_PREFIX@ @DALI_ADAPTOR_VERSION@ @LIB_DIR@ @DEV_INCLUDE_PATH@
   SET( DEV_INCLUDE_PATH ${INCLUDE_DIR} )
-  SET( ADAPTOR_PKG_CFG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/dali2-adaptor.pc )
-  SET( ADAPTOR_INTEGRATION_PKG_CFG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/dali2-adaptor-integration.pc )
-  CONFIGURE_FILE( ${ADAPTOR_PKG_CFG_FILE}.in ${ADAPTOR_PKG_CFG_FILE} @ONLY )
-  CONFIGURE_FILE( ${ADAPTOR_INTEGRATION_PKG_CFG_FILE}.in ${ADAPTOR_INTEGRATION_PKG_CFG_FILE} @ONLY )
+  SET( ADAPTOR_PKG_CFG_FILE ${CMAKE_CURRENT_BINARY_DIR}/dali2-adaptor.pc )
+  SET( ADAPTOR_INTEGRATION_PKG_CFG_FILE ${CMAKE_CURRENT_BINARY_DIR}/dali2-adaptor-integration.pc )
+  CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/dali2-adaptor.pc.in ${ADAPTOR_PKG_CFG_FILE} @ONLY )
+  CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/dali2-adaptor-integration.pc.in ${ADAPTOR_INTEGRATION_PKG_CFG_FILE} @ONLY )
 ENDIF()
 
-CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/system-cache-path.in ${ADAPTOR_ROOT}/dali/internal/adaptor/common/system-cache-path.cpp @ONLY)
-CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/shader-cache-path.in ${ADAPTOR_ROOT}/dali/internal/graphics/common/shader-cache-path.cpp @ONLY)
+CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/system-cache-path.in ${DALI_SYSTEM_CACHE_SOURCE} @ONLY)
+CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/shader-cache-path.in ${DALI_SHADER_CACHE_SOURCE} @ONLY)
 
 SET( THIRD_PARTY_WINDOWS_PLATFORM "" )
 IF( WIN32 )

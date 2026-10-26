@@ -1,0 +1,56 @@
+// P2-b context boundary only; this is not an executable Web host.
+// Link-only diagnostic. The caller must supply real host services and a current
+// context. This is deliberately not a browser bootstrap or executable test.
+#include <emscripten/emscripten.h>
+#include <dali/integration-api/core.h>
+#include <dali/internal/graphics/gles-impl/gles-graphics-controller.h>
+#include <dali/internal/graphics/web/web-gl-implementation.h>
+
+extern "C" EMSCRIPTEN_KEEPALIVE Dali::Integration::Core* createDiagnosticCore(
+  Dali::Integration::RenderController* renderController,
+  Dali::Integration::PlatformAbstraction* platform,
+  Dali::Graphics::GLES::WebGlImplementation* gl,
+  Dali::Graphics::GlesGraphicsController** graphics)
+{
+  *graphics = new Dali::Graphics::GlesGraphicsController;
+  (*graphics)->InitializeGLES(*gl);
+  return Dali::Integration::Core::New(*renderController, *platform, **graphics,
+    static_cast<Dali::Integration::CorePolicyFlags>(0));
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE Dali::Graphics::GLES::WebGlImplementation* createDiagnosticGl()
+{
+  return new Dali::Graphics::GLES::WebGlImplementation;
+}
+
+// Separate link roots, not a valid frame loop. No function here is executed.
+extern "C" EMSCRIPTEN_KEEPALIVE void initializeDiagnosticGraphics(
+  Dali::Graphics::GlesGraphicsController* graphics,
+  Dali::Integration::GraphicsSyncAbstraction* sync,
+  Dali::Graphics::GraphicsInterface* interface)
+{
+  graphics->Initialize(*sync, *interface);
+  graphics->ActivateResourceContext();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void retainDiagnosticFrame(
+  Dali::Integration::Core* core,
+  Dali::Integration::Scene* scene,
+  Dali::Integration::UpdateStatus* updateStatus,
+  Dali::Integration::RenderStatus* renderStatus)
+{
+  core->Update(0.0f, 0u, 0u, *updateStatus, false, false, false);
+  core->PreRender(*renderStatus, false);
+  core->RenderScene(*renderStatus, *scene, false);
+  core->PostRender();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void retainDiagnosticSyncDependency(
+  Dali::Graphics::GLES::SyncPool* pool)
+{
+  auto sync = pool->AllocateSharedSyncObject(false);
+  sync->Poll();
+  const auto id = pool->AllocateSyncObject(nullptr, Dali::Graphics::GLES::SyncPool::SyncContext::GL);
+  pool->ClientWait(id);
+  pool->FreeSyncObject(id);
+}
