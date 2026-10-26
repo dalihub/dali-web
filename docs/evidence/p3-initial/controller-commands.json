@@ -1,0 +1,1180 @@
+[
+  {
+    "name": "version-EMXX",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "--version"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "version-NODE",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "--version"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "version-LLVM_NM",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "--version"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-shader-parser",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/shader-parser.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-shader-parser",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/shader-parser.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-program",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-program.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-program",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-program.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-controller",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-controller.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-controller.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-controller",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-controller.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-controller-debug",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-controller-debug.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-controller-debug.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-controller-debug",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-controller-debug.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-buffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-buffer.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-buffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-command-buffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-command-buffer.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-command-buffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-command-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-debug",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-debug.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-debug",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-debug.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-framebuffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-framebuffer.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-framebuffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-framebuffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-pipeline",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-pipeline.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-pipeline",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-pipeline.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-reflection",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-reflection.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-reflection",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-reflection.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-render-pass",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-render-pass.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-render-pass",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-render-pass.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-render-target",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-render-target.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-render-target",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-render-target.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-sampler",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-sampler.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-sampler",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-sampler.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-shader",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-shader.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-shader",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-shader.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-texture",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-texture.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-texture",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-texture.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-graphics-pipeline-cache",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-pipeline-cache.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-pipeline-cache",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-pipeline-cache.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-context",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-context.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-context",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-context.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-sync-object",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-sync-object.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-sync-object",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-sync-object.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-framebuffer-state-cache",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-framebuffer-state-cache.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-framebuffer-state-cache",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-framebuffer-state-cache.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-sync-pool.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-sync-pool.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-gles-texture-dependency-checker",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-texture-dependency-checker.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-texture-dependency-checker",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-texture-dependency-checker.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-context",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-context.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-context.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-context",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-context.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-rendering",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-rendering.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-rendering.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-rendering",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-rendering.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-sync",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-sync.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-sync.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-sync",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-sync.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-sync-pool.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-sync-pool.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-sync-pool.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-fence",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-fence.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-fence.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-fence",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-fence.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-memory",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-memory.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-memory.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-memory",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-buffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-buffer.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-buffer.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-buffer",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-buffer-memory",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-buffer-memory.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-buffer-memory.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-buffer-memory",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-buffer-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-buffer-storage",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-buffer-storage.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-buffer-storage.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-buffer-storage",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-buffer-storage.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-failure",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-failure.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-failure.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-failure",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-failure.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-web-gles-program-cache",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-program-cache.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-program-cache.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-web-gles-program-cache",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-program-cache.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-environment-variable",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-g",
+      "-pthread",
+      "-std=gnu++17",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/environment-variable.o",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-environment-variable",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/environment-variable.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "compile-link-test",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p3/pixels-3124-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor/automated-tests/src/dali-adaptor/dali-test-suite-utils",
+      "${DALI_WEB_ROOT}/tests/unit/web-buffer-controller.cpp",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/shader-parser.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-program.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-controller.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-controller-debug.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-buffer.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-command-buffer.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-debug.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-framebuffer.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-pipeline.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-reflection.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-render-pass.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-render-target.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-sampler.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-shader.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-texture.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-graphics-pipeline-cache.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-context.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-sync-object.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-framebuffer-state-cache.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-sync-pool.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/gles-texture-dependency-checker.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-context.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-rendering.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-sync.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-sync-pool.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-fence.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-memory.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-buffer.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-buffer-memory.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-buffer-storage.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-failure.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/web-gles-program-cache.o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/environment-variable.o",
+      "${DALI_WEB_ROOT}/build/p3/pixels-3124-002/core/libdali2-core.a",
+      "-sABORTING_MALLOC=0",
+      "-sPTHREAD_POOL_SIZE=1",
+      "-sENVIRONMENT=node",
+      "-sEXIT_RUNTIME=1",
+      "-sMIN_WEBGL_VERSION=2",
+      "-sMAX_WEBGL_VERSION=2",
+      "-sASSERTIONS=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-Wl,-Map=${DALI_WEB_ROOT}/logs/p3/controller-3124-003/test.map",
+      "-Wl,--wrap=glGenBuffers",
+      "-Wl,--wrap=glDeleteBuffers",
+      "-Wl,--wrap=glBindBuffer",
+      "-Wl,--wrap=glBufferData",
+      "-Wl,--wrap=glBufferSubData",
+      "-Wl,--wrap=glGetError",
+      "-Wl,--wrap=emscripten_webgl_get_current_context",
+      "-Wl,--wrap=emscripten_is_webgl_context_lost",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-factory",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "factory"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-discard",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "discard"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-factory-allocation",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "factory-allocation"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-buffer-object",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "buffer-object"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-storage-object",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "storage-object"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-memory-object",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "memory-object"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-gl-allocation",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "gl-allocation"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-gl-data",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "gl-data"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-uniform-cpu",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "uniform-cpu"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-uniform-gpu",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "uniform-gpu"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-shutdown",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "shutdown"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-shutdown-allocator",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "shutdown-allocator"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-invalid-allocator",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "invalid-allocator"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-mapped-recycle",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "mapped-recycle"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-recycle-failure",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "recycle-failure"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-grow-failure",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "grow-failure"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-uniform-cpu-failure",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "uniform-cpu-failure"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-uniform-gpu-failure",
+    "argv": [
+      "${DALI_WEB_HISTORICAL_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p3/controller-3124-003/controller-test.js",
+      "uniform-gpu-failure"
+    ],
+    "exitCode": 0
+  }
+]

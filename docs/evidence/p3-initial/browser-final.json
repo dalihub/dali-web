@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "state": "ready",
+      "reason": null
+    },
+    {
+      "state": "stopped",
+      "reason": null
+    }
+  ],
+  "pixels": [],
+  "errors": [],
+  "done": true,
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "sharedMemory": true
+}

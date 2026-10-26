@@ -180,6 +180,17 @@ int main(int argc, char** argv)
     assert(uniform->Flush());
     if(cpu) assert(uploads == 0);
     else assert(std::memcmp(bytes[actual->GetGLBuffer()].data() + 4, &value, 4) == 0);
+    if(cpu)
+    {
+      // CPU uniforms stay mapped across frames, including empty scenes.
+      for(uint32_t size : {32u, 16u, 0u, 32u, 64u})
+      {
+        uniform->ReSpecify(size);
+        assert(uniform->IsValid());
+        assert(uniform->Write(&value, 4, 4) && uniform->Flush());
+        assert(!WebFailure::HasFailure() && uploads == 0);
+      }
+    }
     uniform.reset(); controller.WaitIdle();
   }
   else

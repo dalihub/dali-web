@@ -14,6 +14,9 @@
 #include <map>
 #include <memory>
 #include <new>
+#ifdef DALI_WEB_TEST_READBACK
+#include <GLES3/gl3.h>
+#endif
 
 EM_JS(void, NotifyStatus, (const char* state, const char* reason), {
   const event = {state: UTF8ToString(state), reason: reason ? UTF8ToString(reason) : null};
@@ -27,6 +30,11 @@ EM_JS(void, NotifyStatus, (const char* state, const char* reason), {
 EM_JS_DEPS(dali_web_worker_dependencies, "$PThread");
 EM_JS(void, DisposeWorkers, (), { PThread.terminateAllThreads(); });
 
+#ifdef DALI_WEB_TEST_READBACK
+EM_JS(void, NotifyPixels, (unsigned frame, const unsigned char* pixels, unsigned error), {
+  if (Module['onDaliPixels']) Module['onDaliPixels']({frame, pixels: Array.from(HEAPU8.subarray(pixels, pixels + 8)), error});
+});
+#endif
 
 namespace Dali::Web
 {
@@ -295,6 +303,15 @@ private:
     mCore->PostRender();
     WebFence::Collect();
     WebFailure::CheckGl();
+#ifdef DALI_WEB_TEST_READBACK
+    if(mReadbackFrame < 2 && !WebFailure::HasFailure())
+    {
+      glReadPixels(10, 10, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, mPixels);
+      glReadPixels(160, 120, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, mPixels + 4);
+      mReadbackError = glGetError();
+      ++mReadbackFrame;
+    }
+#endif
   }
   static EM_BOOL AnimationFrame(double timestamp, void* data)
   {
@@ -351,6 +368,13 @@ private:
     }
     else if(reply == Reply::FrameDone)
     {
+#ifdef DALI_WEB_TEST_READBACK
+      if(self.mReadbackFrame && self.mReportedFrame != self.mReadbackFrame)
+      {
+        self.mReportedFrame = self.mReadbackFrame;
+        NotifyPixels(self.mReadbackFrame, self.mPixels, self.mReadbackError);
+      }
+#endif
       self.mInFlight = false;
       if(self.mStopRequested) self.BeginStop();
       else self.ScheduleFrame();
@@ -410,6 +434,13 @@ private:
   bool mStopping{false};
   bool mFailureNotified{false};
   bool mExited{false};
+#ifdef DALI_WEB_TEST_READBACK
+  // Published by the FrameDone mailbox; read on main before the next command.
+  unsigned char mPixels[8]{};
+  unsigned mReadbackError{0};
+  unsigned mReadbackFrame{0};
+  unsigned mReportedFrame{0};
+#endif
 };
 }
 extern "C" EMSCRIPTEN_KEEPALIVE void dali_web_start()

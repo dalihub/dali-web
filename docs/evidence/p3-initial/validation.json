@@ -1,0 +1,27 @@
+{
+  "sourceDrift": [],
+  "browserVersion": "157.0.1",
+  "head": "abf62214b23c651f06536138cb8b6e0c0fddbfb7",
+  "remoteMain": "a68e3f00f0c7752561137c179500b004b930285e",
+  "productionInputs": 498,
+  "nativeConfigure": "C/C++ compiler unavailable",
+  "completed": "P3 initial pixels and local header/SW comparison only",
+  "notVerified": [
+    "GPU partial buffer/readback suite",
+    "event Worker isolation",
+    "SW revisit/update/unregister/failure",
+    "Pages",
+    "full failure/recreation lifecycle",
+    "native build/runtime"
+  ],
+  "uninstrumentedBrowser": "ready -> stopped; exit 0; no errors",
+  "checks": [
+    "git diff --check",
+    "bash -n profile",
+    "Python AST",
+    "JSON parse",
+    "Node --check browser JS",
+    "735 preserved hashes",
+    "498 production source hashes"
+  ]
+}

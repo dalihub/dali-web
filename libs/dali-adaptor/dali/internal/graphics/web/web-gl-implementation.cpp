@@ -19,6 +19,8 @@
 #include <dali/internal/graphics/web/web-gles-failure.h>
 #include <emscripten/html5_webgl.h>
 #include <GLES3/gl3.h>
+#include <memory>
+#include <new>
 namespace DALI_NAMESPACE::Graphics::GLES
 {
 namespace
@@ -1738,6 +1740,41 @@ void WebGlImplementation::GetActiveUniformsiv(GLuint program, GLsizei uniformCou
 {
   if(!WebFailure::CheckGl())
   {
+    return;
+  }
+  // WebGL2 getActiveUniforms excludes UNIFORM_NAME_LENGTH. Query the real
+  // active uniform name through the supported API, including its terminator.
+  if(pname == GL_UNIFORM_NAME_LENGTH)
+  {
+    if(uniformCount < 0 || (uniformCount && (!uniformIndices || !params)))
+    {
+      WebFailure::Latch("invalid uniform name query");
+      return;
+    }
+    if(!uniformCount) return;
+    GLint capacity = 0;
+    glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &capacity);
+    if(!WebFailure::CheckGl()) return;
+    if(capacity <= 0)
+    {
+      WebFailure::Latch("invalid uniform name capacity");
+      return;
+    }
+    std::unique_ptr<GLchar[]> name(new(std::nothrow) GLchar[capacity]);
+    if(!name)
+    {
+      WebFailure::Latch("uniform name allocation failed");
+      return;
+    }
+    for(GLsizei i = 0; i < uniformCount; ++i)
+    {
+      GLsizei length = 0;
+      GLint size = 0;
+      GLenum type = 0;
+      glGetActiveUniform(program, uniformIndices[i], capacity, &length, &size, &type, name.get());
+      if(!WebFailure::CheckGl()) return;
+      params[i] = length + 1;
+    }
     return;
   }
   glGetActiveUniformsiv(program, uniformCount, uniformIndices, pname, params);

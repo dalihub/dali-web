@@ -7,6 +7,7 @@
 #include <cassert>
 #include <string>
 #include <cstdio>
+#include <cstring>
 namespace
 {
 unsigned draws = 0;
@@ -46,7 +47,20 @@ void __wrap_glDrawArrays(GLenum, GLint, GLsizei)
 {
   ++draws;
 }
-
+void __wrap_glGetProgramiv(GLuint program, GLenum pname, GLint* value)
+{
+  assert(program == 1 && pname == GL_ACTIVE_UNIFORM_MAX_LENGTH);
+  *value = 12;
+}
+void __wrap_glGetActiveUniform(GLuint program, GLuint index, GLsizei capacity, GLsizei* length, GLint* size, GLenum* type, GLchar* name)
+{
+  assert(program == 1 && capacity == 12 && index < 2);
+  const char* text = index ? "uMvpMatrix" : "uSize";
+  std::strcpy(name, text);
+  *length = std::strlen(text);
+  *size = 1;
+  *type = GL_FLOAT;
+}
 }
 int main(int argc, char** argv)
 {
@@ -55,6 +69,10 @@ int main(int argc, char** argv)
   assert(gl.ContextCreated());
   assert(gl.GetShaderLanguageVersion() == 300 && !gl.IsAdvancedBlendEquationSupported());
   assert(!ProgramBinaryCache::IsSupported());
+  const GLuint indices[] = {1, 0};
+  GLint lengths[] = {-1, -1};
+  gl.GetActiveUniformsiv(1, 2, indices, GL_UNIFORM_NAME_LENGTH, lengths);
+  assert(lengths[0] == 11 && lengths[1] == 6 && !WebFailure::HasFailure());
   gl.BlendEquation(GL_FUNC_ADD);
   gl.DrawArrays(GL_TRIANGLES, 0, 3);
   assert(draws == 1 && blends == 1);

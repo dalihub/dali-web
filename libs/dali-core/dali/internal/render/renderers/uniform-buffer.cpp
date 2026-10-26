@@ -234,6 +234,7 @@ void UniformBufferV2::ReSpecifyCPU(uint32_t sizeInBytes)
 
   if(sizeInBytes > currentCapacity)
   {
+    mMappedPtr = nullptr;
     Graphics::UniquePtr<Graphics::Buffer> oldBuffer{nullptr};
 
     // If the CPU buffer already exist use it when applying respec
@@ -265,9 +266,7 @@ void UniformBufferV2::ReSpecifyCPU(uint32_t sizeInBytes)
     mController->WaitIdle();
   }
 
-  mMappedPtr = nullptr;
-
-  if(sizeInBytes)
+  if(sizeInBytes && !mMappedPtr)
   {
     // After respecifying the buffer, we can map it persistently as it already exists
     // in the CPU memory

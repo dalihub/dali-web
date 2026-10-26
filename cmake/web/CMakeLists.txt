@@ -25,6 +25,10 @@ target_include_directories(dali-web-renderer PRIVATE "${DALI_GENERATED_INCLUDE_D
 add_executable(dali-web "${DALI_WEB_ROOT}/web/host/web-host.cpp" $<TARGET_OBJECTS:dali-web-renderer>)
 target_compile_features(dali-web PRIVATE cxx_std_17)
 target_compile_definitions(dali-web PRIVATE DEBUG_ENABLED)
+option(DALI_WEB_TEST_READBACK "Read two real frames for the P3 browser test" OFF)
+if(DALI_WEB_TEST_READBACK)
+  target_compile_definitions(dali-web PRIVATE DALI_WEB_TEST_READBACK)
+endif()
 target_include_directories(dali-web PRIVATE "${DALI_GENERATED_INCLUDE_DIR}"
   "${DALI_WEB_ROOT}/libs/dali-core" "${DALI_WEB_ROOT}/libs/dali-adaptor")
 target_link_libraries(dali-web PRIVATE dali2-core)

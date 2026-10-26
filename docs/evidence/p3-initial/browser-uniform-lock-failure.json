@@ -1,0 +1,26 @@
+{
+  "events": [
+    {
+      "state": "ready",
+      "reason": null
+    },
+    {
+      "state": "failure",
+      "reason": "buffer lock bounds or duplicate lock"
+    },
+    {
+      "state": "stopped",
+      "reason": null
+    }
+  ],
+  "pixels": [],
+  "errors": [
+    "web-gles-failure.cpp: Latch(44) > Web GLES stopped: buffer lock bounds or duplicate lock",
+    "uniform-buffer.cpp: MarkFailed(110) > Uniform buffer preparation failed; discard dependent commands"
+  ],
+  "done": true,
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "sharedMemory": true
+}

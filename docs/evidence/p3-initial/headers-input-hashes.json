@@ -1,0 +1,8 @@
+{
+  "${DALI_WEB_ROOT}/logs/p3/browser-pixels-headers-001/assets/probe/production-sw.js": "0fc0de4a2f118626ffb982f23483541d699b374dd1062b4f09694744255f3b37",
+  "${DALI_WEB_ROOT}/logs/p3/browser-pixels-headers-001/assets/probe/production.html": "0e73149c370c39c348fd2486fcbc4df30fe7fcc423f9d26a37f9e765bac4e62d",
+  "${DALI_WEB_ROOT}/logs/p3/browser-pixels-headers-001/assets/probe/production.js": "f8107d62719595dd2a506f8047702cf5ae3bf1099773f5b8e46d971e6fc26d8a",
+  "${DALI_WEB_ROOT}/build/p3/pixels-3124-002/dali-web.js": "c712cb25c76fdff4984a8137904acfea8f3ab413fc4b8293ed996cb5a07249a2",
+  "${DALI_WEB_ROOT}/build/p3/pixels-3124-002/dali-web.worker.js": "10097d952b52b1909af6f47896af9fac9ca1bd0c6f073ec03b8dd8929e5f04fe",
+  "${DALI_WEB_ROOT}/build/p3/pixels-3124-002/dali-web.wasm": "47e07ff57216e927b43dab5103e2afcdab021e7405bbb900f6ee2767999be761"
+}

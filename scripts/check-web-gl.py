@@ -20,7 +20,7 @@ def execute(name, args):
     (run / 'commands.json').write_text(json.dumps(records, indent=2) + '\n')
     print(name, code, flush=True)
     if code: raise SystemExit(code)
-wrap = ['glGetError', 'glGetIntegerv', 'glBlendEquation', 'glDrawArrays', 'emscripten_webgl_get_current_context',
+wrap = ['glGetError', 'glGetIntegerv', 'glGetProgramiv', 'glGetActiveUniform', 'glBlendEquation', 'glDrawArrays', 'emscripten_webgl_get_current_context',
         'emscripten_is_webgl_context_lost', 'emscripten_webgl_get_context_attributes']
 execute('compile-link', [os.environ['EMXX'], '-std=c++17', '-pthread', '-DDEBUG_ENABLED',
     '-I' + str(core / 'generated/include'), '-I' + str(root / 'libs/dali-core'), '-I' + str(root / 'libs/dali-adaptor'),
