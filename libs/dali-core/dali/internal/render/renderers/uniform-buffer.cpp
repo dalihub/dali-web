@@ -33,14 +33,6 @@ namespace
 constexpr uint32_t INTERNAL_UBO_BUFFER_COUNT = 2u;
 constexpr uint32_t DEFAUT_MEMORY_ALIGNMENT{1};
 
-/**
- * Align size to the current block size.
- */
-int AlignSize(int size, int align)
-{
-  return (size % align == 0) ? size : ((size / align) + 1) * align;
-}
-
 } // namespace
 
 Graphics::UniquePtr<UniformBufferV2> UniformBufferV2::New(Dali::Graphics::Controller* controller, bool emulated, uint32_t alignment)
@@ -65,6 +57,12 @@ UniformBufferV2::UniformBufferV2(Dali::Graphics::Controller* controller, bool em
 void UniformBufferV2::ReSpecify(uint32_t sizeInBytes)
 {
   DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, "Respec(%p) [%d] BufferType:%s  newSize:%d\n", this, mCurrentGraphicsBufferIndex, mEmulated ? "CPU" : "GPU", sizeInBytes);
+  if(mFailed)
+  {
+    mBufferList[mCurrentGraphicsBufferIndex].graphicsMemory.reset();
+    mMappedPtr = nullptr;
+  }
+  mFailed = false;
   if(mEmulated)
   {
     ReSpecifyCPU(sizeInBytes);
@@ -75,18 +73,43 @@ void UniformBufferV2::ReSpecify(uint32_t sizeInBytes)
   }
 }
 
-void UniformBufferV2::Write(const void* data, uint32_t size, uint32_t offset)
+bool UniformBufferV2::Write(const void* data, uint32_t size, uint32_t offset)
 {
-  // Very verbose logging!
-  DALI_LOG_INFO(gUniformBufferLogFilter, Debug::LogLevel(4), "Write(%p) [%d] BufferType:%s  offset:%d size:%d\n", this, mCurrentGraphicsBufferIndex, mEmulated ? "CPU" : "GPU", offset, size);
-  if(mEmulated)
+  const auto capacity = GetCurrentCapacity();
+  if(mFailed || offset > capacity || size > capacity - offset || (size && !data))
   {
-    WriteCPU(data, size, offset);
+    MarkFailed();
+    return false;
   }
-  else
+  if(!size)
   {
-    WriteGPU(data, size, offset);
+    return true;
   }
+  if(!mMappedPtr)
+  {
+    Map();
+  }
+  if(mFailed || !mMappedPtr)
+  {
+    MarkFailed();
+    return false;
+  }
+  memcpy(static_cast<uint8_t*>(mMappedPtr) + offset, data, size);
+  return true;
+}
+
+bool UniformBufferV2::IsValid() const
+{
+  return !mFailed;
+}
+
+void UniformBufferV2::MarkFailed()
+{
+  if(!mFailed)
+  {
+    DALI_LOG_ERROR("Uniform buffer preparation failed; discard dependent commands\n");
+  }
+  mFailed = true;
 }
 
 void UniformBufferV2::Map()
@@ -115,12 +138,12 @@ void UniformBufferV2::Unmap()
   }
 }
 
-void UniformBufferV2::Flush()
+bool UniformBufferV2::Flush()
 {
   DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, "Flush(%p) [%d] BufferType:%s\n", this, mCurrentGraphicsBufferIndex, mEmulated ? "CPU" : "GPU");
 
   // Flush only for GPU buffertype by unmapping
-  if(!mEmulated && mMappedPtr)
+  if(!mEmulated && mBufferList[mCurrentGraphicsBufferIndex].graphicsMemory)
   {
     auto& buffer = mBufferList[mCurrentGraphicsBufferIndex];
     if(buffer.graphicsMemory)
@@ -130,10 +153,13 @@ void UniformBufferV2::Flush()
     }
 
     // Swap buffers for GPU UBOs
-    auto s                      = mBufferList.size();
-    mCurrentGraphicsBufferIndex = ((mCurrentGraphicsBufferIndex + 1) % s);
+    if(!mFailed)
+    {
+      mCurrentGraphicsBufferIndex = (mCurrentGraphicsBufferIndex + 1) % mBufferList.size();
+    }
     DALI_ASSERT_DEBUG(mCurrentGraphicsBufferIndex < mBufferList.size());
   }
+  return !mFailed;
 }
 
 void UniformBufferV2::Rollback()
@@ -145,25 +171,28 @@ void UniformBufferV2::Rollback()
   }
 }
 
-uint32_t UniformBufferV2::IncrementOffsetBy(uint32_t value)
+bool UniformBufferV2::IncrementOffsetBy(uint32_t value)
 {
-  if(mEmulated && !mBufferList.empty())
+  auto& buffer = mBufferList[mCurrentGraphicsBufferIndex];
+  const uint32_t padding = value % mBlockAlignment ? mBlockAlignment - value % mBlockAlignment : 0u;
+  if(mFailed || buffer.currentOffset > buffer.capacity || value > buffer.capacity - buffer.currentOffset || padding > buffer.capacity - buffer.currentOffset - value)
   {
-    mBufferList[mCurrentGraphicsBufferIndex].currentOffset += AlignSize(value, mBlockAlignment); // reset offset
-    return mBufferList[mCurrentGraphicsBufferIndex].currentOffset;
-  } // GPU
-  else if(!mBufferList.empty())
-  {
-    mBufferList[mCurrentGraphicsBufferIndex].currentOffset += AlignSize(value, mBlockAlignment); // reset offset
-    return mBufferList[mCurrentGraphicsBufferIndex].currentOffset;
+    MarkFailed();
+    return false;
   }
-  DALI_LOG_INFO(gUniformBufferLogFilter, Debug::General, "Buffer should be allocated before incrementing offset\n");
-  return 0;
+  buffer.currentOffset += value + padding;
+  return true;
 }
 
 bool UniformBufferV2::MemoryCompare(void* data, uint32_t offset, uint32_t size)
 {
-  return !memcmp(data, reinterpret_cast<uint8_t*>(mMappedPtr) + offset, size);
+  const auto capacity = GetCurrentCapacity();
+  if(mFailed || offset > capacity || size > capacity - offset || (size && (!data || !mMappedPtr)))
+  {
+    MarkFailed();
+    return false;
+  }
+  return !size || !memcmp(data, static_cast<uint8_t*>(mMappedPtr) + offset, size);
 }
 
 uint32_t UniformBufferV2::GetBlockAlignment() const
@@ -194,7 +223,7 @@ uint32_t UniformBufferV2::GetCurrentCapacity() const
 
 Dali::Graphics::Buffer* UniformBufferV2::GetGraphicsBuffer() const
 {
-  return mBufferList[mCurrentGraphicsBufferIndex].graphicsBuffer.get();
+  return mFailed ? nullptr : mBufferList[mCurrentGraphicsBufferIndex].graphicsBuffer.get();
 }
 
 void UniformBufferV2::ReSpecifyCPU(uint32_t sizeInBytes)
@@ -221,10 +250,16 @@ void UniformBufferV2::ReSpecifyCPU(uint32_t sizeInBytes)
                         .SetUsage(0u | Graphics::BufferUsage::UNIFORM_BUFFER);
 
     gfxBuffer.graphicsBuffer = mController->CreateBuffer(createInfo, std::move(oldBuffer));
-    gfxBuffer.capacity       = sizeInBytes;
+    gfxBuffer.capacity = gfxBuffer.graphicsBuffer ? sizeInBytes : 0;
     gfxBuffer.currentOffset  = 0;
 
     mBufferList[0] = std::move(gfxBuffer);
+    if(!mBufferList[mCurrentGraphicsBufferIndex].graphicsBuffer)
+    {
+      mMappedPtr = nullptr;
+      MarkFailed();
+      return;
+    }
     // make sure buffer is created (move creation to run in parallel in the backed
     // as this may be a major slowdown)
     mController->WaitIdle();
@@ -263,10 +298,16 @@ void UniformBufferV2::ReSpecifyGPU(uint32_t sizeInBytes)
                         .SetUsage(0u | Graphics::BufferUsage::UNIFORM_BUFFER);
 
     gfxBuffer.graphicsBuffer = mController->CreateBuffer(createInfo, std::move(oldBuffer));
-    gfxBuffer.capacity       = sizeInBytes;
+    gfxBuffer.capacity = gfxBuffer.graphicsBuffer ? sizeInBytes : 0;
     gfxBuffer.currentOffset  = 0;
 
     mBufferList[mCurrentGraphicsBufferIndex] = std::move(gfxBuffer);
+    if(!mBufferList[mCurrentGraphicsBufferIndex].graphicsBuffer)
+    {
+      mMappedPtr = nullptr;
+      MarkFailed();
+      return;
+    }
     // make sure buffer is created (move creation to run in parallel in the backend
     // as this may be a major slowdown)
     mController->WaitIdle();
@@ -281,43 +322,14 @@ void UniformBufferV2::ReSpecifyGPU(uint32_t sizeInBytes)
   }
 }
 
-void UniformBufferV2::WriteCPU(const void* data, uint32_t size, uint32_t offset)
-{
-  // If not mapped
-  if(!mMappedPtr)
-  {
-    DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, "Warning: CPU buffer should already be mapped!\n");
-    MapCPU();
-  }
-
-  DALI_ASSERT_DEBUG(offset + size <= mBufferList[mCurrentGraphicsBufferIndex].capacity);
-
-  if(mMappedPtr)
-  {
-    // just copy whatever comes here
-    memcpy(reinterpret_cast<uint8_t*>(mMappedPtr) + offset, data, size);
-  }
-}
-
-void UniformBufferV2::WriteGPU(const void* data, uint32_t size, uint32_t offset)
-{
-  if(!mMappedPtr)
-  {
-    DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, "Warning: GPU buffer should already be mapped!\n");
-    MapGPU();
-  }
-
-  DALI_ASSERT_DEBUG(offset + size <= mBufferList[mCurrentGraphicsBufferIndex].capacity);
-
-  if(mMappedPtr)
-  {
-    memcpy(reinterpret_cast<uint8_t*>(mMappedPtr) + offset, data, size);
-  }
-}
-
 void UniformBufferV2::MapCPU()
 {
   auto& buffer = mBufferList[0]; // CPU contains always one buffer
+  if(mFailed || !buffer.graphicsBuffer)
+  {
+    MarkFailed();
+    return;
+  }
   if(!buffer.graphicsMemory)
   {
     Graphics::MapBufferInfo info{};
@@ -334,11 +346,20 @@ void UniformBufferV2::MapCPU()
     mMappedPtr = buffer.graphicsMemory->LockRegion(0, buffer.capacity);
     DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, "CPU buffer is mapped to %p\n", mMappedPtr);
   }
+  if(!mMappedPtr)
+  {
+    MarkFailed();
+  }
 }
 
 void UniformBufferV2::MapGPU()
 {
   auto& buffer = mBufferList[mCurrentGraphicsBufferIndex];
+  if(mFailed || !buffer.graphicsBuffer)
+  {
+    MarkFailed();
+    return;
+  }
   if(!buffer.graphicsMemory)
   {
     Graphics::MapBufferInfo info{};
@@ -354,6 +375,10 @@ void UniformBufferV2::MapGPU()
   {
     mMappedPtr = buffer.graphicsMemory->LockRegion(0, buffer.capacity);
     DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, "GPU buffer is mapped to %p\n", mMappedPtr);
+  }
+  if(!mMappedPtr)
+  {
+    MarkFailed();
   }
 }
 

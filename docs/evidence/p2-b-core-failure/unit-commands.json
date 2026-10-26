@@ -1,0 +1,98 @@
+[
+  {
+    "name": "version-EMXX",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-CMAKE",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-NINJA",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-NODE",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "version-PYTHON",
+    "argv": [
+      "/usr/bin/python3",
+      "--version"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "configure",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/emcmake",
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/cmake/p2-b-core-tests",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/core-failure-005",
+      "-G",
+      "Ninja",
+      "-DCMAKE_BUILD_TYPE=Debug",
+      "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "build",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "--build",
+      "${DALI_WEB_ROOT}/build/p2-b/core-failure-005",
+      "--target",
+      "core-buffer-failure",
+      "core-smoke",
+      "-j",
+      "6"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "node-failure",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/core-failure-005/core-buffer-failure.js"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  },
+  {
+    "name": "node-smoke",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/core-failure-005/probes/core-smoke.js"
+    ],
+    "cwd": "${DALI_WEB_ROOT}",
+    "exitCode": 0
+  }
+]

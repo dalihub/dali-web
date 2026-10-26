@@ -90,7 +90,7 @@ public:
    * @brief Total aligned block sizes for registered uniform block and programs.
    * @return Total aligned block size which registered this frame.
    */
-  uint32_t GetTotalAlignedBlockSize() const;
+  uint64_t GetTotalAlignedBlockSize() const;
 
   /**
    * @brief Create UniformBufferView for each pair of program and shared uniform blocks.

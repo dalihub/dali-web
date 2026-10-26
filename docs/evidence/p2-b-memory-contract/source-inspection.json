@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-23",
+  "head": "abf62214b23c651f06536138cb8b6e0c0fddbfb7",
+  "kind": "static-source-inspection",
+  "runtimeTestExecuted": false,
+  "productionCodeChanged": false,
+  "sources": [
+    {
+      "path": "libs/dali-core/dali/graphics-api/graphics-controller.h",
+      "sha256": "64ea7ce10962f63057b9a9a858afb16f804a66d8ff84442bd6b336dfb4e930fb",
+      "excerpts": [
+        {
+          "firstLine": 300,
+          "lastLine": 306,
+          "text": "  /**\n   * @brief Maps memory associated with Buffer object\n   *\n   * @param[in] mapInfo Filled details of mapped resource\n   * @return Returns pointer to Memory object or nullptr on error\n   */\n  virtual UniquePtr<Memory> MapBufferRange(const MapBufferInfo& mapInfo) = 0;"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-core/dali/graphics-api/graphics-memory.h",
+      "sha256": "cc3fe89be3ac7c77f693ab3655b491257b40646941c4ee8768ae32b73d1304e0",
+      "excerpts": [
+        {
+          "firstLine": 60,
+          "lastLine": 68,
+          "text": "  virtual void* LockRegion(uint32_t offset, uint32_t size) = 0;\n\n  /**\n   * @brief Unlocks previously locked memory region\n   *\n   * @param[in] flush If true, region will be flushed immediately and visible to GPU\n   */\n  virtual void Unlock(bool flush) = 0;\n"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-core/dali/internal/render/renderers/gpu-buffer.cpp",
+      "sha256": "00da9e00a46e76f11ca7cd31d4d9ef338ba69547ad8760f4e686cbf6b4974ae8",
+      "excerpts": [
+        {
+          "firstLine": 41,
+          "lastLine": 102,
+          "text": "void GpuBuffer::UpdateDataBuffer(Graphics::Controller& graphicsController, uint32_t size, const void* data)\n{\n  DALI_ASSERT_DEBUG(size > 0);\n  mSize = size;\n\n  /**\n   *  We will create a new buffer in following cases:\n   *  1. The buffer doesn't exist\n   *  2. The spec changes (size of new buffer changes)\n   *  3. The policy is to discard on write\n   *\n   *  Third option will try to recycle existing buffer when its spec stays unchanged.\n   *  It will allow the GPU driver to release the underlying memory and attach new memory\n   *  to the GPU buffer object. It will prevent memory locking during writes in case the\n   *  buffer is in use by the GPU.\n   */\n  if(!mGraphicsObject || size > mCapacity || mWritePolicy == WritePolicy::DISCARD)\n  {\n    Graphics::BufferCreateInfo createInfo{};\n    createInfo.SetUsage(mUsage).SetSize(size);\n    mGraphicsObject = graphicsController.CreateBuffer(createInfo, std::move(mGraphicsObject));\n    mCapacity       = size;\n  }\n\n  Graphics::MapBufferInfo info{};\n  info.buffer = mGraphicsObject.get();\n  info.usage  = 0 | Graphics::MemoryUsageFlagBits::WRITE;\n  info.offset = 0;\n  info.size   = size;\n\n  auto  memory = graphicsController.MapBufferRange(info);\n  void* ptr    = memory->LockRegion(0, size);\n  memcpy(ptr, data, size);\n  memory->Unlock(true);\n  graphicsController.UnmapMemory(std::move(memory));\n}\n\nvoid GpuBuffer::UpdateDataBufferWithCallback(Graphics::Controller& graphicsController, Dali::VertexBufferUpdateCallback* callback, uint32_t& bytesUpdatedCount)\n{\n  // create or orphan object so mapping can be instant\n  if(!mGraphicsObject || mWritePolicy == WritePolicy::DISCARD)\n  {\n    Graphics::BufferCreateInfo createInfo{};\n    createInfo.SetUsage(mUsage).SetSize(mSize);\n    mGraphicsObject = graphicsController.CreateBuffer(createInfo, std::move(mGraphicsObject));\n    mCapacity       = mSize;\n  }\n\n  Graphics::MapBufferInfo info{};\n  info.buffer = mGraphicsObject.get();\n  info.usage  = 0 | Graphics::MemoryUsageFlagBits::WRITE;\n  info.offset = 0;\n  info.size   = mSize; // map entire buffer\n\n  auto  memory = graphicsController.MapBufferRange(info);\n  void* ptr    = memory->LockRegion(0, mSize);\n\n  bytesUpdatedCount = callback->Invoke(ptr, mSize); // passing low level binary size, not element count!\n\n  memory->Unlock(true);\n  graphicsController.UnmapMemory(std::move(memory));\n}"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-core/dali/internal/render/renderers/render-vertex-buffer.cpp",
+      "sha256": "0131482d4ec2253c95fc8ae49fe24abc3cb0736b857882417aca04fe0c6f29e0",
+      "excerpts": [
+        {
+          "firstLine": 74,
+          "lastLine": 106,
+          "text": "  if(!mGpuBuffer || mDataChanged)\n  {\n    if(!mGpuBuffer)\n    {\n      mGpuBuffer = new GpuBuffer(graphicsController, 0 | Graphics::BufferUsage::VERTEX_BUFFER, GpuBuffer::WritePolicy::DISCARD);\n    }\n\n    // Update the GpuBuffer\n    if(mGpuBuffer && mData && !mData->Empty())\n    {\n      DALI_ASSERT_DEBUG(mSize && \"No data in the property buffer!\");\n      mGpuBuffer->UpdateDataBuffer(graphicsController, GetDataSize(), &((*mData)[0]));\n    }\n\n    mElementCount = mSize;\n\n    mDataChanged = false;\n  }\n\n  // To execute the callback the buffer must be already initialized.\n  mVertexBufferStateLock.ChangeState(VertexBufferSyncState::UNLOCKED, VertexBufferSyncState::LOCKED_FOR_UPDATE);\n  if(mVertexBufferUpdateCallback && mGpuBuffer)\n  {\n    // If running callback, we may end up with less elements in the buffer\n    // of the same capacity\n    uint32_t updatedSize = mSize * mFormat->size;\n    mGpuBuffer->UpdateDataBufferWithCallback(graphicsController, mVertexBufferUpdateCallback.get(), updatedSize);\n    mElementCount = updatedSize / mFormat->size;\n  }\n  mVertexBufferStateLock.ChangeState(VertexBufferSyncState::LOCKED_FOR_UPDATE, VertexBufferSyncState::UNLOCKED);\n  return true;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-core/dali/internal/render/renderers/render-geometry.cpp",
+      "sha256": "60739ed68d6793d2d493b78a4874c171de872999ba6fb9e9ff2a4cdc9d66c697",
+      "excerpts": [
+        {
+          "firstLine": 127,
+          "lastLine": 168,
+          "text": "void Geometry::Upload(Graphics::Controller& graphicsController)\n{\n  if(!mHasBeenUploaded)\n  {\n    // Update buffers\n    if(mIndicesChanged)\n    {\n      if(mIndices.Empty())\n      {\n        mIndexBuffer = nullptr;\n      }\n      else\n      {\n        if(mIndexBuffer == nullptr)\n        {\n          // Currently we are unable to reuse the index buffer so the write policy is to preserve current content\n          mIndexBuffer = new GpuBuffer(graphicsController, 0 | Graphics::BufferUsage::INDEX_BUFFER, GpuBuffer::WritePolicy::RETAIN);\n        }\n\n        auto bufferSize = static_cast<uint32_t>(sizeof(uint16_t) * mIndices.Size());\n        mIndexBuffer->UpdateDataBuffer(graphicsController, bufferSize, &mIndices[0]);\n      }\n\n      mIndicesChanged = false;\n    }\n\n    // Make geometry buffer changed as true if Type changed.\n    bool geometryBufferChanged = mUpdated;\n    for(auto&& buffer : mVertexBuffers)\n    {\n      geometryBufferChanged = geometryBufferChanged || buffer->IsDataChanged();\n      mUpdated              = mUpdated || geometryBufferChanged || buffer->IsRedrawRequired();\n      if(!buffer->Update(graphicsController))\n      {\n        // Vertex buffer is not ready ( Size, data or format has not been specified yet )\n        return;\n      }\n    }\n\n    mHasBeenUploaded = true;\n\n    // Notify to observers that geometry information has changed"
+        },
+        {
+          "firstLine": 250,
+          "lastLine": 263,
+          "text": "  {\n    // Issue draw call only if there's non-zero numIndices\n    if(numIndices)\n    {\n      // Indexed draw call\n      const Graphics::Buffer* ibo = mIndexBuffer->GetGraphicsObject();\n      if(ibo)\n      {\n        commandBuffer.BindIndexBuffer(*ibo, 0, mIndexType);\n      }\n\n      commandBuffer.DrawIndexed(numIndices, instanceCount, static_cast<uint32_t>(firstIndexOffset), 0, 0);\n    }\n  }"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-core/dali/internal/render/renderers/uniform-buffer.cpp",
+      "sha256": "350358c6e4a2fccadf1357412eeafd4480ed82234f0b3d2b900233b1dbbc34d8",
+      "excerpts": [
+        {
+          "firstLine": 284,
+          "lastLine": 358,
+          "text": "void UniformBufferV2::WriteCPU(const void* data, uint32_t size, uint32_t offset)\n{\n  // If not mapped\n  if(!mMappedPtr)\n  {\n    DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, \"Warning: CPU buffer should already be mapped!\\n\");\n    MapCPU();\n  }\n\n  DALI_ASSERT_DEBUG(offset + size <= mBufferList[mCurrentGraphicsBufferIndex].capacity);\n\n  if(mMappedPtr)\n  {\n    // just copy whatever comes here\n    memcpy(reinterpret_cast<uint8_t*>(mMappedPtr) + offset, data, size);\n  }\n}\n\nvoid UniformBufferV2::WriteGPU(const void* data, uint32_t size, uint32_t offset)\n{\n  if(!mMappedPtr)\n  {\n    DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, \"Warning: GPU buffer should already be mapped!\\n\");\n    MapGPU();\n  }\n\n  DALI_ASSERT_DEBUG(offset + size <= mBufferList[mCurrentGraphicsBufferIndex].capacity);\n\n  if(mMappedPtr)\n  {\n    memcpy(reinterpret_cast<uint8_t*>(mMappedPtr) + offset, data, size);\n  }\n}\n\nvoid UniformBufferV2::MapCPU()\n{\n  auto& buffer = mBufferList[0]; // CPU contains always one buffer\n  if(!buffer.graphicsMemory)\n  {\n    Graphics::MapBufferInfo info{};\n    info.buffer           = buffer.graphicsBuffer.get();\n    info.usage            = 0 | Graphics::MemoryUsageFlagBits::WRITE;\n    info.offset           = 0;\n    info.size             = buffer.capacity;\n    buffer.graphicsMemory = mController->MapBufferRange(info);\n  }\n\n  // obtain pointer instantly\n  if(buffer.graphicsMemory)\n  {\n    mMappedPtr = buffer.graphicsMemory->LockRegion(0, buffer.capacity);\n    DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, \"CPU buffer is mapped to %p\\n\", mMappedPtr);\n  }\n}\n\nvoid UniformBufferV2::MapGPU()\n{\n  auto& buffer = mBufferList[mCurrentGraphicsBufferIndex];\n  if(!buffer.graphicsMemory)\n  {\n    Graphics::MapBufferInfo info{};\n    info.buffer           = buffer.graphicsBuffer.get();\n    info.usage            = 0 | Graphics::MemoryUsageFlagBits::WRITE;\n    info.offset           = 0;\n    info.size             = buffer.capacity;\n    buffer.graphicsMemory = mController->MapBufferRange(info);\n  }\n\n  // obtain pointer instantly\n  if(buffer.graphicsMemory)\n  {\n    mMappedPtr = buffer.graphicsMemory->LockRegion(0, buffer.capacity);\n    DALI_LOG_INFO(gUniformBufferLogFilter, Debug::Verbose, \"GPU buffer is mapped to %p\\n\", mMappedPtr);\n  }\n}"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-core/dali/internal/render/common/render-manager.cpp",
+      "sha256": "ccd59d2d0cbcd849cd400bee59bf212681912850274150fbdc6adef108e0a6dc",
+      "excerpts": [
+        {
+          "firstLine": 607,
+          "lastLine": 615,
+          "text": "  {\n    DALI_LOG_INFO(gLogFilter, Debug::General, \"Render: Processing\\n\");\n\n    // Upload the geometries\n    for(auto&& geom : mImpl->geometryContainer)\n    {\n      geom->Upload(mImpl->graphicsController);\n    }\n  }"
+        }
+      ]
+    },
+    {
+      "path": "libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-controller.cpp",
+      "sha256": "9deb9ad1867c648b4d3cb51f2b7ac54dc07eca352883aaa2c29b1a837659a062",
+      "excerpts": [
+        {
+          "firstLine": 1037,
+          "lastLine": 1057,
+          "text": "Graphics::UniquePtr<Memory> GlesGraphicsController::MapBufferRange(const MapBufferInfo& mapInfo)\n{\n  // Mapping buffer requires the object to be created NOW\n  // Workaround - flush now, otherwise there will be given a staging buffer\n  // in case when the buffer is not there yet\n  if(!mCreateBufferQueue.empty())\n  {\n    mGraphics->ActivateResourceContext();\n    ProcessCreateQueues();\n  }\n\n  if(GetGLESVersion() < GLES::GLESVersion::GLES_30)\n  {\n    return Graphics::UniquePtr<Memory>(new GLES::Memory2(mapInfo, *this));\n  }\n  else\n  {\n    return Graphics::UniquePtr<Memory>(new GLES::Memory3(mapInfo, *this));\n  }\n}\n"
+        }
+      ]
+    }
+  ]
+}

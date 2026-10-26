@@ -63,7 +63,7 @@ public:
    * @param[in] offset The offset of this view from ubo
    * @return A new UniformBufferView
    */
-  static UniformBufferView* New(UniformBufferV2& ubo, uint32_t offset);
+  static UniformBufferView* New(UniformBufferV2& ubo, uint32_t offset, uint32_t size);
 
   /**
    * Try to recycle input view. If recycle failed, inputed view memory freed, and new UniformView created.
@@ -72,7 +72,7 @@ public:
    * @param[in] offset The offset of this view from ubo
    * @return A UniformBufferView that recycled, or newly created.
    */
-  static UniformBufferView* TryRecycle(UniformBufferView*& oldView, UniformBufferV2& ubo, uint32_t offset);
+  static UniformBufferView* TryRecycle(UniformBufferView*& oldView, UniformBufferV2& ubo, uint32_t offset, uint32_t size);
 
   /**
    * Register memory pool of UBO view.
@@ -103,7 +103,7 @@ public:
    * @param[in] size size of source data
    * @param[in] offset destination offset from the offset of this view
    */
-  void Write(const void* data, uint32_t size, uint32_t offset);
+  bool Write(const void* data, uint32_t size, uint32_t offset);
 
   /**
    * @brief Returns the offset within the UBO
@@ -125,10 +125,11 @@ protected:
   /**
    * Protected constructor. See New()
    */
-  UniformBufferView(UniformBufferV2& ubo, uint32_t offset);
+  UniformBufferView(UniformBufferV2& ubo, uint32_t offset, uint32_t size);
 
 private:
   UniformBufferV2* mUniformBuffer{nullptr}; ///< UniformBuffer that the view views
+  uint32_t mSize{0u}; ///< Bounds of this view, excluding alignment padding.
   uint32_t         mOffset{0u};             ///< Offset within the buffer
 };
 } // namespace Render

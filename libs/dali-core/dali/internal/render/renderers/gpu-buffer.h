@@ -77,7 +77,7 @@ public:
    * @param size Specifies the size in bytes of the buffer object's new data store.
    * @param data pointer to the data to load
    */
-  void UpdateDataBuffer(Graphics::Controller& graphicsController, uint32_t size, const void* data);
+  bool UpdateDataBuffer(Graphics::Controller& graphicsController, uint32_t size, const void* data);
 
   /**
    * Updates existing buffer by calling associated VertexBufferUpdateCallback
@@ -88,7 +88,7 @@ public:
    * @param[in] callback  Valid pointer to the VertexBufferUpdateCallback
    * @param[out] bytesUpdatedCount Number of bytes updated
    */
-  void UpdateDataBufferWithCallback(Graphics::Controller& graphicsController, Dali::VertexBufferUpdateCallback* callback, uint32_t& bytesUpdatedCount);
+  bool UpdateDataBufferWithCallback(Graphics::Controller& graphicsController, Dali::VertexBufferUpdateCallback* callback, uint32_t& bytesUpdatedCount);
 
   /**
    * Get the size of the buffer
@@ -101,7 +101,7 @@ public:
 
   [[nodiscard]] inline const Graphics::Buffer* GetGraphicsObject() const
   {
-    return mGraphicsObject.get();
+    return mValid ? mGraphicsObject.get() : nullptr;
   }
 
   /**
@@ -114,6 +114,7 @@ private:
   uint32_t                              mCapacity{0}; ///< buffer capacity
   uint32_t                              mSize{0};     ///< buffer size
   Graphics::BufferUsageFlags            mUsage;
+  bool mValid{false}; ///< Only successfully written data may be drawn.
   WritePolicy                           mWritePolicy{WritePolicy::RETAIN}; ///< data write policy for the buffer
 };
 

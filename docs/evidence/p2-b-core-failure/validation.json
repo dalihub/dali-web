@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-23",
+  "kind": "Core failure implementation checkpoint",
+  "preservation": {
+    "logs/p2-b/context-001/preserved-hashes.json": {
+      "count": 1370,
+      "changed": []
+    },
+    "logs/p2-b/sync-session-001/before.json": {
+      "count": 36,
+      "changed": []
+    },
+    "logs/p2-b/memory-contract-001/before.json": {
+      "count": 51,
+      "changed": []
+    }
+  },
+  "testInputChanges": {
+    "core-failure-005": [],
+    "core-failure-web-001": []
+  },
+  "markdownLinksChecked": 83,
+  "missingMarkdownLinks": [],
+  "diffCheckExitCode": 0,
+  "publicApiDiffExitCode": 0,
+  "changedTrackedProductionFiles": [
+    "libs/dali-core/dali/internal/render/common/render-manager.cpp",
+    "libs/dali-core/dali/internal/render/common/shared-uniform-buffer-view-container.cpp",
+    "libs/dali-core/dali/internal/render/common/shared-uniform-buffer-view-container.h",
+    "libs/dali-core/dali/internal/render/renderers/gpu-buffer.cpp",
+    "libs/dali-core/dali/internal/render/renderers/gpu-buffer.h",
+    "libs/dali-core/dali/internal/render/renderers/render-geometry.cpp",
+    "libs/dali-core/dali/internal/render/renderers/render-renderer.cpp",
+    "libs/dali-core/dali/internal/render/renderers/render-renderer.h",
+    "libs/dali-core/dali/internal/render/renderers/render-vertex-buffer.cpp",
+    "libs/dali-core/dali/internal/render/renderers/uniform-buffer-manager.cpp",
+    "libs/dali-core/dali/internal/render/renderers/uniform-buffer-manager.h",
+    "libs/dali-core/dali/internal/render/renderers/uniform-buffer-view.cpp",
+    "libs/dali-core/dali/internal/render/renderers/uniform-buffer-view.h",
+    "libs/dali-core/dali/internal/render/renderers/uniform-buffer.cpp",
+    "libs/dali-core/dali/internal/render/renderers/uniform-buffer.h"
+  ],
+  "unexpectedProductionPaths": [],
+  "newCommitCreated": false,
+  "passed": true
+}

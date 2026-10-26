@@ -90,7 +90,7 @@ public:
   using UniformBufferViewContainer = std::unordered_map<ProgramUniformBlockPair, Dali::Graphics::UniquePtr<Render::UniformBufferView>, ProgramUniformBlockPair::ProgramUniformBlockPairHash>;
   UniformBufferViewContainer mSharedUniformBlockBufferViews{};
 
-  uint32_t mTotalAlignedBlockSize{0u};
+  uint64_t mTotalAlignedBlockSize{0u};
 
   Render::UniformBlock::ProgramIndex mLatestQueryIndex{0u};
   Render::UniformBlock*              mLatestQueryBlock{nullptr};
@@ -115,12 +115,12 @@ bool SharedUniformBufferViewContainer::RegisterSharedUniformBlockAndPrograms(con
     mImpl->mTotalAlignedBlockSize += blockSizeAligned;
   }
 
-  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Registered : %zu, Program : %p, UBO : %p, blockSize : %u %u -- Registered : %d. Total GPU size : %u\n", mImpl->mSharedUniformBlockBufferViews.size(), &program, &sharedUniformBlock, blockSize, blockSizeAligned, ret.second, mImpl->mTotalAlignedBlockSize);
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Registered : %zu, Program : %p, UBO : %p, blockSize : %u %u -- Registered : %d. Total GPU size : %llu\n", mImpl->mSharedUniformBlockBufferViews.size(), &program, &sharedUniformBlock, blockSize, blockSizeAligned, ret.second, static_cast<unsigned long long>(mImpl->mTotalAlignedBlockSize));
 
   return ret.second;
 }
 
-uint32_t SharedUniformBufferViewContainer::GetTotalAlignedBlockSize() const
+uint64_t SharedUniformBufferViewContainer::GetTotalAlignedBlockSize() const
 {
   return mImpl->mTotalAlignedBlockSize;
 }
@@ -166,7 +166,7 @@ void SharedUniformBufferViewContainer::Initialize(Render::UniformBufferManager& 
     // Write to the buffer view here, by value at sharedUniformBlock.
     sharedUniformBlock.WriteUniforms(programIndex, ubo);
   }
-  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Registered : %zu, SharedUniformBufferView count : %u, total block size:%u %u\n", mImpl->mSharedUniformBlockBufferViews.size(), totalUniformBufferViewCount, totalSize, mImpl->mTotalAlignedBlockSize);
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Registered : %zu, SharedUniformBufferView count : %u, total block size:%u %llu\n", mImpl->mSharedUniformBlockBufferViews.size(), totalUniformBufferViewCount, totalSize, static_cast<unsigned long long>(mImpl->mTotalAlignedBlockSize));
 }
 
 Render::UniformBufferView* SharedUniformBufferViewContainer::GetSharedUniformBlockBufferView(const Program& program, Render::UniformBlock& sharedUniformBlock) const

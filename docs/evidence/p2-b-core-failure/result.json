@@ -1,0 +1,95 @@
+{
+  "scope": "Core internal failure handling; not Web memory or production host",
+  "head": "abf62214b23c651f06536138cb8b6e0c0fddbfb7",
+  "committed": false,
+  "p2Complete": false,
+  "gpuTested": false,
+  "nativeRuntimeTested": false,
+  "unitRun": "core-failure-005",
+  "unitExits": {
+    "version-EMXX": 0,
+    "version-CMAKE": 0,
+    "version-NINJA": 0,
+    "version-NODE": 0,
+    "version-PYTHON": 0,
+    "configure": 0,
+    "build": 0,
+    "node-failure": 0,
+    "node-smoke": 0
+  },
+  "boundaryRun": "core-failure-web-001",
+  "boundaryCoreBuildExit": 0,
+  "compileCount": 34,
+  "nmObjectCount": 34,
+  "strict": {
+    "webgl2": {
+      "exitCode": 1,
+      "unresolved": [
+        "Dali::FileLoader::ReadFile(std::__2::basic_string<char, std::__2::char_traits<char>, std::__2::allocator<char>> const&, Dali::Vector<char, true>&, Dali::FileLoader::FileType)",
+        "Dali::ADAPTOR_MAJOR_VERSION",
+        "Dali::ADAPTOR_MINOR_VERSION",
+        "Dali::ADAPTOR_MICRO_VERSION",
+        "Dali::TizenPlatform::PrintSystemError(char const*, char const*, int)",
+        "glUnmapBuffer",
+        "glGetBufferPointerv",
+        "glMapBufferRange",
+        "glFlushMappedBufferRange",
+        "glBlendBarrier"
+      ],
+      "mapExists": false
+    },
+    "full-es3": {
+      "exitCode": 1,
+      "unresolved": [
+        "Dali::FileLoader::ReadFile(std::__2::basic_string<char, std::__2::char_traits<char>, std::__2::allocator<char>> const&, Dali::Vector<char, true>&, Dali::FileLoader::FileType)",
+        "Dali::ADAPTOR_MAJOR_VERSION",
+        "Dali::ADAPTOR_MINOR_VERSION",
+        "Dali::ADAPTOR_MICRO_VERSION",
+        "Dali::TizenPlatform::PrintSystemError(char const*, char const*, int)",
+        "glBlendBarrier"
+      ],
+      "mapExists": false
+    }
+  },
+  "earlierUnitAttempts": {
+    "core-failure-001": {
+      "version-EMXX": 0,
+      "version-CMAKE": 0,
+      "version-NINJA": 0,
+      "version-NODE": 0,
+      "version-PYTHON": 0,
+      "configure": 0,
+      "build": 1
+    },
+    "core-failure-002": {
+      "version-EMXX": 0,
+      "version-CMAKE": 0,
+      "version-NINJA": 0,
+      "version-NODE": 0,
+      "version-PYTHON": 0,
+      "configure": 0,
+      "build": 1
+    },
+    "core-failure-003": {
+      "version-EMXX": 0,
+      "version-CMAKE": 0,
+      "version-NINJA": 0,
+      "version-NODE": 0,
+      "version-PYTHON": 0,
+      "configure": 0,
+      "build": 0,
+      "node-failure": 0,
+      "node-smoke": 0
+    },
+    "core-failure-004": {
+      "version-EMXX": 0,
+      "version-CMAKE": 0,
+      "version-NINJA": 0,
+      "version-NODE": 0,
+      "version-PYTHON": 0,
+      "configure": 0,
+      "build": 0,
+      "node-failure": 1
+    }
+  }
+}

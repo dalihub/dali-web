@@ -683,7 +683,7 @@ private:
    * @param[in] instruction The render instruction
    * @param[in] The node index
    */
-  void WriteUniformBuffer(Graphics::CommandBuffer&             commandBuffer,
+  bool WriteUniformBuffer(Graphics::CommandBuffer&             commandBuffer,
                           Program*                             program,
                           const SceneGraph::RenderInstruction& instruction,
                           const Matrix&                        modelMatrix,

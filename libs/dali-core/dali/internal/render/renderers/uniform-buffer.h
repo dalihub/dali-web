@@ -53,13 +53,13 @@ public:
    */
   void ReSpecify(uint32_t sizeInBytes);
 
-  void Write(const void* data, uint32_t size, uint32_t offset);
+  bool Write(const void* data, uint32_t size, uint32_t offset);
 
   void Map();
 
   void Unmap();
 
-  void Flush(); // We aren't guaranteeing creation with this call.
+  bool Flush(); // We aren't guaranteeing creation with this call.
 
   void Rollback();
 
@@ -67,7 +67,11 @@ public:
    * Increase offset by value.
    * Note that new offset will meet alignment requirements
    */
-  uint32_t IncrementOffsetBy(uint32_t value);
+  bool IncrementOffsetBy(uint32_t value);
+
+  bool IsValid() const;
+
+  void MarkFailed();
 
   bool MemoryCompare(void* data, uint32_t offset, uint32_t size);
 
@@ -85,10 +89,6 @@ private:
   void ReSpecifyCPU(uint32_t sizeInBytes);
 
   void ReSpecifyGPU(uint32_t sizeInBytes);
-
-  void WriteCPU(const void* data, uint32_t size, uint32_t offset);
-
-  void WriteGPU(const void* data, uint32_t size, uint32_t offset);
 
   void MapCPU();
 
@@ -116,6 +116,7 @@ private:
   void*                  mMappedPtr{nullptr};
   uint32_t               mCurrentGraphicsBufferIndex{0u};
   bool                   mEmulated{false};
+  bool mFailed{false};
 };
 } //namespace DALI_NAMESPACE::Internal::Render
 #endif //DALI_INTERNAL_UNIFORM_BUFFER_H

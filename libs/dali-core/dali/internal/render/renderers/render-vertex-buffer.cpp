@@ -18,7 +18,10 @@
 // CLASS HEADER
 #include <dali/internal/render/renderers/render-vertex-buffer.h>
 
+#include <dali/integration-api/debug.h>
+
 // INTERNAL HEADERS
+#include <limits>
 #include <dali/internal/event/rendering/vertex-buffer-impl.h> // Dali::Internal::VertexBuffer
 
 namespace DALI_NAMESPACE
@@ -66,6 +69,12 @@ bool VertexBuffer::Update(Graphics::Controller& graphicsController)
     return false;
   }
 
+  if(!mFormat->size || mSize > std::numeric_limits<uint32_t>::max() / mFormat->size)
+  {
+    DALI_LOG_ERROR("Vertex buffer size overflow\n");
+    return false;
+  }
+
   if(!mVertexBufferUpdateCallback && (!mData || mData->Empty()))
   {
     return false;
@@ -82,7 +91,10 @@ bool VertexBuffer::Update(Graphics::Controller& graphicsController)
     if(mGpuBuffer && mData && !mData->Empty())
     {
       DALI_ASSERT_DEBUG(mSize && "No data in the property buffer!");
-      mGpuBuffer->UpdateDataBuffer(graphicsController, GetDataSize(), &((*mData)[0]));
+      if(mData->Size() < GetDataSize() || !mGpuBuffer->UpdateDataBuffer(graphicsController, GetDataSize(), &((*mData)[0])))
+      {
+        return false;
+      }
     }
 
     mElementCount = mSize;
@@ -92,16 +104,27 @@ bool VertexBuffer::Update(Graphics::Controller& graphicsController)
 
   // To execute the callback the buffer must be already initialized.
   mVertexBufferStateLock.ChangeState(VertexBufferSyncState::UNLOCKED, VertexBufferSyncState::LOCKED_FOR_UPDATE);
+  struct UnlockCallback
+  {
+    StateLock<VertexBufferSyncState>& lock;
+    ~UnlockCallback()
+    {
+      lock.ChangeState(VertexBufferSyncState::LOCKED_FOR_UPDATE, VertexBufferSyncState::UNLOCKED);
+    }
+  } unlock{mVertexBufferStateLock};
   if(mVertexBufferUpdateCallback && mGpuBuffer)
   {
     // If running callback, we may end up with less elements in the buffer
     // of the same capacity
     uint32_t updatedSize = mSize * mFormat->size;
-    mGpuBuffer->UpdateDataBufferWithCallback(graphicsController, mVertexBufferUpdateCallback.get(), updatedSize);
+    if(!mGpuBuffer->UpdateDataBufferWithCallback(graphicsController, mVertexBufferUpdateCallback.get(), updatedSize))
+    {
+      mElementCount = 0;
+      return false;
+    }
     mElementCount = updatedSize / mFormat->size;
   }
-  mVertexBufferStateLock.ChangeState(VertexBufferSyncState::LOCKED_FOR_UPDATE, VertexBufferSyncState::UNLOCKED);
-  return true;
+  return mGpuBuffer && mGpuBuffer->GetGraphicsObject();
 }
 
 void VertexBuffer::SetDivisor(uint32_t divisor)

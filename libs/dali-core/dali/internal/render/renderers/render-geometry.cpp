@@ -17,6 +17,8 @@
 // CLASS HEADER
 #include <dali/internal/render/renderers/render-geometry.h>
 
+#include <dali/integration-api/debug.h>
+
 // INTERNAL INCLUDES
 #include <dali/internal/render/renderers/render-vertex-buffer.h>
 #include <dali/internal/render/shaders/program.h>
@@ -143,8 +145,16 @@ void Geometry::Upload(Graphics::Controller& graphicsController)
           mIndexBuffer = new GpuBuffer(graphicsController, 0 | Graphics::BufferUsage::INDEX_BUFFER, GpuBuffer::WritePolicy::RETAIN);
         }
 
+        if(mIndices.Size() > UINT32_MAX / sizeof(uint16_t))
+        {
+          DALI_LOG_ERROR("Index buffer size overflow\n");
+          return;
+        }
         auto bufferSize = static_cast<uint32_t>(sizeof(uint16_t) * mIndices.Size());
-        mIndexBuffer->UpdateDataBuffer(graphicsController, bufferSize, &mIndices[0]);
+        if(!mIndexBuffer->UpdateDataBuffer(graphicsController, bufferSize, &mIndices[0]))
+        {
+          return;
+        }
       }
 
       mIndicesChanged = false;
@@ -184,6 +194,10 @@ void Geometry::Upload(Graphics::Controller& graphicsController)
 
 bool Geometry::BindVertexAttributes(Graphics::CommandBuffer& commandBuffer)
 {
+  if(!mHasBeenUploaded)
+  {
+    return false;
+  }
   // Bind buffers to attribute locations
   const auto vertexBufferCount = static_cast<uint32_t>(mVertexBuffers.Count());
 
@@ -224,6 +238,10 @@ bool Geometry::Draw(
   uint32_t                 elementBufferCount,
   uint32_t                 instanceCount)
 {
+  if(!mHasBeenUploaded)
+  {
+    return false;
+  }
   uint32_t numIndices(0u);
   intptr_t firstIndexOffset(0u);
   if(mIndexBuffer)

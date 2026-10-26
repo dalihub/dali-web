@@ -961,8 +961,8 @@ void RenderManager::RenderScene(Integration::RenderStatus& status, Integration::
 
   // Prefetch programs before we start rendering so reflection is
   // ready, and we can pull exact size of UBO needed (no need to resize during drawing)
-  auto totalSizeCPU = 0u;
-  auto totalSizeGPU = 0u;
+  uint64_t totalSizeCPU = 0u;
+  uint64_t totalSizeGPU = 0u;
 
   std::unordered_map<Graphics::Program*, Graphics::ProgramResourceBindingInfo> programUsageCount;
 
@@ -1066,18 +1066,25 @@ void RenderManager::RenderScene(Integration::RenderStatus& status, Integration::
 
   totalSizeGPU += mImpl->sharedUniformBufferViewContainer.GetTotalAlignedBlockSize();
 
-  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Render scene (%s), CPU:%d GPU:%d\n", renderToFbo ? "Offscreen" : "Onscreen", totalSizeCPU, totalSizeGPU);
+  DALI_LOG_INFO(gLogFilter, Debug::Verbose, "Render scene (%s), CPU:%llu GPU:%llu\n", renderToFbo ? "Offscreen" : "Onscreen", static_cast<unsigned long long>(totalSizeCPU), static_cast<unsigned long long>(totalSizeGPU));
 
   auto& uboManager = mImpl->uniformBufferManager;
 
   uboManager->SetCurrentSceneRenderInfo(sceneObject, renderToFbo);
   uboManager->Rollback(sceneObject, renderToFbo);
 
+  if(totalSizeCPU > UINT32_MAX || totalSizeGPU > UINT32_MAX)
+  {
+    DALI_LOG_ERROR("Scene uniform buffer size overflow\n");
+    mImpl->sharedUniformBufferViewContainer.Finalize();
+    return;
+  }
+
   // Respec UBOs for this frame (orphan buffers or double buffer in the GPU)
   if(instructionCount)
   {
-    uboManager->GetUniformBufferForScene(sceneObject, renderToFbo, true)->ReSpecify(totalSizeCPU);
-    uboManager->GetUniformBufferForScene(sceneObject, renderToFbo, false)->ReSpecify(totalSizeGPU);
+    uboManager->GetUniformBufferForScene(sceneObject, renderToFbo, true)->ReSpecify(static_cast<uint32_t>(totalSizeCPU));
+    uboManager->GetUniformBufferForScene(sceneObject, renderToFbo, false)->ReSpecify(static_cast<uint32_t>(totalSizeGPU));
   }
 
 #if defined(DEBUG_ENABLED)
@@ -1122,6 +1129,7 @@ void RenderManager::RenderScene(Integration::RenderStatus& status, Integration::
   }
 
   std::vector<Graphics::CommandBuffer*> commandBuffers;
+  std::vector<RenderInstruction*> recordedInstructions;
 
   for(uint32_t i = 0; i < instructionCount; ++i)
   {
@@ -1274,6 +1282,7 @@ void RenderManager::RenderScene(Integration::RenderStatus& status, Integration::
     {
       // Setup command buffer for this instruction.
       commandBuffers.emplace_back(currentCommandBuffer);
+      recordedInstructions.emplace_back(&instruction);
 
       Graphics::CommandBufferBeginInfo info;
       info.usage = 0 | Graphics::CommandBufferUsageFlagBits::ONE_TIME_SUBMIT;
@@ -1298,36 +1307,46 @@ void RenderManager::RenderScene(Integration::RenderStatus& status, Integration::
                                                        currentRenderPass,
                                                        *currentRenderTargetGraphicsObjects);
 
-      Graphics::SyncObject* syncObject{nullptr};
-
-      // If the render instruction has an associated render tracker (owned separately)
-      // and framebuffer, create a one shot sync object, and use it to determine when
-      // the render pass has finished executing on GPU.
-      if(instruction.mRenderTracker && instruction.mFrameBuffer)
-      {
-        syncObject                 = instruction.mRenderTracker->CreateSyncObject(mImpl->graphicsController);
-        instruction.mRenderTracker = nullptr;
-      }
-      currentCommandBuffer->EndRenderPass(syncObject);
-
-      if(instruction.mFrameBuffer && instruction.mFrameBuffer->IsKeepingRenderResultRequested())
-      {
-        currentCommandBuffer->ReadPixels(instruction.mFrameBuffer->GetRenderResultBuffer());
-        mImpl->renderedFrameBufferContainer.push_back(instruction.mFrameBuffer);
-      }
+      // Complete this pass only after all shared uniform data has been validated.
     }
   }
 
   // Flush UBOs
-  mImpl->uniformBufferManager->Flush(sceneObject, renderToFbo);
+  const bool uniformsValid = mImpl->uniformBufferManager->Flush(sceneObject, renderToFbo);
+  if(!uniformsValid)
+  {
+    for(auto* commandBuffer : commandBuffers)
+    {
+      commandBuffer->EndRenderPass(nullptr);
+      commandBuffer->End();
+      commandBuffer->Reset();
+    }
+    // No sync/readback request has been consumed or reported as completed.
+    mImpl->sharedUniformBufferViewContainer.Finalize();
+    return;
+  }
 
   // Submit command buffers
   Graphics::SubmitInfo submitInfo;
   submitInfo.flags = 0 | Graphics::SubmitFlagBits::FLUSH;
   submitInfo.cmdBuffer.reserve(commandBuffers.size());
 
-  for(auto commandBuffer : commandBuffers)
+  for(std::size_t i = 0; i < commandBuffers.size(); ++i)
   {
+    auto* commandBuffer = commandBuffers[i];
+    auto& instruction = *recordedInstructions[i];
+    Graphics::SyncObject* syncObject = nullptr;
+    if(instruction.mRenderTracker && instruction.mFrameBuffer)
+    {
+      syncObject = instruction.mRenderTracker->CreateSyncObject(mImpl->graphicsController);
+      instruction.mRenderTracker = nullptr;
+    }
+    commandBuffer->EndRenderPass(syncObject);
+    if(instruction.mFrameBuffer && instruction.mFrameBuffer->IsKeepingRenderResultRequested())
+    {
+      commandBuffer->ReadPixels(instruction.mFrameBuffer->GetRenderResultBuffer());
+      mImpl->renderedFrameBufferContainer.push_back(instruction.mFrameBuffer);
+    }
     commandBuffer->End();
     submitInfo.cmdBuffer.emplace_back(commandBuffer);
   }

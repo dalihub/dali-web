@@ -19,6 +19,8 @@
 #include <dali/devel-api/signals/vertex-buffer-update-callback.h> // Dali::VertexBufferUpdateCallback
 #include <dali/internal/render/renderers/gpu-buffer.h>
 
+#include <dali/integration-api/debug.h>
+
 // INTERNAL INCLUDES
 #include <dali/graphics-api/graphics-types.h>
 #include <dali/public-api/common/dali-common.h>
@@ -38,10 +40,14 @@ GpuBuffer::GpuBuffer(Graphics::Controller& graphicsController, Graphics::BufferU
 {
 }
 
-void GpuBuffer::UpdateDataBuffer(Graphics::Controller& graphicsController, uint32_t size, const void* data)
+bool GpuBuffer::UpdateDataBuffer(Graphics::Controller& graphicsController, uint32_t size, const void* data)
 {
-  DALI_ASSERT_DEBUG(size > 0);
-  mSize = size;
+  mValid = false;
+  if(!size || !data)
+  {
+    DALI_LOG_ERROR("Invalid buffer upload data or size\n");
+    return false;
+  }
 
   /**
    *  We will create a new buffer in following cases:
@@ -62,21 +68,48 @@ void GpuBuffer::UpdateDataBuffer(Graphics::Controller& graphicsController, uint3
     mCapacity       = size;
   }
 
+  if(!mGraphicsObject)
+  {
+    mCapacity = 0;
+    DALI_LOG_ERROR("Failed to create upload buffer\n");
+    return false;
+  }
+
   Graphics::MapBufferInfo info{};
   info.buffer = mGraphicsObject.get();
   info.usage  = 0 | Graphics::MemoryUsageFlagBits::WRITE;
   info.offset = 0;
   info.size   = size;
 
-  auto  memory = graphicsController.MapBufferRange(info);
-  void* ptr    = memory->LockRegion(0, size);
+  auto memory = graphicsController.MapBufferRange(info);
+  if(!memory)
+  {
+    DALI_LOG_ERROR("Failed to map upload buffer\n");
+    return false;
+  }
+  void* ptr = memory->LockRegion(0, size);
+  if(!ptr)
+  {
+    graphicsController.UnmapMemory(std::move(memory));
+    DALI_LOG_ERROR("Failed to lock upload buffer\n");
+    return false;
+  }
   memcpy(ptr, data, size);
   memory->Unlock(true);
   graphicsController.UnmapMemory(std::move(memory));
+  mSize = size;
+  mValid = true;
+  return true;
 }
 
-void GpuBuffer::UpdateDataBufferWithCallback(Graphics::Controller& graphicsController, Dali::VertexBufferUpdateCallback* callback, uint32_t& bytesUpdatedCount)
+bool GpuBuffer::UpdateDataBufferWithCallback(Graphics::Controller& graphicsController, Dali::VertexBufferUpdateCallback* callback, uint32_t& bytesUpdatedCount)
 {
+  mValid = false;
+  bytesUpdatedCount = 0;
+  if(!callback || !mSize)
+  {
+    return false;
+  }
   // create or orphan object so mapping can be instant
   if(!mGraphicsObject || mWritePolicy == WritePolicy::DISCARD)
   {
@@ -86,23 +119,50 @@ void GpuBuffer::UpdateDataBufferWithCallback(Graphics::Controller& graphicsContr
     mCapacity       = mSize;
   }
 
+  if(!mGraphicsObject)
+  {
+    mCapacity = 0;
+    DALI_LOG_ERROR("Failed to create upload buffer\n");
+    return false;
+  }
+
   Graphics::MapBufferInfo info{};
   info.buffer = mGraphicsObject.get();
   info.usage  = 0 | Graphics::MemoryUsageFlagBits::WRITE;
   info.offset = 0;
   info.size   = mSize; // map entire buffer
 
-  auto  memory = graphicsController.MapBufferRange(info);
-  void* ptr    = memory->LockRegion(0, mSize);
+  auto memory = graphicsController.MapBufferRange(info);
+  if(!memory)
+  {
+    DALI_LOG_ERROR("Failed to map callback buffer\n");
+    return false;
+  }
+  void* ptr = memory->LockRegion(0, mSize);
+  if(!ptr)
+  {
+    graphicsController.UnmapMemory(std::move(memory));
+    DALI_LOG_ERROR("Failed to lock callback buffer\n");
+    return false;
+  }
 
   bytesUpdatedCount = callback->Invoke(ptr, mSize); // passing low level binary size, not element count!
 
   memory->Unlock(true);
   graphicsController.UnmapMemory(std::move(memory));
+  if(bytesUpdatedCount > mSize)
+  {
+    bytesUpdatedCount = 0;
+    DALI_LOG_ERROR("Callback returned more bytes than buffer capacity\n");
+    return false;
+  }
+  mValid = true;
+  return true;
 }
 
 void GpuBuffer::Destroy()
 {
+  mValid = false;
   mCapacity = 0;
   mSize     = 0;
   mGraphicsObject.reset();

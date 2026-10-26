@@ -733,7 +733,10 @@ bool Renderer::Render(Graphics::CommandBuffer&                             comma
     if(queueIndex == 0)
     {
       std::size_t nodeIndex = BuildUniformIndexMap(node, *program);
-      WriteUniformBuffer(commandBuffer, program, instruction, modelMatrix, modelViewMatrix, viewMatrix, projectionMatrix, worldColorMultiplier, scale, size, nodeIndex);
+      if(!WriteUniformBuffer(commandBuffer, program, instruction, modelMatrix, modelViewMatrix, viewMatrix, projectionMatrix, worldColorMultiplier, scale, size, nodeIndex))
+      {
+        return false;
+      }
     }
 
     // @todo We should detect this case much earlier to prevent unnecessary work
@@ -875,7 +878,7 @@ std::size_t Renderer::BuildUniformIndexMap(const SceneGraph::NodeDataProvider& n
   return renderItemMapIndex;
 }
 
-void Renderer::WriteUniformBuffer(
+bool Renderer::WriteUniformBuffer(
   Graphics::CommandBuffer&             commandBuffer,
   Program*                             program,
   const SceneGraph::RenderInstruction& instruction,
@@ -936,7 +939,10 @@ void Renderer::WriteUniformBuffer(
           // Write GPU buffer and offset to unfirom buffer bindings.
           auto sharedUniformBufferViewPtr = mSharedUniformBufferViewContainer->GetSharedUniformBlockBufferView(*program, *sharedUniformBlock);
 
-          DALI_ASSERT_ALWAYS(sharedUniformBufferViewPtr && "SharedUniformBufferView not exist!");
+          if(!sharedUniformBufferViewPtr || !sharedUniformBufferViewPtr->GetBuffer())
+          {
+            return false;
+          }
 
           mUniformBufferBindings[i].buffer = sharedUniformBufferViewPtr->GetBuffer();
           mUniformBufferBindings[i].offset = sharedUniformBufferViewPtr->GetOffset();
@@ -951,6 +957,10 @@ void Renderer::WriteUniformBuffer(
         // If this block is NOT shared, create new uboView.
         auto uniformBufferView = mUniformBufferManager->CreateUniformBufferView(uboViews[i], programRequirements.blockSize[i], standaloneUniforms);
 
+        if(!uniformBufferView || !uniformBufferView->GetBuffer())
+        {
+          return false;
+        }
         mUniformBufferBindings[i].buffer = uniformBufferView->GetBuffer();
         mUniformBufferBindings[i].offset = uniformBufferView->GetOffset();
 
@@ -1008,8 +1018,16 @@ void Renderer::WriteUniformBuffer(
     // Write uSize in the end, as it shouldn't be overridable by dynamic properties.
     WriteDefaultUniformV2(program->GetDefaultUniform(Program::DefaultUniformIndex::SIZE), uboViews, size);
 
+    for(auto* view : uboViews)
+    {
+      if(view && !view->GetBuffer())
+      {
+        return false;
+      }
+    }
     commandBuffer.BindUniformBuffers(mUniformBufferBindings);
   }
+  return true;
 }
 
 template<class T>

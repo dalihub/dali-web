@@ -32,23 +32,30 @@ Dali::Internal::SceneGraph::MemoryPoolCollection*                               
 static constexpr Dali::Internal::SceneGraph::MemoryPoolCollection::MemoryPoolType gMemoryPoolType       = Dali::Internal::SceneGraph::MemoryPoolCollection::MemoryPoolType::RENDER_UBO_VIEW;
 } // namespace
 
-UniformBufferView* UniformBufferView::New(UniformBufferV2& ubo, uint32_t offset)
+UniformBufferView* UniformBufferView::New(UniformBufferV2& ubo, uint32_t offset, uint32_t size)
 {
   DALI_ASSERT_DEBUG(gMemoryPoolCollection && "UniformBufferView::RegisterMemoryPoolCollection not called!");
-  return new(gMemoryPoolCollection->AllocateRaw(gMemoryPoolType)) UniformBufferView(ubo, offset);
+  auto* storage = gMemoryPoolCollection->AllocateRaw(gMemoryPoolType);
+  if(!storage)
+  {
+    ubo.MarkFailed();
+    return nullptr;
+  }
+  return new(storage) UniformBufferView(ubo, offset, size);
 }
 
-UniformBufferView* UniformBufferView::TryRecycle(UniformBufferView*& oldView, UniformBufferV2& ubo, uint32_t offset)
+UniformBufferView* UniformBufferView::TryRecycle(UniformBufferView*& oldView, UniformBufferV2& ubo, uint32_t offset, uint32_t size)
 {
   auto* ptr = oldView;
   if(ptr)
   {
     oldView             = nullptr;
     ptr->mUniformBuffer = &ubo;
-    ptr->mOffset        = offset;
+    ptr->mOffset = offset;
+    ptr->mSize = size;
     return ptr;
   }
-  return UniformBufferView::New(ubo, offset);
+  return UniformBufferView::New(ubo, offset, size);
 }
 
 void UniformBufferView::RegisterMemoryPoolCollection(SceneGraph::MemoryPoolCollection& memoryPoolCollection)
@@ -61,8 +68,9 @@ void UniformBufferView::UnregisterMemoryPoolCollection()
   gMemoryPoolCollection = nullptr;
 }
 
-UniformBufferView::UniformBufferView(UniformBufferV2& ubo, uint32_t offset)
+UniformBufferView::UniformBufferView(UniformBufferV2& ubo, uint32_t offset, uint32_t size)
 : mUniformBuffer(&ubo),
+  mSize(size),
   mOffset(offset)
 {
 }
@@ -77,10 +85,14 @@ void UniformBufferView::operator delete(void* ptr)
   }
 }
 
-void UniformBufferView::Write(const void* data, uint32_t size, uint32_t offset)
+bool UniformBufferView::Write(const void* data, uint32_t size, uint32_t offset)
 {
-  // Write into mapped buffer
-  mUniformBuffer->Write(data, size, offset + mOffset);
+  if(offset > mSize || size > mSize - offset || offset > UINT32_MAX - mOffset)
+  {
+    mUniformBuffer->MarkFailed();
+    return false;
+  }
+  return mUniformBuffer->Write(data, size, offset + mOffset);
 }
 
 Graphics::Buffer* UniformBufferView::GetBuffer() const

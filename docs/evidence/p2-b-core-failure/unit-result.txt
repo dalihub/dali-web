@@ -1,0 +1,6 @@
+PASS buffer create/map/lock failure and callback zero/partial/full/invalid count
+PASS vertex dirty/lock release and index failure blocks bind/draw including cached path
+PASS CPU/GPU uniform failures, explicit recovery, view bounds and offset overflow
+PASS real Core scene blocks submission/sync/readback on uniform create/map/lock/range failure (mock graphics)
+PASS Core buffer failure suite; no GPU/runtime compatibility claim
+PASS: DALi Core WebAssembly actor animation midpoint=50.0 endpoint=100.0 (mock graphics)

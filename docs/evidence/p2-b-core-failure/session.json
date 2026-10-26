@@ -1,0 +1,11 @@
+{
+  "head": "abf62214b23c651f06536138cb8b6e0c0fddbfb7",
+  "branch": "main",
+  "origin": "https://github.com/dalihub/dali-web.git",
+  "remoteRefEvidence": "../p2-b-memory-contract/remote.json",
+  "appliedAbandonedPatches": false,
+  "commitOrPush": false,
+  "upstreamUpdated": false,
+  "deployed": false,
+  "serverStarted": false
+}

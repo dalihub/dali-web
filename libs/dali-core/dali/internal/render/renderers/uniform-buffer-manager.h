@@ -85,7 +85,7 @@ public:
   /**
    * @brief Flushes current UBO set
    */
-  void Flush(SceneGraph::Scene* scene, bool offscreen);
+  bool Flush(SceneGraph::Scene* scene, bool offscreen);
 
   /**
    * Gets the uniform block alignment.

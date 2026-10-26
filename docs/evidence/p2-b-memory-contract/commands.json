@@ -1,0 +1,100 @@
+[
+  {
+    "name": "head",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "stdout": "abf62214b23c651f06536138cb8b6e0c0fddbfb7\n",
+    "stderr": ""
+  },
+  {
+    "name": "status",
+    "argv": [
+      "git",
+      "status",
+      "--porcelain=v1"
+    ],
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "branch",
+    "argv": [
+      "git",
+      "branch",
+      "--show-current"
+    ],
+    "exitCode": 0,
+    "stdout": "main\n",
+    "stderr": ""
+  },
+  {
+    "name": "remotes",
+    "argv": [
+      "git",
+      "remote",
+      "-v"
+    ],
+    "exitCode": 0,
+    "stdout": "origin\thttps://github.com/dalihub/dali-web.git (fetch)\norigin\thttps://github.com/dalihub/dali-web.git (push)\nupstream-dali-adaptor\tssh://review.tizen.org:29418/platform/core/uifw/dali-adaptor (fetch)\nupstream-dali-adaptor\tssh://review.tizen.org:29418/platform/core/uifw/dali-adaptor (push)\nupstream-dali-core\tssh://review.tizen.org:29418/platform/core/uifw/dali-core (fetch)\nupstream-dali-core\tssh://review.tizen.org:29418/platform/core/uifw/dali-core (push)\nupstream-dali-ui\tssh://review.tizen.org:29418/platform/core/uifw/dali-ui (fetch)\nupstream-dali-ui\tssh://review.tizen.org:29418/platform/core/uifw/dali-ui (push)\n",
+    "stderr": ""
+  },
+  {
+    "name": "diff-names",
+    "argv": [
+      "git",
+      "diff",
+      "--name-only",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "stdout": "README.md\ndocs/HANDOFF.md\ndocs/JOURNAL.md\ndocs/NEXT-CONTEXT.md\ndocs/P2-b-HANDOFF.md\ndocs/P2-b-RESULTS.md\ndocs/PLAN.md\ndocs/STATE.md\n",
+    "stderr": ""
+  },
+  {
+    "name": "untracked",
+    "argv": [
+      "git",
+      "ls-files",
+      "--others",
+      "--exclude-standard"
+    ],
+    "exitCode": 0,
+    "stdout": "docs/P2-b-MEMORY-BLOCKER.md\ndocs/evidence/p2-b-memory-contract/README.md\ndocs/evidence/p2-b-memory-contract/commands.json\ndocs/evidence/p2-b-memory-contract/remote.json\ndocs/evidence/p2-b-memory-contract/source-inspection.json\n",
+    "stderr": ""
+  },
+  {
+    "name": "diff-check",
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "production-diff",
+    "argv": [
+      "git",
+      "diff",
+      "--exit-code",
+      "HEAD",
+      "--",
+      "libs",
+      "cmake",
+      "scripts",
+      "tests",
+      "upstreams.lock.json",
+      "toolchain.lock.json"
+    ],
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]

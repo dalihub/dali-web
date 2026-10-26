@@ -75,9 +75,11 @@ Graphics::UniquePtr<UniformBufferView> UniformBufferManager::CreateUniformBuffer
 
   // Use current offset and increment it after
   auto offset = ubo->GetCurrentOffset();
-  auto retval = Graphics::UniquePtr<UniformBufferView>(UniformBufferView::TryRecycle(oldView, *ubo.get(), offset));
-
-  ubo->IncrementOffsetBy(size);
+  if(!ubo->IncrementOffsetBy(size))
+  {
+    return Graphics::UniquePtr<UniformBufferView>(nullptr);
+  }
+  auto retval = Graphics::UniquePtr<UniformBufferView>(UniformBufferView::TryRecycle(oldView, *ubo.get(), offset, size));
   return retval;
 }
 
@@ -140,22 +142,18 @@ void UniformBufferManager::Rollback(SceneGraph::Scene* scene, bool offscreen)
   }
 }
 
-void UniformBufferManager::Flush(SceneGraph::Scene* scene, bool offscreen)
+bool UniformBufferManager::Flush(SceneGraph::Scene* scene, bool offscreen)
 {
-  auto* uboSet = GetUBOSetForScene(scene);
-  if(uboSet)
+  auto* cpu = GetUniformBufferForScene(scene, offscreen, true);
+  auto* gpu = GetUniformBufferForScene(scene, offscreen, false);
+  if(!cpu || !gpu)
   {
-    if(offscreen)
-    {
-      uboSet->cpuBufferOffScreen->Flush();
-      uboSet->gpuBufferOffScreen->Flush();
-    }
-    else
-    {
-      uboSet->cpuBufferOnScreen->Flush();
-      uboSet->gpuBufferOnScreen->Flush();
-    }
+    return false;
   }
+  // Always release both mappings, even when one buffer failed.
+  const bool cpuValid = cpu->Flush();
+  const bool gpuValid = gpu->Flush();
+  return cpuValid && gpuValid;
 }
 
 uint32_t UniformBufferManager::GetUniformBlockAlignment(bool emulated)
