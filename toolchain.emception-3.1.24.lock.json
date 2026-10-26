@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux-x86_64",
+  "emscriptenVersion": "3.1.24",
+  "emscriptenCommit": "68a9f990429e0bcfb63b1cde68bad792554350a5",
+  "emscriptenRelease": "54217a0950bb1dafe8808cc6207d378e323f9d74",
+  "sdkArchiveSha256": "20e8e5bd745e3ad69c03bb877091d2fbb0c7db1eab309de8f185e9821aea40f4",
+  "sdkArchiveUrl": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/linux/54217a0950bb1dafe8808cc6207d378e323f9d74/wasm-binaries.tbz2",
+  "browserCompilerEvidence": "docs/evidence/emception-3.1.24-alignment/browser-tests.json",
+  "nodeVersion": "24.19.0",
+  "maxJobs": 6
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "hello",
+    "source": "#include <iostream>\n#include <vector>\nint main(){std::vector<int> v{1,2,3};std::cout << \"RESULT:\" << v.size() << std::endl;}\n",
+    "argv": [
+      "em++",
+      "hello.cpp",
+      "-std=c++17",
+      "-O0",
+      "-sSINGLE_FILE=1",
+      "-sEXIT_RUNTIME=1",
+      "-o",
+      "hello.js"
+    ],
+    "result": {
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "shared:INFO: \u001b[32m(Emscripten: Running sanity checks)\u001b[0m",
+      "ms": 7200
+    },
+    "execution": {
+      "messages": [
+        {
+          "stdout": "RESULT:3"
+        },
+        {
+          "exitCode": 0
+        }
+      ]
+    }
+  }
+]

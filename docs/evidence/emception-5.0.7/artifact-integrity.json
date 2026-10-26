@@ -1,0 +1,32 @@
+[
+  {
+    "bundle": "clang",
+    "file": "/usr/lib/clang.mjs",
+    "hashMatches": true
+  },
+  {
+    "bundle": "clang",
+    "file": "/usr/lib/clang.wasm",
+    "hashMatches": true
+  },
+  {
+    "bundle": "python",
+    "file": "/usr/lib/python.mjs",
+    "hashMatches": true
+  },
+  {
+    "bundle": "python",
+    "file": "/usr/lib/python.wasm",
+    "hashMatches": true
+  },
+  {
+    "bundle": "lld",
+    "file": "/usr/lib/lld.mjs",
+    "hashMatches": true
+  },
+  {
+    "bundle": "lld",
+    "file": "/usr/lib/lld.wasm",
+    "hashMatches": true
+  }
+]

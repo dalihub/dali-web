@@ -1,0 +1,1 @@
+export default {turbopack:{rules:{'*.py':{loaders:['raw-loader'],as:'*.js'}}},headers:async()=>[{source:'/:path*',headers:[{key:'Cross-Origin-Opener-Policy',value:'same-origin'},{key:'Cross-Origin-Embedder-Policy',value:'credentialless'}]}]};

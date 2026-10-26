@@ -1,0 +1,93 @@
+[
+  {
+    "name": "version",
+    "source": null,
+    "argv": [
+      "em++",
+      "--version"
+    ],
+    "result": {
+      "returncode": 0,
+      "stdout": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.24-git\nCopyright (C) 2014 the Emscripten authors (see AUTHORS.txt)\nThis is free and open source software under the MIT license.\nThere is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n",
+      "stderr": "",
+      "ms": 295
+    }
+  },
+  {
+    "name": "hello",
+    "source": "#include <iostream>\n#include <vector>\nint main(){std::vector<int> v{1,2,3};std::cout << v.size();}\n",
+    "argv": [
+      "em++",
+      "hello.cpp",
+      "-std=c++17",
+      "-O0",
+      "-sSINGLE_FILE=1",
+      "-o",
+      "hello.js"
+    ],
+    "result": {
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "shared:INFO: \u001b[32m(Emscripten: Running sanity checks)\u001b[0m",
+      "ms": 5886
+    }
+  },
+  {
+    "name": "syntax-error",
+    "source": "int main( {",
+    "argv": [
+      "em++",
+      "syntax-error.cpp",
+      "-o",
+      "bad.js"
+    ],
+    "result": {
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "syntax-error.cpp:1:1: error: main cannot be declared as global variable\nint main( {\n^\nsyntax-error.cpp:1:12: error: expected expression\nint main( {\n           ^\nsyntax-error.cpp:1:12: error: expected '}'\nsyntax-error.cpp:1:11: note: to match this '{'\nint main( {\n          ^\nsyntax-error.cpp:1:12: error: expected ';' after top level declarator\nint main( {\n           ^\n           ;\n4 errors generated.em++: \u001b[31merror: \u001b[0m'/usr/bin/clang++ -target wasm32-unknown-emscripten -fignore-exceptions -fvisibility=default -mllvm -combiner-global-alias-analysis=false -mllvm -enable-emscripten-sjlj -mllvm -disable-lsr -DEMSCRIPTEN -I/emscripten/cache/sysroot/include/SDL --sysroot=/emscripten/cache/sysroot -Xclang -iwithsysroot/include/compat syntax-error.cpp -c -o /tmp/emscripten_temp_jdkfefzw/syntax-error_0.o' failed (returned 1)",
+      "ms": 146
+    }
+  },
+  {
+    "name": "pthread",
+    "source": "#include <pthread.h>\nvoid* work(void*){return 0;}\nint main(){pthread_t t;return pthread_create(&t,0,work,0);}\n",
+    "argv": [
+      "em++",
+      "pthread.cpp",
+      "-pthread",
+      "-sPTHREAD_POOL_SIZE=1",
+      "-sABORTING_MALLOC=0",
+      "-o",
+      "pthread.js"
+    ],
+    "result": {
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "ms": 5516
+    }
+  },
+  {
+    "name": "webgl2",
+    "source": "#include <emscripten/html5.h>\n#include <GLES3/gl3.h>\nint main(){EmscriptenWebGLContextAttributes a;emscripten_webgl_init_context_attributes(&a);a.majorVersion=2;auto c=emscripten_webgl_create_context(\"#canvas\",&a);emscripten_webgl_make_context_current(c);glClear(GL_COLOR_BUFFER_BIT);return !c;}\n",
+    "argv": [
+      "em++",
+      "webgl2.cpp",
+      "-pthread",
+      "-sMIN_WEBGL_VERSION=2",
+      "-sMAX_WEBGL_VERSION=2",
+      "-sFULL_ES3=0",
+      "-sOFFSCREENCANVAS_SUPPORT=1",
+      "-sABORTING_MALLOC=0",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-o",
+      "webgl2.js"
+    ],
+    "result": {
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "ms": 1084
+    }
+  }
+]

@@ -1,0 +1,3 @@
+const coreLibBundles = ['cache-core', 'cache-crt', 'cache-libc-variants', 'cache-libcxx-variants'];
+=>
+const coreLibBundles = ['cache-core', 'cache-crt', 'cache-libc-variants', 'cache-libcxx-variants', 'cache-debug', 'cache-gl-variants', 'cache-misc'];

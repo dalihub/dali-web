@@ -1,0 +1,38 @@
+[
+  {
+    "library": "./cache/sysroot/lib/wasm32-emscripten/libc++-mt-noexcept.a",
+    "asset": "80e8be53df562faaf13f.a",
+    "bytes": 6211864,
+    "sha256": "e8959c1c7bab96fbdbbcf176e747b742d1d0278d4b546e7ef1a1b843413c8557"
+  },
+  {
+    "library": "./cache/sysroot/lib/wasm32-emscripten/libc++abi-debug-mt-noexcept.a",
+    "asset": "acebf0ab9836a0b4a201.a",
+    "bytes": 1255620,
+    "sha256": "cd34e0122950eca5afc86dc07ac1366eb6711e8949cc3c75bd18401d4072ad6b"
+  },
+  {
+    "library": "./cache/sysroot/lib/wasm32-emscripten/libc++abi-debug-noexcept.a",
+    "asset": "02a1e1da31f4dbcf92cf.a",
+    "bytes": 1239542,
+    "sha256": "444529b19c617a11e649773bb7fc045455aca185a7ff7ca80f1aaeb7d40d232f"
+  },
+  {
+    "library": "./cache/sysroot/lib/wasm32-emscripten/libc-debug.a",
+    "asset": "770a53c29432c92364e8.a",
+    "bytes": 3128288,
+    "sha256": "1c1abe3f7149fee0ec3e0fa62e3c4ff91678c30ba09ed073bfa19905962539a3"
+  },
+  {
+    "library": "./cache/sysroot/lib/wasm32-emscripten/libc-mt-debug.a",
+    "asset": "ac41c398c49667748a17.a",
+    "bytes": 3537434,
+    "sha256": "1ce11120b7c2cfe0f8cc74be822b3726c45512177d72f2f5169581d6ce3cbb6f"
+  },
+  {
+    "library": "./cache/sysroot/lib/wasm32-emscripten/libstubs-debug.a",
+    "asset": "da352a2e4b1a38aed21a.a",
+    "bytes": 28932,
+    "sha256": "3ce8fdabab1629e324d3ee70c64828edcc888892b9ef00e3def5d4336f3f266d"
+  }
+]

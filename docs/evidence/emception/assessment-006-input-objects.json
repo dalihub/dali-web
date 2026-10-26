@@ -1,0 +1,12 @@
+{
+  "vector2.o": {
+    "path": "${DALI_WEB_ROOT}/build/p2-b/production-003/core/CMakeFiles/dali2-core.dir${DALI_WEB_ROOT}/libs/dali-core/dali/public-api/math/vector2.cpp.o",
+    "sha256": "85d5ad2bd865db25596f8de8b88929130a69730240e5acf855b9b4faef127442",
+    "bytes": 23139
+  },
+  "host.o": {
+    "path": "${DALI_WEB_ROOT}/build/p2-b/production-003/CMakeFiles/dali-web.dir${DALI_WEB_ROOT}/web/host/web-host.cpp.o",
+    "sha256": "19bf8c1813aee7eeb3c94ff8061863db2b3c3759f5c41add27a2c18d4717a694",
+    "bytes": 456549
+  }
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "hello",
+    "source": "#include <iostream>\n#include <vector>\nint main(){std::vector<int> v{1,2,3};std::cout << \"RESULT:\" << v.size() << std::endl;}\n",
+    "argv": [
+      "em++",
+      "hello.cpp",
+      "-std=c++17",
+      "-O0",
+      "-sSINGLE_FILE=1",
+      "-sEXIT_RUNTIME=1",
+      "-o",
+      "hello.js"
+    ],
+    "result": {
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "shared:INFO: \u001b[32m(Emscripten: Running sanity checks)\u001b[0m\nTraceback (most recent call last):\n  File \"/emscripten/tools/shared.py\", line 232, in check_call\n  File \"/emscripten/tools/shared.py\", line 110, in run_process\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/subprocess.py\", line 571, in run\nsubprocess.CalledProcessError: Command '['/usr/bin/wasm-ld', '-o', 'hello.wasm', '/tmp/emscripten_temp_kwmrr7b_/hello_0.o', '-L/emscripten/cache/sysroot/lib/wasm32-emscripten', '-lGL', '-lal', '-lhtml5', '-lstubs-debug', '-lc-debug', '-ldlmalloc', '-lcompiler_rt', '-lc++-noexcept', '-lc++abi-debug-noexcept', '-lsockets', '-mllvm', '-combiner-global-alias-analysis=false', '-mllvm', '-enable-emscripten-sjlj', '-mllvm', '-disable-lsr', '--import-undefined', '--strip-debug', '--export-if-defined=main', '--export-if-defined=__start_em_asm', '--export-if-defined=__stop_em_asm', '--export-if-defined=__start_em_lib_deps', '--export-if-defined=__stop_em_lib_deps', '--export-if-defined=__start_em_js', '--export-if-defined=__stop_em_js', '--export-if-defined=__main_argc_argv', '--export-if-defined=fflush', '--export=emscripten_stack_get_end', '--export=emscripten_stack_get_free', '--export=emscripten_stack_get_base', '--export=emscripten_stack_init', '--export=stackSave', '--export=stackRestore', '--export=stackAlloc', '--export=__wasm_call_ctors', '--export=__errno_location', '--export=__get_temp_ret', '--export=__set_temp_ret', '--export=__funcs_on_exit', '--export=malloc', '--export=__cxa_is_pointer_type', '--export-table', '-z', 'stack-size=5242880', '--initial-memory=16777216', '--no-entry', '--max-memory=16777216', '--global-base=1024']' died with unknown signal 42.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/emscripten/em++.py\", line 14, in <module>\n  File \"/emscripten/emcc.py\", line 1194, in run\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/contextlib.py\", line 81, in inner\n  File \"/emscripten/emcc.py\", line 2857, in phase_link\n  File \"/emscripten/tools/building.py\", line 270, in link_lld\n  File \"/emscripten/tools/shared.py\", line 234, in check_call\n  File \"/emscripten/tools/shared.py\", line 133, in returncode_to_str\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/enum.py\", line 701, in __call__\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/enum.py\", line 1088, in __new__\nValueError: 42 is not a valid Signals",
+      "ms": 1111.8600000000001
+    }
+  },
+  {
+    "name": "dali-vector",
+    "source": "#include <dali/public-api/math/vector2.h>\n#include <cstdio>\nint main(){Dali::Vector2 v(3,4);printf(\"LENGTH:%.0f\\n\",v.Length());return v.Length()==5?0:1;}\n",
+    "argv": [
+      "em++",
+      "dali-vector.cpp",
+      "vector2.o",
+      "-Iinclude",
+      "-std=c++17",
+      "-O0",
+      "-sSINGLE_FILE=1",
+      "-sEXIT_RUNTIME=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-o",
+      "dali-vector.js"
+    ],
+    "result": {
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/emscripten/tools/shared.py\", line 232, in check_call\n  File \"/emscripten/tools/shared.py\", line 110, in run_process\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/subprocess.py\", line 571, in run\nsubprocess.CalledProcessError: Command '['/usr/bin/wasm-ld', '-o', 'dali-vector.wasm', '/tmp/emscripten_temp_s5rxs2w2/dali-vector_0.o', 'vector2.o', '-L/emscripten/cache/sysroot/lib/wasm32-emscripten', '-lGL', '-lal', '-lhtml5', '-lstubs-debug', '-lc-debug', '-ldlmalloc', '-lcompiler_rt', '-lc++-noexcept', '-lc++abi-debug-noexcept', '-lsockets', '-mllvm', '-combiner-global-alias-analysis=false', '-mllvm', '-enable-emscripten-sjlj', '-mllvm', '-disable-lsr', '--import-undefined', '--strip-debug', '--export-if-defined=main', '--export-if-defined=__start_em_asm', '--export-if-defined=__stop_em_asm', '--export-if-defined=__start_em_lib_deps', '--export-if-defined=__stop_em_lib_deps', '--export-if-defined=__start_em_js', '--export-if-defined=__stop_em_js', '--export-if-defined=__main_argc_argv', '--export-if-defined=fflush', '--export=emscripten_stack_get_end', '--export=emscripten_stack_get_free', '--export=emscripten_stack_get_base', '--export=emscripten_stack_init', '--export=stackSave', '--export=stackRestore', '--export=stackAlloc', '--export=__wasm_call_ctors', '--export=__errno_location', '--export=__get_temp_ret', '--export=__set_temp_ret', '--export=__funcs_on_exit', '--export-table', '-z', 'stack-size=5242880', '--initial-memory=16777216', '--no-entry', '--max-memory=16777216', '--global-base=1024']' died with unknown signal 42.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/emscripten/em++.py\", line 14, in <module>\n  File \"/emscripten/emcc.py\", line 1194, in run\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/contextlib.py\", line 81, in inner\n  File \"/emscripten/emcc.py\", line 2857, in phase_link\n  File \"/emscripten/tools/building.py\", line 270, in link_lld\n  File \"/emscripten/tools/shared.py\", line 234, in check_call\n  File \"/emscripten/tools/shared.py\", line 133, in returncode_to_str\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/enum.py\", line 701, in __call__\n  File \"/home/jprendes/Projects/emception/upstream/cpython/Lib/enum.py\", line 1088, in __new__\nValueError: 42 is not a valid Signals",
+      "ms": 218.3199999999997
+    }
+  },
+  {
+    "name": "host-reloc",
+    "source": null,
+    "argv": [
+      "/usr/bin/wasm-ld",
+      "-r",
+      "/working/host.o",
+      "-o",
+      "/working/host-reloc.o"
+    ],
+    "result": {
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "ms": 11.819999999999709
+    }
+  }
+]

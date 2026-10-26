@@ -1,0 +1,557 @@
+[
+  {
+    "group": "gameguild-002",
+    "run": "browser-debug",
+    "resultSha256": "7eace9bf4836b3ef49dd944854fe5388edc426424c34c8e627244c39550b5560",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "debug",
+        "result": {
+          "timedOut": true
+        }
+      }
+    ],
+    "done": true,
+    "phase": "debug",
+    "args": [
+      "em++",
+      "/home/user/main.cpp",
+      "-O0",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-o",
+      "/home/user/main.js"
+    ],
+    "source": "int main(){return 0;}",
+    "logExcerpts": [
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 624.9ms",
+      "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 429.6ms",
+      "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    ],
+    "browserErrors": [
+      "JavaScript error: blob:http://127.0.0.1:3187/864a8674-2b15-40ee-ae14-de18b1faf9d1, line 41385732: RuntimeError: index out of bounds"
+    ]
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-direct-official",
+    "resultSha256": "4a39471f6e94da04c36e7377df3f70a4c0e4a5c2061a89ff4eb4d9a7008cbf50",
+    "harnessExitCode": 0,
+    "phase": "official",
+    "cases": [
+      {
+        "name": "official",
+        "result": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "error: error reading 'main.cpp': No such file or directory\n1 error generated.",
+          "durationMs": 4479,
+          "timedOut": false
+        }
+      }
+    ],
+    "done": true,
+    "logExcerpts": [
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 510.1ms",
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1433.8ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: clang — exitCode=1, total=4478.8ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-official",
+    "resultSha256": "fab66a23e6b9b80c6a7ad16fe274b1062ab6fb2c900747e91f95b125b6777461",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "official",
+        "result": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "error: error reading 'main.cpp': No such file or directory\n1 error generated.",
+          "durationMs": 4829,
+          "timedOut": false
+        }
+      }
+    ],
+    "done": true,
+    "phase": "official",
+    "logExcerpts": [
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 564.0ms",
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1474.4ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: clang — exitCode=1, total=4829.2ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-official-absolute",
+    "resultSha256": "bddaf4f654e5a356d8d66ed19a811d5b38acd0f3268157b94cdd25ddcc4df92f",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "official-absolute",
+        "result": {
+          "exitCode": 0,
+          "stdout": "HELLO_OFFICIAL_ABSOLUTE\n",
+          "stderr": "",
+          "durationMs": 1188,
+          "timedOut": false
+        }
+      }
+    ],
+    "done": true,
+    "phase": "official-absolute",
+    "logExcerpts": [
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 545.1ms",
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 4178.6ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: clang — exitCode=0, total=7316.6ms =====",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 3377.6ms",
+      "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 470.6ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: wasm-ld — exitCode=0, total=5403.3ms =====",
+      "[Emception:Kernel] ===== WASI COMPLETE: exitCode=0, total=1187.2ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-official-stl",
+    "resultSha256": "713f48f4a72291a5bb724867f8afe0473e7f683c085366a8de98151260e6bc44",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "official-stl",
+        "result": {
+          "exitCode": 0,
+          "stdout": "STL:3\n",
+          "stderr": "",
+          "durationMs": 1298,
+          "timedOut": false
+        }
+      }
+    ],
+    "done": true,
+    "phase": "official-stl",
+    "logExcerpts": [
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 3078.3ms",
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1571.8ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: clang — exitCode=0, total=11033.7ms =====",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 924.7ms",
+      "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 490.2ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: wasm-ld — exitCode=0, total=4776.9ms =====",
+      "[Emception:Kernel] ===== WASI COMPLETE: exitCode=0, total=1297.9ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-optimized",
+    "resultSha256": "f662f2de8c672615fbd462c1ac5d8e713a80ce8065e5e74010585f063ce9adc9",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "optimized",
+        "result": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "Traceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?\nTraceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?",
+          "durationMs": 23138,
+          "timedOut": false
+        }
+      }
+    ],
+    "done": true,
+    "phase": "optimized",
+    "args": [
+      "em++",
+      "/home/user/main.cpp",
+      "-O2",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-o",
+      "/home/user/main.js"
+    ],
+    "source": "int main(){return 0;}",
+    "files": {
+      "js": {
+        "error": "TypeError: can't access property \"byteLength\", data is null"
+      },
+      "wasm": {
+        "bytes": 589,
+        "head": [
+          0,
+          97,
+          115,
+          109,
+          1,
+          0,
+          0,
+          0
+        ],
+        "text": null
+      }
+    },
+    "logExcerpts": [
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 439.0ms",
+      "[Emception:VFSFS] [activity] bypass=321 asyncHooks=1 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1276.9ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang — exitCode=0, total=6489.6ms =====",
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 0.1ms",
+      "[Emception:Kernel]   Pre-warmed 0/2445 header files for clang in 11.3ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang — exitCode=0, total=1241.3ms =====",
+      "[Emception:Kernel]   [SKIPPED] compiler.mjs (post-processing, already done by clang)",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 724.8ms",
+      "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 491.3ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/wasm-ld — exitCode=0, total=2696.4ms =====",
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=14 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/llvm-objcopy — exitCode=0 (skipped), total=1234.1ms =====",
+      "[Emception:Kernel] ===== RUN COMPLETE: em++ — exitCode=1, total=23138.2ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-pthread",
+    "resultSha256": "a4beccb50731b172b16db4045e75127471c9c397041549d5903a4ec7a610d316",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "pthread",
+        "result": {
+          "timedOut": true
+        }
+      }
+    ],
+    "done": true,
+    "phase": "pthread",
+    "args": [
+      "em++",
+      "/home/user/main.cpp",
+      "-O2",
+      "-pthread",
+      "-sPTHREAD_POOL_SIZE=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-o",
+      "/home/user/main.js"
+    ],
+    "source": "#include <pthread.h>\nvoid* f(void*){return 0;} int main(){pthread_t t;pthread_create(&t,0,f,0);pthread_join(t,0);return 0;}",
+    "logExcerpts": [
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 1133.4ms",
+      "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 457.0ms",
+      "[Emception:VFSFS] [activity] bypass=3 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libGL-mt-getprocaddr.a\""
+    ],
+    "browserErrors": [
+      "JavaScript error: blob:http://127.0.0.1:3187/4b038cb7-e229-4cfe-b98d-95d5f7685d2f, line 41385732: RuntimeError: index out of bounds"
+    ]
+  },
+  {
+    "group": "gameguild-002",
+    "run": "browser-webgl",
+    "resultSha256": "db61cc7661aee768660284701f758a79aae62d9f9155b22761ebaca0a317bfdd",
+    "harnessExitCode": 0,
+    "cases": [
+      {
+        "mode": "webgl",
+        "result": {
+          "timedOut": true
+        }
+      }
+    ],
+    "done": true,
+    "phase": "webgl",
+    "args": [
+      "em++",
+      "/home/user/main.cpp",
+      "-O2",
+      "-sUSE_WEBGL2=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-o",
+      "/home/user/main.js"
+    ],
+    "source": "#include <emscripten/html5.h>\n#include <GLES3/gl3.h>\nint main(){EmscriptenWebGLContextAttributes a;emscripten_webgl_init_context_attributes(&a);a.majorVersion=2;auto c=emscripten_webgl_create_context(\"#canvas\",&a);emscripten_webgl_make_context_current(c);glClear(GL_COLOR_BUFFER_BIT);return 0;}",
+    "logExcerpts": [
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 3548.0ms",
+      "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 514.6ms",
+      "[Emception:VFSFS] [activity] bypass=1 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libGL-webgl2-getprocaddr.a\"",
+      "[Emception:VFSFS] [activity] bypass=2 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libGL-webgl2-getprocaddr.a\""
+    ],
+    "browserErrors": [
+      "JavaScript error: blob:http://127.0.0.1:3187/8f997446-1ff3-4cfc-b594-885a2ff1bc53, line 41385732: RuntimeError: index out of bounds"
+    ]
+  },
+  {
+    "group": "gameguild-003",
+    "run": "browser-debug",
+    "resultSha256": "d1b290309f14baf290445f966fd79c1e6179182fd75f317c128d3168fd827e41",
+    "harnessExitCode": 0,
+    "phase": "em++-minimal",
+    "cases": [
+      {
+        "name": "em++-minimal",
+        "source": "int main(){return 0;}",
+        "args": [
+          "em++",
+          "/home/user/minimal.cpp",
+          "-O0",
+          "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+          "-o",
+          "/home/user/minimal.js"
+        ],
+        "result": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "Traceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?\nTraceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?",
+          "durationMs": 29111,
+          "timedOut": false
+        },
+        "files": {
+          "js": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          },
+          "wasm": {
+            "bytes": 1426,
+            "head": [
+              0,
+              97,
+              115,
+              109,
+              1,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    ],
+    "done": true,
+    "logExcerpts": [
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants + cache-debug + cache-gl-variants + cache-misc bundles for lld in 1254.9ms",
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Pre-warmed 174/174 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants+cache-debug+cache-gl-variants+cache-misc) for lld in 1289.9ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/wasm-ld — exitCode=0, total=3910.2ms =====",
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=14 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/llvm-objcopy — exitCode=0 (skipped), total=7365.0ms =====",
+      "[Emception:Kernel]   [SKIPPED] compiler.mjs (post-processing, already done by clang)",
+      "[Emception:Kernel] ===== RUN COMPLETE: em++ — exitCode=1, total=29111.6ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-003",
+    "run": "browser-prewarm",
+    "resultSha256": "dd2272d7551fa5b75a938a71bc60b69060b241e8bf18e52b3d56dcad5a97aa7f",
+    "harnessExitCode": 0,
+    "phase": "em++-minimal",
+    "cases": [
+      {
+        "name": "em++-minimal",
+        "source": "#include <emscripten/html5.h>\n#include <GLES3/gl3.h>\nint main(){EmscriptenWebGLContextAttributes a;emscripten_webgl_init_context_attributes(&a);a.majorVersion=2;auto c=emscripten_webgl_create_context(\"#canvas\",&a);emscripten_webgl_make_context_current(c);glClear(GL_COLOR_BUFFER_BIT);return 0;}",
+        "args": [
+          "em++",
+          "/home/user/minimal.cpp",
+          "-O2",
+          "-sUSE_WEBGL2=1",
+          "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+          "-o",
+          "/home/user/minimal.js"
+        ],
+        "result": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "Traceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?\nTraceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?",
+          "durationMs": 26342,
+          "timedOut": false
+        },
+        "files": {
+          "js": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          },
+          "wasm": {
+            "bytes": 1055,
+            "head": [
+              0,
+              97,
+              115,
+              109,
+              1,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    ],
+    "done": true,
+    "logExcerpts": [
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants + cache-debug + cache-gl-variants + cache-misc bundles for lld in 2081.0ms",
+      "[Emception:Kernel]   Pre-warmed 174/174 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants+cache-debug+cache-gl-variants+cache-misc) for lld in 1113.9ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/wasm-ld — exitCode=0, total=4538.3ms =====",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/llvm-objcopy — exitCode=0 (skipped), total=2677.4ms =====",
+      "[Emception:Kernel]   [SKIPPED] compiler.mjs (post-processing, already done by clang)",
+      "[Emception:Kernel] ===== RUN COMPLETE: em++ — exitCode=1, total=26342.1ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-003",
+    "run": "browser-pthread",
+    "resultSha256": "596e762d7cc11333ca3328736cf90a99faf15a1d793762bd288124d88494fd2e",
+    "harnessExitCode": 0,
+    "phase": "em++-minimal",
+    "cases": [
+      {
+        "name": "em++-minimal",
+        "source": "#include <pthread.h>\nvoid* f(void*){return 0;} int main(){pthread_t t;pthread_create(&t,0,f,0);pthread_join(t,0);return 0;}",
+        "args": [
+          "em++",
+          "/home/user/minimal.cpp",
+          "-O2",
+          "-pthread",
+          "-sPTHREAD_POOL_SIZE=1",
+          "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+          "-o",
+          "/home/user/minimal.js"
+        ],
+        "result": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "Traceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?\nTraceback (most recent call last):\n  File \"/usr/lib/emscripten/emcc.py\", line 586, in <module>\n    sys.exit(main(sys.argv))\n             ~~~~^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/emcc.py\", line 328, in main\n    return link.run(options, linker_args)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/emscripten/tools/link.py\", line 3155, in run\n    phase_post_link(options, wasm_target, wasm_target, target, js_syms, base_metadata)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1898, in phase_post_link\n    metadata = phase_emscript(in_wasm, wasm_target, js_syms, base_metadata)\n  File \"/usr/lib/python3.13/contextlib.py\", line 85, in inner\n    return func(*args, **kwds)\n  File \"/usr/lib/emscripten/tools/link.py\", line 1930, in phase_emscript\n    metadata = emscripten.emscript(in_wasm, wasm_target, final_js, js_syms, base_metadata=base_metadata)\n  File \"/usr/lib/emscripten/tools/emscripten.py\", line 428, in emscript\n    assert '//FORWARDED_DATA:' in out, 'Did not receive forwarded data in pre output - process failed?'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Did not receive forwarded data in pre output - process failed?",
+          "durationMs": 29242,
+          "timedOut": false
+        },
+        "files": {
+          "js": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          },
+          "wasm": {
+            "bytes": 20968,
+            "head": [
+              0,
+              97,
+              115,
+              109,
+              1,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    ],
+    "done": true,
+    "logExcerpts": [
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants + cache-debug + cache-gl-variants + cache-misc bundles for lld in 4587.5ms",
+      "[Emception:Kernel]   Pre-warmed 174/174 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants+cache-debug+cache-gl-variants+cache-misc) for lld in 1230.3ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/wasm-ld — exitCode=0, total=7300.3ms =====",
+      "[Emception:VFSFS] [activity] bypass=422 asyncHooks=14 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/llvm-objcopy — exitCode=0 (skipped), total=5094.3ms =====",
+      "[Emception:Kernel]   [SKIPPED] compiler.mjs (post-processing, already done by clang)",
+      "[Emception:Kernel] ===== RUN COMPLETE: em++ — exitCode=1, total=29242.0ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-004",
+    "run": "browser-noskip",
+    "resultSha256": "b41be384629fef95f4d78bdf5d26e048e3b9d369244f84875940f775c15897c2",
+    "harnessExitCode": 0,
+    "phase": "em++-minimal",
+    "cases": [
+      {
+        "name": "em++-minimal",
+        "source": "int main(){return 0;}",
+        "args": [
+          "em++",
+          "/home/user/minimal.cpp",
+          "-O2",
+          "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+          "-o",
+          "/home/user/minimal.js"
+        ],
+        "result": {
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": "emcc: error: '/usr/bin/node /usr/lib/emscripten/tools/compiler.mjs - --symbols-only' failed (returned 1)",
+          "durationMs": 16362,
+          "timedOut": false
+        },
+        "files": {
+          "js": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          },
+          "wasm": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          }
+        }
+      }
+    ],
+    "done": true,
+    "logExcerpts": [
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1228.7ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang — exitCode=0, total=6070.1ms =====",
+      "[Emception:VFSFS] [activity] bypass=333 asyncHooks=4 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 0.1ms",
+      "[Emception:Kernel]   Pre-warmed 0/2445 header files for clang in 11.2ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang — exitCode=0, total=1317.9ms =====",
+      "[Emception:Kernel] ❌ JS eval error after 0.4ms: '#' not followed by identifier",
+      "[Emception:Kernel] ===== RUN COMPLETE: em++ — exitCode=0, total=16361.8ms ====="
+    ],
+    "browserErrors": []
+  },
+  {
+    "group": "gameguild-004",
+    "run": "browser-noskip-noshebang",
+    "resultSha256": "0ed594ad58e8a63eb814774fe5d5e84ac091a342452cd75f1b7a1adcea38e4a4",
+    "harnessExitCode": 0,
+    "phase": "em++-minimal",
+    "cases": [
+      {
+        "name": "em++-minimal",
+        "source": "int main(){return 0;}",
+        "args": [
+          "em++",
+          "/home/user/minimal.cpp",
+          "-O2",
+          "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+          "-o",
+          "/home/user/minimal.js"
+        ],
+        "result": {
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": "emcc: error: '/usr/bin/node /usr/lib/emscripten/tools/compiler.mjs - --symbols-only' failed (returned 1)",
+          "durationMs": 18211,
+          "timedOut": false
+        },
+        "files": {
+          "js": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          },
+          "wasm": {
+            "error": "TypeError: can't access property \"byteLength\", bytes is null"
+          }
+        }
+      }
+    ],
+    "done": true,
+    "logExcerpts": [
+      "[Emception:VFSFS] [activity] bypass=321 asyncHooks=1 last=\"open: /tmp/.subprocess_request\"",
+      "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1392.3ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang — exitCode=0, total=5640.3ms =====",
+      "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 0.1ms",
+      "[Emception:Kernel]   Pre-warmed 0/2445 header files for clang in 10.8ms",
+      "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang — exitCode=0, total=1202.1ms =====",
+      "[Emception:Kernel] ❌ JS eval error after 0.4ms: expected expression, got '*'",
+      "[Emception:Kernel] ===== RUN COMPLETE: em++ — exitCode=0, total=18210.7ms ====="
+    ],
+    "browserErrors": []
+  }
+]

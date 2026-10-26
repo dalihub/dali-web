@@ -1,0 +1,6 @@
+llvm-nm, compatible with GNU nm
+LLVM (http://llvm.org/):
+  LLVM version 16.0.0git
+  Optimized build.
+  Default target: x86_64-unknown-linux-gnu
+  Host CPU: rocketlake

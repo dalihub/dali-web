@@ -1,0 +1,85 @@
+[
+  {
+    "query": "dali_user_probe",
+    "matches": [
+      [
+        28,
+        "       -     d288      1a6         /tmp/emscripten_temp_fybqc6x0/production-user_0.o:(dali_user_probe)"
+      ],
+      [
+        29,
+        "       -     d288      1a6                 dali_user_probe"
+      ]
+    ]
+  },
+  {
+    "query": "dali_web_start",
+    "matches": [
+      [
+        18308,
+        "       -   15762c      2a3         /working/production/web-host.cpp.o:(dali_web_start)"
+      ],
+      [
+        18309,
+        "       -   15762c      2a3                 dali_web_start"
+      ]
+    ]
+  },
+  {
+    "query": "Controller::CreateBuffer",
+    "matches": [
+      [
+        3052,
+        "       -    47658       9d                 Dali::Graphics::GlesGraphicsController::CreateBuffer(Dali::Graphics::BufferCreateInfo const&, std::__2::unique_ptr<Dali::Graphics::Buffer, Dali::Graphics::DefaultDeleter<Dali::Graphics::Buffer>>&&)"
+      ]
+    ]
+  },
+  {
+    "query": "Controller::SubmitCommandBuffers",
+    "matches": [
+      [
+        2888,
+        "       -    42810      1ef                 Dali::Graphics::GlesGraphicsController::SubmitCommandBuffers(Dali::Graphics::SubmitInfo const&)"
+      ]
+    ]
+  },
+  {
+    "query": "WebBufferMemory::",
+    "matches": [
+      [
+        18245,
+        "       -   155dd6      2da                 Dali::Graphics::GLES::WebBufferMemory::Create(Dali::Graphics::GLES::WebBufferStorage*, unsigned int, unsigned int)"
+      ],
+      [
+        18249,
+        "       -   1560e0       de                 Dali::Graphics::GLES::WebBufferMemory::WebBufferMemory(Dali::Graphics::GLES::WebBufferStorage*, unsigned int, unsigned int)"
+      ]
+    ]
+  },
+  {
+    "query": "RenderManager::",
+    "matches": [
+      [
+        49428,
+        "       -   3ef71a       d1                 Dali::Internal::SceneGraph::RenderManager::New(Dali::Graphics::Controller&, Dali::Internal::SceneGraph::MemoryPoolCollection&)"
+      ],
+      [
+        49430,
+        "       -   3ef7eb      2e3                 Dali::Internal::SceneGraph::RenderManager::Impl::Impl(Dali::Graphics::Controller&)"
+      ]
+    ]
+  },
+  {
+    "query": "Vector2::Length",
+    "matches": [
+      [
+        65048,
+        "       -   512971       57                 Dali::Vector2::Length() const"
+      ],
+      [
+        65050,
+        "       -   5129c8       5c                 Dali::Vector2::LengthSquared() const"
+      ]
+    ]
+  }
+]

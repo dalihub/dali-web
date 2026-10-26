@@ -1,0 +1,13 @@
+export DALI_WEB_EMSDK=""
+export DALI_WEB_HOST_TOOLS=${DALI_WEB_HOST_TOOLS}
+export EM_CONFIG=${DALI_WEB_EMSDK_3124}/.emscripten
+export EM_CACHE=${DALI_WEB_EMSDK_3124}/cache
+export EMCC=${DALI_WEB_EMSDK_3124}/upstream/emscripten/emcc
+export EMXX=${DALI_WEB_EMSDK_3124}/upstream/emscripten/em++
+export EMCMAKE=${DALI_WEB_EMSDK_3124}/upstream/emscripten/emcmake
+export LLVM_NM=${DALI_WEB_EMSDK_3124}/upstream/bin/llvm-nm
+export NODE=${DALI_WEB_NODE}
+export PATH="${DALI_WEB_EMSDK_3124}/upstream/emscripten:/home/jy/work/dali/webassembly-probe/tools/emsdk/node/24.19.0_64bit/bin:$PATH"
+source scripts/env.sh
+export DALI_WEB_JOBS=6
+export EMCC_CORES=6

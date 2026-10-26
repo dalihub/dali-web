@@ -1,0 +1,533 @@
+{
+  "phase": "tiny-object",
+  "cases": [
+    {
+      "name": "clang-version",
+      "args": [
+        "clang++",
+        "--version"
+      ],
+      "result": {
+        "exitCode": 0,
+        "stdout": "clang version 23.0.0git (https://github.com/gameguild-gg/gameguild 4be99450ebde24a561a7f10ace3fd94ea0fac296)\nTarget: wasm32-unknown-emscripten\nThread model: posix\nInstalledDir: ",
+        "stderr": "",
+        "durationMs": 4471,
+        "timedOut": false
+      },
+      "object": null
+    },
+    {
+      "name": "tiny-object",
+      "args": [
+        "clang++",
+        "-c",
+        "/home/user/tiny.cpp",
+        "-o",
+        "/home/user/tiny.o"
+      ],
+      "result": {
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "",
+        "durationMs": 1418,
+        "timedOut": false
+      },
+      "object": {
+        "bytes": 471,
+        "head": [
+          0,
+          97,
+          115,
+          109,
+          1,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "done": true,
+  "logs": [
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #200] /usr/lib/clang/23/include/ppc_wrappers/smmintrin.h +23559B @0 (total=23559B, accBytes=6357631)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #300] /usr/include/c++/v1/cfloat +2048B @0 (total=2048B, accBytes=8312765)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #400] /usr/include/c++/v1/utility +12062B @0 (total=12062B, accBytes=10712391)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #500] /usr/include/allegro5/internal/aintern_prim_opengl.h +1427B @0 (total=1427B, accBytes=11348315)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #600] /usr/include/allegro5/utf8.h +6195B @0 (total=6195B, accBytes=12110835)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #700] /usr/include/c++/v1/__algorithm/move_backward.h +6664B @0 (total=6664B, accBytes=12396003)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #800] /usr/include/c++/v1/__algorithm/ranges_stable_partition.h +3200B @0 (total=3200B, accBytes=12739862)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #900] /usr/include/c++/v1/__chrono/literals.h +1309B @0 (total=1309B, accBytes=13224685)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1000] /usr/include/c++/v1/__filesystem/recursive_directory_iterator.h +6007B @0 (total=6007B, accBytes=13709483)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1100] /usr/include/c++/v1/__fwd/vector.h +782B @0 (total=782B, accBytes=14501946)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1200] /usr/include/c++/v1/__memory_resource/monotonic_buffer_resource.h +3999B @0 (total=3999B, accBytes=15072686)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1300] /usr/include/c++/v1/__random/exponential_distribution.h +4700B @0 (total=4700B, accBytes=15586872)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1400] /usr/include/c++/v1/__thread/support.h +3780B @0 (total=3780B, accBytes=16189361)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1500] /usr/include/c++/v1/__type_traits/is_trivially_copyable.h +1191B @0 (total=1191B, accBytes=16399369)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1600] /usr/include/c++/v1/uchar.h +1806B @0 (total=1806B, accBytes=16752023)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1700] /usr/include/GLES2/gl2platform.h +1160B @0 (total=1160B, accBytes=24718375)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1800] /usr/include/python3.13/cpython/fileobject.h +652B @0 (total=652B, accBytes=26825366)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1900] /usr/include/python3.13/internal/pycore_floatobject.h +1495B @0 (total=1495B, accBytes=27440046)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2000] /usr/include/python3.13/objimpl.h +8380B @0 (total=8380B, accBytes=28338612)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2100] /usr/include/SDL/SDL_image.h +5513B @0 (total=5513B, accBytes=30325625)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2200] /usr/include/SDL2/SDL_surface.h +36909B @0 (total=36909B, accBytes=33181339)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2300] /usr/include/ucontext.h +495B @0 (total=495B, accBytes=34181504)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2400] /usr/include/SDL3/SDL_mutex.h +36726B @0 (total=36726B, accBytes=44162697)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 1338.3ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 4/4: callMain([\"--version\"])..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [onExit] streams: opens=2445 writes=2445 bytes=46453904; mmaps=0"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [onExit] non-/usr fileData entries (0): "
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 4/4 done: exitCode=0 in 2.5ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Process complete, releasing WASM instance (total spawn: 2536.6ms)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== RUN COMPLETE: clang++ \u2014 exitCode=0, total=4470.7ms ====="
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== RUN: clang++ ====="
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   argv: [\"clang++\", \"-c\", \"/home/user/tiny.cpp\", \"-o\", \"/home/user/tiny.o\"]"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   resolveToolDescriptor: \"clang++\" \u2192 registry match"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Descriptor: module=/usr/lib/clang.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 1/4: Loading module factory for /usr/lib/clang.wasm..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   loadModuleFactory: /usr/lib/clang.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   loadModuleFactory: preloading bundle \"clang\" for /usr/lib/clang.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:WasmLoader] loadModuleFactory: /usr/lib/clang.wasm \u2014 CACHE HIT"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 1/4 done: factory loaded in 0.1ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 2/4: Instantiating isolated WASM process..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 2/4 done: process instantiated in 810.5ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 3/4: Mounting VFSFS + Asyncify hooks..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /usr"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /etc"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /home"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /tmp"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 3/4 done: FS set up in 0.7ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Preloaded clang-headers + usr-include + sdl3 + cache-core bundles for clang in 0.1ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #1] /usr/lib/clang/23/include/cuda_wrappers/algorithm hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1] /usr/lib/clang/23/include/cuda_wrappers/algorithm +4612B @0 (total=4612B, accBytes=4612)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #2] /usr/lib/clang/23/include/cuda_wrappers/cmath hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2] /usr/lib/clang/23/include/cuda_wrappers/cmath +2045B @0 (total=2045B, accBytes=6657)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #3] /usr/lib/clang/23/include/cuda_wrappers/complex hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #3] /usr/lib/clang/23/include/cuda_wrappers/complex +3618B @0 (total=3618B, accBytes=10275)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #4] /usr/lib/clang/23/include/cuda_wrappers/new hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #4] /usr/lib/clang/23/include/cuda_wrappers/new +3739B @0 (total=3739B, accBytes=14014)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #5] /usr/lib/clang/23/include/openmp_wrappers/cmath hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #5] /usr/lib/clang/23/include/openmp_wrappers/cmath +5251B @0 (total=5251B, accBytes=19265)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #6] /usr/lib/clang/23/include/openmp_wrappers/complex hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #6] /usr/lib/clang/23/include/openmp_wrappers/complex +1941B @0 (total=1941B, accBytes=21206)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #7] /usr/lib/clang/23/include/openmp_wrappers/new hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #7] /usr/lib/clang/23/include/openmp_wrappers/new +1409B @0 (total=1409B, accBytes=22615)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #8] /usr/lib/clang/23/include/__clang_cuda_builtin_vars.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #8] /usr/lib/clang/23/include/__clang_cuda_builtin_vars.h +4892B @0 (total=4892B, accBytes=27507)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #9] /usr/lib/clang/23/include/__clang_cuda_cmath.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #9] /usr/lib/clang/23/include/__clang_cuda_cmath.h +18493B @0 (total=18493B, accBytes=46000)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #10] /usr/lib/clang/23/include/__clang_cuda_complex_builtins.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #10] /usr/lib/clang/23/include/__clang_cuda_complex_builtins.h +9140B @0 (total=9140B, accBytes=55140)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #11] /usr/lib/clang/23/include/__clang_cuda_device_functions.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #11] /usr/lib/clang/23/include/__clang_cuda_device_functions.h +58753B @0 (total=58753B, accBytes=113893)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #12] /usr/lib/clang/23/include/__clang_cuda_intrinsics.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #12] /usr/lib/clang/23/include/__clang_cuda_intrinsics.h +48862B @0 (total=48862B, accBytes=162755)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #13] /usr/lib/clang/23/include/__clang_cuda_libdevice_declares.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #13] /usr/lib/clang/23/include/__clang_cuda_libdevice_declares.h +22414B @0 (total=22414B, accBytes=185169)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #14] /usr/lib/clang/23/include/__clang_cuda_math_forward_declares.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #14] /usr/lib/clang/23/include/__clang_cuda_math_forward_declares.h +8694B @0 (total=8694B, accBytes=193863)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #15] /usr/lib/clang/23/include/__clang_cuda_math.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #15] /usr/lib/clang/23/include/__clang_cuda_math.h +16602B @0 (total=16602B, accBytes=210465)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #16] /usr/lib/clang/23/include/__clang_cuda_runtime_wrapper.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #16] /usr/lib/clang/23/include/__clang_cuda_runtime_wrapper.h +18634B @0 (total=18634B, accBytes=229099)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #17] /usr/lib/clang/23/include/__clang_cuda_texture_intrinsics.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #17] /usr/lib/clang/23/include/__clang_cuda_texture_intrinsics.h +56680B @0 (total=56680B, accBytes=285779)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #18] /usr/lib/clang/23/include/__clang_hip_cmath.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #18] /usr/lib/clang/23/include/__clang_hip_cmath.h +27196B @0 (total=27196B, accBytes=312975)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #19] /usr/lib/clang/23/include/__clang_hip_libdevice_declares.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #19] /usr/lib/clang/23/include/__clang_hip_libdevice_declares.h +20133B @0 (total=20133B, accBytes=333108)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #20] /usr/lib/clang/23/include/__clang_hip_math.h hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #20] /usr/lib/clang/23/include/__clang_hip_math.h +36679B @0 (total=36679B, accBytes=369787)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #100] /usr/lib/clang/23/include/avx512vlintrin.h +327830B @0 (total=327830B, accBytes=3182996)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #200] /usr/lib/clang/23/include/ppc_wrappers/smmintrin.h +23559B @0 (total=23559B, accBytes=6357631)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #300] /usr/include/c++/v1/cfloat +2048B @0 (total=2048B, accBytes=8312765)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #400] /usr/include/c++/v1/utility +12062B @0 (total=12062B, accBytes=10712391)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #500] /usr/include/allegro5/internal/aintern_prim_opengl.h +1427B @0 (total=1427B, accBytes=11348315)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #600] /usr/include/allegro5/utf8.h +6195B @0 (total=6195B, accBytes=12110835)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #700] /usr/include/c++/v1/__algorithm/move_backward.h +6664B @0 (total=6664B, accBytes=12396003)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #800] /usr/include/c++/v1/__algorithm/ranges_stable_partition.h +3200B @0 (total=3200B, accBytes=12739862)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #900] /usr/include/c++/v1/__chrono/literals.h +1309B @0 (total=1309B, accBytes=13224685)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1000] /usr/include/c++/v1/__filesystem/recursive_directory_iterator.h +6007B @0 (total=6007B, accBytes=13709483)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1100] /usr/include/c++/v1/__fwd/vector.h +782B @0 (total=782B, accBytes=14501946)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1200] /usr/include/c++/v1/__memory_resource/monotonic_buffer_resource.h +3999B @0 (total=3999B, accBytes=15072686)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1300] /usr/include/c++/v1/__random/exponential_distribution.h +4700B @0 (total=4700B, accBytes=15586872)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1400] /usr/include/c++/v1/__thread/support.h +3780B @0 (total=3780B, accBytes=16189361)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1500] /usr/include/c++/v1/__type_traits/is_trivially_copyable.h +1191B @0 (total=1191B, accBytes=16399369)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1600] /usr/include/c++/v1/uchar.h +1806B @0 (total=1806B, accBytes=16752023)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1700] /usr/include/GLES2/gl2platform.h +1160B @0 (total=1160B, accBytes=24718375)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1800] /usr/include/python3.13/cpython/fileobject.h +652B @0 (total=652B, accBytes=26825366)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1900] /usr/include/python3.13/internal/pycore_floatobject.h +1495B @0 (total=1495B, accBytes=27440046)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2000] /usr/include/python3.13/objimpl.h +8380B @0 (total=8380B, accBytes=28338612)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2100] /usr/include/SDL/SDL_image.h +5513B @0 (total=5513B, accBytes=30325625)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2200] /usr/include/SDL2/SDL_surface.h +36909B @0 (total=36909B, accBytes=33181339)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2300] /usr/include/ucontext.h +495B @0 (total=495B, accBytes=34181504)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2400] /usr/include/SDL3/SDL_mutex.h +36726B @0 (total=36726B, accBytes=44162697)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Pre-warmed 2445/2445 header files for clang in 182.0ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 4/4: callMain([\"-c\", \"/home/user/tiny.cpp\", \"-o\", \"/home/user/tiny.o\"])..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [onExit] streams: opens=2447 writes=2463 bytes=46454425; mmaps=0"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [onExit] non-/usr fileData entries (2): /home/user/tiny.cpp(44B), /home/user/tiny.o(471B)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 4/4 done: exitCode=0 in 10.0ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Persisted output artifact: /home/user/tiny.o (471B)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Process complete, releasing WASM instance (total spawn: 1004.0ms)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== RUN COMPLETE: clang++ \u2014 exitCode=0, total=1417.7ms ====="
+    }
+  ]
+}

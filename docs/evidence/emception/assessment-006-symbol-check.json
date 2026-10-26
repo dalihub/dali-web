@@ -1,0 +1,43 @@
+[
+  {
+    "name": "current-core",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-003/core/libdali2-core.a"
+    ],
+    "exitCode": 0,
+    "hashMemoryMatches": [
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)",
+      "         U std::__2::__hash_memory(void const*, unsigned long)"
+    ]
+  },
+  {
+    "name": "old-libcxx-mt",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-C",
+      "${DALI_WEB_ROOT}/logs/emception/offline-assets/80e8be53df562faaf13f.a"
+    ],
+    "exitCode": 0,
+    "hashMemoryMatches": []
+  }
+]

@@ -1,0 +1,182 @@
+{
+  "shader-parser.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/common/shader-parser.cpp.o",
+    "sha256": "0369566ce628cd90482481f8f5ca6c4a0da2176e4a58cbb73d4bc49feb889454",
+    "bytes": 752685
+  },
+  "gles-graphics-program.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp.o",
+    "sha256": "07f3a03f8006c555665712e7d7fc1d9cef2263955e9ce1fa7685999373d0c8f4",
+    "bytes": 525993
+  },
+  "gles-graphics-controller.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-controller.cpp.o",
+    "sha256": "9a3b905cee68901575cb45700025516b49748b8d24964dd4b4aaa1c9f51ad481",
+    "bytes": 3030858
+  },
+  "gles-graphics-controller-debug.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-controller-debug.cpp.o",
+    "sha256": "1edba6e4f8f380c23789b3cf366be20bde0d904a3838719be1090bc4fdb6b93d",
+    "bytes": 315119
+  },
+  "gles-graphics-buffer.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp.o",
+    "sha256": "f75a536da77dd2e2f3114090c2e3ea716f08dc78a9c75771dfc569b3c2630242",
+    "bytes": 141758
+  },
+  "gles-graphics-command-buffer.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-command-buffer.cpp.o",
+    "sha256": "7a3e264618d75a86e0c7337eb2eb6c3b0b601fc0c3e0eb24c084f88cd2054d09",
+    "bytes": 394759
+  },
+  "gles-graphics-debug.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-debug.cpp.o",
+    "sha256": "8ab9007bcbc9e9e0fcdda5f682000094827907e5d48d4b91b4019bd2c0cd5f8f",
+    "bytes": 275
+  },
+  "gles-graphics-framebuffer.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-framebuffer.cpp.o",
+    "sha256": "a6b46616b2b97ca76a2a11d7e346f55f9a561225752e3ed413efd3100eb6bbe3",
+    "bytes": 298753
+  },
+  "gles-graphics-pipeline.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline.cpp.o",
+    "sha256": "c34d0c9f8b2367e5808269ce1896a0d76ea8bcaa8a1fcf2cf624fd72d2988343",
+    "bytes": 315037
+  },
+  "gles-graphics-reflection.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-reflection.cpp.o",
+    "sha256": "6d3d4a08774000fe3af8e79297c6b5eaa57c95f99cdaf938adcf6f6267a5513f",
+    "bytes": 722250
+  },
+  "gles-graphics-render-pass.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-pass.cpp.o",
+    "sha256": "77d99834728029e4ca331a03ff944b8ed2c802bfc05154fd6fe95d1cc82e4445",
+    "bytes": 267844
+  },
+  "gles-graphics-render-target.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-render-target.cpp.o",
+    "sha256": "8759db04d2fd89e37b0813943918c562f13803c0e36c30c7f262ff52e22256d5",
+    "bytes": 145005
+  },
+  "gles-graphics-sampler.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-sampler.cpp.o",
+    "sha256": "15670bb0663493f059bf411c691a4fb039d4182fef0131f75e7c28b7c9340933",
+    "bytes": 141303
+  },
+  "gles-graphics-shader.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-shader.cpp.o",
+    "sha256": "e957150eeaa69738084c0535e6b85881150af8b48890be214d61c6b795352b10",
+    "bytes": 319186
+  },
+  "gles-graphics-texture.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-texture.cpp.o",
+    "sha256": "047d1501d289dd02c21ac0786f3db59afd9411886e8cc8bc13ba8c5548e3433a",
+    "bytes": 373563
+  },
+  "gles-graphics-pipeline-cache.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-pipeline-cache.cpp.o",
+    "sha256": "3ca34513477b0f501fa91f40bcbce89e29710972a20a4e95a760e209934cf3e5",
+    "bytes": 851328
+  },
+  "gles-context.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-context.cpp.o",
+    "sha256": "87e2bfd220856e41b3554614733d9743835f1682a145a8355b0f3f44b26afd11",
+    "bytes": 1245028
+  },
+  "gles-sync-object.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-object.cpp.o",
+    "sha256": "178f14ee453a2cb48eb31699dd0ce20961dbc9f9e2878d9f0d088665f61c600e",
+    "bytes": 34655
+  },
+  "gles-framebuffer-state-cache.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-framebuffer-state-cache.cpp.o",
+    "sha256": "104e99e3ac0d7999c7da81de5c2853f4ef166a918334ba8606e19607636636ce",
+    "bytes": 52575
+  },
+  "gles-sync-pool.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-sync-pool.cpp.o",
+    "sha256": "09e6167fd2e0562afdff62da292af0524f065343c60ea04ef4a3e582df6a7ca0",
+    "bytes": 740762
+  },
+  "gles-texture-dependency-checker.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-texture-dependency-checker.cpp.o",
+    "sha256": "4197b6ad8e3bf3dd68d206ea7b45560e0d6851fe4923ae3c8feb87a49e5e4b20",
+    "bytes": 937500
+  },
+  "web-gl-implementation.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gl-implementation.cpp.o",
+    "sha256": "0f5e91e17552be543c17297483bfd0cbec847804401aa5f5cc5111c073b9af01",
+    "bytes": 242274
+  },
+  "web-gles-context.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-context.cpp.o",
+    "sha256": "338365c348e82ac087374776e4476f050b8273ccc57ab960e6216a42cec074e7",
+    "bytes": 34050
+  },
+  "web-gles-rendering.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-rendering.cpp.o",
+    "sha256": "6da02bb3c6d84edd5a08a6ef829fbb2df15d9ca14ff873767a50ae559a093ca5",
+    "bytes": 41305
+  },
+  "web-gles-sync.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-sync.cpp.o",
+    "sha256": "a15a6a3af99fad69fa83848df292cd3faeef1d8d79f13a0e7ed3c928b768b304",
+    "bytes": 51953
+  },
+  "web-gles-sync-pool.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-sync-pool.cpp.o",
+    "sha256": "4d899b4e0b0ab635efe6a255861b37b9c8fb51e4cb4abfb21405e1d8cf3e41d3",
+    "bytes": 61376
+  },
+  "web-gles-fence.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-fence.cpp.o",
+    "sha256": "872de2b4deea5a2d7f9c7c7745091c6830e56be47129b2a831895ce87c9ffecb",
+    "bytes": 206661
+  },
+  "web-gles-memory.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-memory.cpp.o",
+    "sha256": "dce0ec109b28b85d7d05634ec9f9727ce22c46970b2f32fd21f58918044a1486",
+    "bytes": 41715
+  },
+  "web-gles-buffer.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-buffer.cpp.o",
+    "sha256": "55499289d5555fe669733fbf50efcd4467e770a904fd7f699fa527cac2a2a82b",
+    "bytes": 37818
+  },
+  "web-buffer-memory.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-buffer-memory.cpp.o",
+    "sha256": "f997657c36d2943d0708f7d107436832d85bbc264bd2ec1176b456b95e0bceee",
+    "bytes": 30123
+  },
+  "web-buffer-storage.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-buffer-storage.cpp.o",
+    "sha256": "32ce270dc41f1bdd86199c2d7f9c604171fbe442e103e50be48ad29e92cc14e0",
+    "bytes": 27174
+  },
+  "web-gles-failure.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-failure.cpp.o",
+    "sha256": "1efe69feefb3036973b8e465b50c60b3bc177016e0d0d4d984c0d6b19a5a79b3",
+    "bytes": 26873
+  },
+  "web-gles-program-cache.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-program-cache.cpp.o",
+    "sha256": "65f4e6abdaeea80f907481d97c21ca2d4c5754b9efc3477fe3333b0be7ca90ce",
+    "bytes": 30730
+  },
+  "environment-variable.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web-renderer.dir${DALI_WEB_ROOT}/libs/dali-adaptor/dali/devel-api/adaptor-framework/environment-variable.cpp.o",
+    "sha256": "ddcca9994cd96cfc2770ac6b688a3c47efead66af149283c2629ee17a9a10e95",
+    "bytes": 20914
+  },
+  "web-host.cpp.o": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/CMakeFiles/dali-web.dir${DALI_WEB_ROOT}/web/host/web-host.cpp.o",
+    "sha256": "6ce0549bb9e4cc4ec9f69e0a7374801776d95997731668ee63e06609dd9a1177",
+    "bytes": 495423
+  },
+  "libdali2-core.a": {
+    "path": "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/core/libdali2-core.a",
+    "sha256": "c5b630fc8df1ce3a8c68d055ff98814f9b9d474d3b440dc347eeacf640421a4e",
+    "bytes": 68673332
+  }
+}

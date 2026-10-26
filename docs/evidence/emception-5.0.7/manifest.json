@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "artifactVersion": "4.5.0",
+  "runtimeAbi": "emception-browser-v1",
+  "patchSetVersion": "emception-glue-v5",
+  "buildFingerprint": "45e6c83d57b544d8b8ab15ecb558a8f18f0d6bfd5fdb7f05639d0770b7b011d9",
+  "toolVersions": {
+    "emsdk": "5.0.7",
+    "llvm": "23.0.0git",
+    "binaryen": "129",
+    "python": "3.13.3",
+    "pythonMajorMinor": "3.13",
+    "pythonMajorMinorCompact": "313",
+    "cmake": "3.31.12",
+    "brotli": "1.2.0",
+    "imgui": "v1.92.7",
+    "raylib": "6.0",
+    "raygui": "4.0",
+    "physac": "1.1",
+    "allegro": "5.2.10.1",
+    "curlLite": "8.20.0"
+  },
+  "toolchainLockHash": "405e9f1fdd936ba31e11247fa1f901eaee24c4fcf641e343505df75c3d539b37",
+  "buildReceiptHash": "3517c67ff7df661f380071e0f766c48fc8c5bc71ee37b2f14951d09c74b72b2f"
+}

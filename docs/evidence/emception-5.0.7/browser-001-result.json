@@ -1,0 +1,83 @@
+{
+  "phase": "webgl2",
+  "cases": [
+    {
+      "name": "version",
+      "source": null,
+      "args": [
+        "--version"
+      ],
+      "result": {
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "emcc: error: no input files",
+        "durationMs": 10848,
+        "timedOut": false
+      }
+    },
+    {
+      "name": "cpp",
+      "source": "#include <vector>\n#include <iostream>\nint main(){std::vector<int> v{1,2,3};std::cout<<v.size()<<std::endl;}",
+      "args": [
+        "/home/user/cpp.cpp",
+        "-std=c++17",
+        "-O0",
+        "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+        "-o",
+        "/home/user/cpp.js"
+      ],
+      "result": {
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "emcc: error: no input files\nemcc: error: no input files",
+        "durationMs": 4277,
+        "timedOut": false
+      }
+    },
+    {
+      "name": "pthread",
+      "source": "#include <pthread.h>\nvoid* f(void*){return nullptr;}\nint main(){pthread_t t;return pthread_create(&t,nullptr,f,nullptr);}",
+      "args": [
+        "/home/user/pthread.cpp",
+        "-pthread",
+        "-sPTHREAD_POOL_SIZE=1",
+        "-sABORTING_MALLOC=0",
+        "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+        "-o",
+        "/home/user/pthread.js"
+      ],
+      "result": {
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "emcc: error: no input files\nemcc: error: no input files\nemcc: error: no input files",
+        "durationMs": 4009,
+        "timedOut": false
+      }
+    },
+    {
+      "name": "webgl2",
+      "source": "#include <emscripten/html5.h>\n#include <GLES3/gl3.h>\nint main(){EmscriptenWebGLContextAttributes a;emscripten_webgl_init_context_attributes(&a);a.majorVersion=2;auto c=emscripten_webgl_create_context(\"#canvas\",&a);emscripten_webgl_make_context_current(c);glClear(GL_COLOR_BUFFER_BIT);return !c;}",
+      "args": [
+        "/home/user/webgl2.cpp",
+        "-pthread",
+        "-sMIN_WEBGL_VERSION=2",
+        "-sMAX_WEBGL_VERSION=2",
+        "-sFULL_ES3=0",
+        "-sOFFSCREENCANVAS_SUPPORT=1",
+        "-sABORTING_MALLOC=0",
+        "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+        "-o",
+        "/home/user/webgl2.js"
+      ],
+      "result": {
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "emcc: error: no input files\nemcc: error: no input files\nemcc: error: no input files\nemcc: error: no input files",
+        "durationMs": 6355,
+        "timedOut": false
+      }
+    }
+  ],
+  "done": true,
+  "isolation": true
+}

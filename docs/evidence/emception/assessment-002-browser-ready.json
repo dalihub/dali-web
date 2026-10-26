@@ -1,0 +1,5 @@
+{
+  "ready": true,
+  "text": "Emception\nCompile!\n1\n2\n3\n4\n5\n6\n7\n#include\u00a0<iostream>\nint\u00a0main(void)\u00a0{\n\u00a0\u00a0\u00a0\u00a0std::cout\u00a0<<\u00a0\"hello\u00a0world!\\n\";\n\u00a0\u00a0\u00a0\u00a0return\u00a00;\n}\nIddle",
+  "isolation": false
+}

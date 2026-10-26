@@ -55,7 +55,7 @@ execute('compile-link-test', [os.environ['EMXX'], '-std=c++17', '-pthread', '-DD
     '-I' + str(core / 'generated/include'), '-I' + str(root / 'libs/dali-core'),
     '-I' + str(root / 'libs/dali-adaptor'), '-I' + str(utils),
     *map(str, sources), *objects, str(core / 'core/libdali2-core.a'),
-    '-sABORTING_MALLOC=0', '-sPTHREAD_POOL_SIZE=1', '-sENVIRONMENT=node',
+    '-sABORTING_MALLOC=0', '-sPTHREAD_POOL_SIZE=1', '-sENVIRONMENT=node', '-sEXIT_RUNTIME=1',
     '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sASSERTIONS=1',
     '-sERROR_ON_UNDEFINED_SYMBOLS=1', '-Wl,-Map=' + str(run / 'test.map'),
     *['-Wl,--wrap=' + name for name in wrap], '-o', str(build / 'controller-test.js')])

@@ -1,0 +1,16 @@
+{
+  "next": "16.4.2",
+  "react": "19.3.1",
+  "emceptionPackages": "4.5.0",
+  "emsdk": "5.0.7",
+  "limitMs": 300000,
+  "originalRunnerSha256": "760fe1280c2ff862ceef39489f159a844725c4f924cddf601b4745bdffaac5e9",
+  "npmRunnerSha256": "760fe1280c2ff862ceef39489f159a844725c4f924cddf601b4745bdffaac5e9",
+  "sameRunner": true,
+  "packageLockSha256": "f4fdc50a25eb09f0111cff9bb2c798b80240457ecc1864cb2d59ee387e43d8da",
+  "browser": {
+    "browserName": "firefox",
+    "browserVersion": "157.0.1",
+    "moz:geckodriverVersion": "0.37.1"
+  }
+}

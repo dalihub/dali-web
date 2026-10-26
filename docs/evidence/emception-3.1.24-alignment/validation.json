@@ -1,0 +1,82 @@
+{
+  "head": "abf62214b23c651f06536138cb8b6e0c0fddbfb7",
+  "nativeFirstAttemptExit": 1,
+  "nativeFirstFailure": "SDK config edited during build caused cache reset; fixed configuration then fresh build; no source compatibility failure claimed",
+  "nativeFinalExit": 0,
+  "coreBuildSteps": 333,
+  "productionCompileCount": 35,
+  "nativeStrictLinkExit": 0,
+  "browserProductionLinkExit": 0,
+  "browserUserCompileLinkExit": 0,
+  "userFunctionResult": 5,
+  "browserHarnessExit": 0,
+  "runtimeHarnessExits": {
+    "headers": 0,
+    "sw": 0
+  },
+  "productionPreservation": {
+    "checked": 497,
+    "changed": []
+  },
+  "sourceRegressionExit": 0,
+  "artifacts": {
+    "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/dali-web.js": {
+      "bytes": 239417,
+      "sha256": "a5a94f88f85b338ed416f2b3761f1c945c9823a1dbf195c79aea20f2504f6884"
+    },
+    "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/dali-web.worker.js": {
+      "bytes": 6997,
+      "sha256": "10097d952b52b1909af6f47896af9fac9ca1bd0c6f073ec03b8dd8929e5f04fe"
+    },
+    "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/dali-web.wasm": {
+      "bytes": 5334286,
+      "sha256": "5c21ed8cf760f9ea51c71447e030762221ad91d11490af90d6b776e01f3d8275"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-native-002/webgl2.map": {
+      "bytes": 20214250,
+      "sha256": "948ff9ddc5f849a0a06cc8eef8b489eda622be67a5199ffe01b6e94fedd827dd"
+    },
+    "${DALI_WEB_ROOT}/build/emception/alignment-3124-002/compile_commands.json": {
+      "bytes": 307313,
+      "sha256": "df21a4b6f46edf9afa3c801156bedb9531eb2e0dfe43ca660de23140a9393af4"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production.map": {
+      "bytes": 17456926,
+      "sha256": "310c00f96fb1a87a7f6592b58c1be0bc4a4e5354bb35332636ec0bd36eb934a5"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production-user.map": {
+      "bytes": 17573954,
+      "sha256": "efdf01a895a42c1d165490d7dcfde4461eb2688b702c8f94bf92a820362bfca2"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production-user.worker.js": {
+      "bytes": 6997,
+      "sha256": "10097d952b52b1909af6f47896af9fac9ca1bd0c6f073ec03b8dd8929e5f04fe"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production-user.js": {
+      "bytes": 239874,
+      "sha256": "b506fdf530f6048510c818aafcdd351d7b1c76f5917be968041e7c27240176cd"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production.worker.js": {
+      "bytes": 6997,
+      "sha256": "10097d952b52b1909af6f47896af9fac9ca1bd0c6f073ec03b8dd8929e5f04fe"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production-user.wasm": {
+      "bytes": 5350247,
+      "sha256": "85a7084666e77b7a33876d9ba8c90981fac89a5bba2dd2ed70447c72adb8c5f9"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production.js": {
+      "bytes": 239720,
+      "sha256": "64d9ba3bc9ce42119d6560078485268f3d138a2997c2fc594e0ae15ade72761b"
+    },
+    "${DALI_WEB_ROOT}/logs/emception/alignment-3124-browser-001/production.wasm": {
+      "bytes": 5334007,
+      "sha256": "958951a40e2d609a8f5c690728eca47b2b0c254cd2ea59cf4de2aff948225bcb"
+    }
+  },
+  "nativeGpuTested": false,
+  "daliHostStarted": false,
+  "pagesTested": false,
+  "sdkLockChanged": false,
+  "maxCmakeJobs": 6,
+  "finalEmccCores": 6
+}

@@ -1,0 +1,266 @@
+{
+  "libraries": [
+    {
+      "library": "libGL-mt-webgl2-ofb.a",
+      "asset": "a5ee9301e9948a38c5b0.a",
+      "bytes": 243790
+    },
+    {
+      "library": "libGL-mt-webgl2.a",
+      "asset": "0e8d0fbb3e449a5365ea.a",
+      "bytes": 70344
+    },
+    {
+      "library": "libGL.a",
+      "asset": "94c22103400127179679.a",
+      "bytes": 39098
+    },
+    {
+      "library": "libal.a",
+      "asset": "65502b6412f21c86f425.a",
+      "bytes": 18656
+    },
+    {
+      "library": "libc++-mt-noexcept.a",
+      "asset": "80e8be53df562faaf13f.a",
+      "bytes": 6211864
+    },
+    {
+      "library": "libc++-mt.a",
+      "asset": "ace2f4d2f26710ccafae.a",
+      "bytes": 6583348
+    },
+    {
+      "library": "libc++-noexcept.a",
+      "asset": "9c6f88f14b1ca01cd2a3.a",
+      "bytes": 6209488
+    },
+    {
+      "library": "libc++.a",
+      "asset": "5cca7d24838f53227177.a",
+      "bytes": 6641068
+    },
+    {
+      "library": "libc++abi-mt-noexcept.a",
+      "asset": "fc7443fdff9e56254cce.a",
+      "bytes": 934376
+    },
+    {
+      "library": "libc++abi-mt.a",
+      "asset": "027cb8ac6666251e390f.a",
+      "bytes": 939898
+    },
+    {
+      "library": "libc++abi-noexcept.a",
+      "asset": "936acf34f9406ab0a6f8.a",
+      "bytes": 918294
+    },
+    {
+      "library": "libc++abi.a",
+      "asset": "526fdf5d41f613e9918f.a",
+      "bytes": 923732
+    },
+    {
+      "library": "libc-mt.a",
+      "asset": "1631613159e86cd28b93.a",
+      "bytes": 3523698
+    },
+    {
+      "library": "libc.a",
+      "asset": "4c353481d4a4d217faf3.a",
+      "bytes": 3123758
+    },
+    {
+      "library": "libcompiler_rt-mt.a",
+      "asset": "d07d07d3f2cae1667a40.a",
+      "bytes": 539682
+    },
+    {
+      "library": "libcompiler_rt.a",
+      "asset": "68a84a9f1afc575af7fa.a",
+      "bytes": 530834
+    },
+    {
+      "library": "libdlmalloc-mt.a",
+      "asset": "e875359c01ba17c0be14.a",
+      "bytes": 81278
+    },
+    {
+      "library": "libdlmalloc.a",
+      "asset": "65483916311c903881d2.a",
+      "bytes": 81204
+    },
+    {
+      "library": "libhtml5.a",
+      "asset": "5de9254458072f582a9c.a",
+      "bytes": 39268
+    },
+    {
+      "library": "libsockets-mt.a",
+      "asset": "81d0ac06d1c2ad629785.a",
+      "bytes": 40254
+    },
+    {
+      "library": "libsockets.a",
+      "asset": "e6bcedba8c951c670fa8.a",
+      "bytes": 38742
+    },
+    {
+      "library": "libstubs.a",
+      "asset": "8cb0ec04369d2ee7bc3b.a",
+      "bytes": 24778
+    }
+  ],
+  "downloads": [
+    {
+      "name": "027cb8ac6666251e390f.a",
+      "url": "https://jprendes.github.io/emception/027cb8ac6666251e390f.a",
+      "bytes": 939898,
+      "sha256": "06f5b827287d37646e40d0995efd1270186cf300a22dd84e64e51cbe0ddb5608"
+    },
+    {
+      "name": "0e8d0fbb3e449a5365ea.a",
+      "url": "https://jprendes.github.io/emception/0e8d0fbb3e449a5365ea.a",
+      "bytes": 70344,
+      "sha256": "f3847f72fb2fb87197521b4ded3f877355d9e5bbe8c439533091c5e466ec1a63"
+    },
+    {
+      "name": "1631613159e86cd28b93.a",
+      "url": "https://jprendes.github.io/emception/1631613159e86cd28b93.a",
+      "bytes": 3523698,
+      "sha256": "ac2df9ac2c6c2c86587b435ab2f959f181517a52ec32e94a3a8797064efb6ba8"
+    },
+    {
+      "name": "4c353481d4a4d217faf3.a",
+      "url": "https://jprendes.github.io/emception/4c353481d4a4d217faf3.a",
+      "bytes": 3123758,
+      "sha256": "f1c56c59ef096fcc642238a35cefcc5fd7d7821b452619c75356e33ff98ef1ab"
+    },
+    {
+      "name": "526fdf5d41f613e9918f.a",
+      "url": "https://jprendes.github.io/emception/526fdf5d41f613e9918f.a",
+      "bytes": 923732,
+      "sha256": "b2a63aa220a96f6513c9ed5cc8c850e69faa649302cb91bbd3dada29971ff397"
+    },
+    {
+      "name": "5cca7d24838f53227177.a",
+      "url": "https://jprendes.github.io/emception/5cca7d24838f53227177.a",
+      "bytes": 6641068,
+      "sha256": "9e5ea50a099a4d986b538ccb4d98054637a243f40bfb0e8d47a409fe9e613434"
+    },
+    {
+      "name": "5de9254458072f582a9c.a",
+      "url": "https://jprendes.github.io/emception/5de9254458072f582a9c.a",
+      "bytes": 39268,
+      "sha256": "76b3ef126c2594fafd102ac3cd2548dfd2142f4eb9faad788e63cc6130455333"
+    },
+    {
+      "name": "65483916311c903881d2.a",
+      "url": "https://jprendes.github.io/emception/65483916311c903881d2.a",
+      "bytes": 81204,
+      "sha256": "c7ca442e50022edbc1f15349631eeed7d875dbc0318831d1413ba02df4aac1fc"
+    },
+    {
+      "name": "65502b6412f21c86f425.a",
+      "url": "https://jprendes.github.io/emception/65502b6412f21c86f425.a",
+      "bytes": 18656,
+      "sha256": "de0ade019a30dd518e06d877fe05a292f3618162454b53f94ab0a781312d5e00"
+    },
+    {
+      "name": "68a84a9f1afc575af7fa.a",
+      "url": "https://jprendes.github.io/emception/68a84a9f1afc575af7fa.a",
+      "bytes": 530834,
+      "sha256": "bf3371663d977093a2bace02cb2752c9d6d8e1c04ad48c6b2ed40b5b0b90cd57"
+    },
+    {
+      "name": "80e8be53df562faaf13f.a",
+      "url": "https://jprendes.github.io/emception/80e8be53df562faaf13f.a",
+      "bytes": 6211864,
+      "sha256": "e8959c1c7bab96fbdbbcf176e747b742d1d0278d4b546e7ef1a1b843413c8557"
+    },
+    {
+      "name": "81d0ac06d1c2ad629785.a",
+      "url": "https://jprendes.github.io/emception/81d0ac06d1c2ad629785.a",
+      "bytes": 40254,
+      "sha256": "df8abfb78ba45c304261a387b48fa56e4e09a81b30cb9a29754b7442bcdba4f8"
+    },
+    {
+      "name": "8cb0ec04369d2ee7bc3b.a",
+      "url": "https://jprendes.github.io/emception/8cb0ec04369d2ee7bc3b.a",
+      "bytes": 24778,
+      "sha256": "66fe147f5efe7bd8c22116366b1be655631053cc81cf5faec77bc43fe0d17f3a"
+    },
+    {
+      "name": "936acf34f9406ab0a6f8.a",
+      "url": "https://jprendes.github.io/emception/936acf34f9406ab0a6f8.a",
+      "bytes": 918294,
+      "sha256": "d8d34da0cb9342868337e814220b5758bd380d3a80af54f58e613d90d198e45a"
+    },
+    {
+      "name": "94c22103400127179679.a",
+      "url": "https://jprendes.github.io/emception/94c22103400127179679.a",
+      "bytes": 39098,
+      "sha256": "f3ad59cab588e191931ae59e4febbf2e8619aeeb45ac459792998e7e71157596"
+    },
+    {
+      "name": "9c6f88f14b1ca01cd2a3.a",
+      "url": "https://jprendes.github.io/emception/9c6f88f14b1ca01cd2a3.a",
+      "bytes": 6209488,
+      "sha256": "2a528aa0971510cfda14ee90ce751de64761ed8ce99c89d1d78c658705011dc5"
+    },
+    {
+      "name": "9d1e542b80004e27297f.wasm",
+      "url": "https://jprendes.github.io/emception/9d1e542b80004e27297f.wasm",
+      "bytes": 146837,
+      "sha256": "47a2b00defa938d4471ff6ffdbf4d424ee03599db7d8f56590c6223e96191631"
+    },
+    {
+      "name": "a5ee9301e9948a38c5b0.a",
+      "url": "https://jprendes.github.io/emception/a5ee9301e9948a38c5b0.a",
+      "bytes": 243790,
+      "sha256": "4fd918d954e387d05e4d089d639e919c4ec482035adbe248a1ff75f1fe9d4505"
+    },
+    {
+      "name": "ace2f4d2f26710ccafae.a",
+      "url": "https://jprendes.github.io/emception/ace2f4d2f26710ccafae.a",
+      "bytes": 6583348,
+      "sha256": "ed6f779b5bed913332e772747fd8598626319445f0e5df3b3d4422affae74d62"
+    },
+    {
+      "name": "cecdfcda360457a8f204.br",
+      "url": "https://jprendes.github.io/emception/cecdfcda360457a8f204.br",
+      "bytes": 23510428,
+      "sha256": "9bd873132b4915a4da34a977a386a4ae68785df34b8cdb9c3d205fae26eeb772"
+    },
+    {
+      "name": "d07d07d3f2cae1667a40.a",
+      "url": "https://jprendes.github.io/emception/d07d07d3f2cae1667a40.a",
+      "bytes": 539682,
+      "sha256": "e7c2db62423ef48616601a0429bde91de870e5dbfd063ea1b92e619295a4b4d6"
+    },
+    {
+      "name": "e6bcedba8c951c670fa8.a",
+      "url": "https://jprendes.github.io/emception/e6bcedba8c951c670fa8.a",
+      "bytes": 38742,
+      "sha256": "a9bdb0170825bf261279c49ae2a8c169c422479cdcbc479a74f3697a4da83a4e"
+    },
+    {
+      "name": "e875359c01ba17c0be14.a",
+      "url": "https://jprendes.github.io/emception/e875359c01ba17c0be14.a",
+      "bytes": 81278,
+      "sha256": "b304586fe8fe101a3bfcd54f71105e7c6ff664c31caf2a8a5b54ef989b5d7042"
+    },
+    {
+      "name": "f0283badd42fe745cbe4.wasm",
+      "url": "https://jprendes.github.io/emception/f0283badd42fe745cbe4.wasm",
+      "bytes": 804447,
+      "sha256": "2c60c515eca756e80ddc752a6ac062e07f596eb70c7a1308321705f90e09b442"
+    },
+    {
+      "name": "fc7443fdff9e56254cce.a",
+      "url": "https://jprendes.github.io/emception/fc7443fdff9e56254cce.a",
+      "bytes": 934376,
+      "sha256": "493d1c0a2d7eb061101b5b0e95f81fc2257bb9f2f5eba3c97200816a4d936751"
+    }
+  ]
+}

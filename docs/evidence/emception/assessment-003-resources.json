@@ -1,0 +1,12 @@
+[
+  {
+    "name": "http://127.0.0.1:40129/bridge.js",
+    "bytes": 1191,
+    "duration": 7.359999999999999
+  },
+  {
+    "name": "http://127.0.0.1:40129/emception.worker.bundle.worker.js",
+    "bytes": 530981,
+    "duration": 3
+  }
+]

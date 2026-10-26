@@ -1,0 +1,9 @@
+{
+  "done": true,
+  "mode": "sw",
+  "isolation": true,
+  "firstIsolation": "false",
+  "controlled": true,
+  "sharedMemory": true,
+  "value": 5
+}

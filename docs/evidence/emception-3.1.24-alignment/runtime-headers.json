@@ -1,0 +1,9 @@
+{
+  "done": true,
+  "mode": "headers",
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "sharedMemory": true,
+  "value": 5
+}

@@ -1,0 +1,87 @@
+{
+  "repository": "jprendes/emception",
+  "sourceCommit": "5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+  "files": {
+    "docker/Dockerfile": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/docker/Dockerfile?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "c19ed3b6fa8e8e98c47a42f9b325c758959f71e8af7d86939cec562d1e38d20c",
+      "relevantLines": [
+        {
+          "line": 3,
+          "text": "FROM emscripten/emsdk:3.1.24"
+        }
+      ]
+    },
+    "build-llvm.sh": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/build-llvm.sh?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "a1399216f941adce59e295d9acbd0232456138da52417f33e2e11fb96eb3881d",
+      "relevantLines": [
+        {
+          "line": 29,
+          "text": "    COMMIT=d5a963ab8b40fcf7a99acd834e5f10a1a30cc2e5"
+        },
+        {
+          "line": 71,
+          "text": "        -DLLVM_ENABLE_THREADS=OFF \\"
+        }
+      ]
+    },
+    "packs/emscripten/make.sh": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/packs/emscripten/make.sh?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "01d012055b926356c78135ed8160a9317dbc03b0807b2c328b7286cd547e633d",
+      "relevantLines": [
+        {
+          "line": 11,
+          "text": "# We use here 3.1.24 since that's the latest tag it's been tested with."
+        },
+        {
+          "line": 13,
+          "text": "curl --silent --output emscripten.zip --location https://github.com/emscripten-core/emscripten/archive/refs/tags/3.1.24.zip"
+        },
+        {
+          "line": 51,
+          "text": "CONTAINER_ID=$(docker create emscripten/emsdk:3.1.24)"
+        }
+      ]
+    },
+    "packs/emscripten/emscripten.patch": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/packs/emscripten/emscripten.patch?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "d484be49b6458e76a9508a91dc0fc06f73f9fae04e8350ac2d6ab4d23e547f37",
+      "relevantLines": []
+    },
+    "demo/emception.js": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/demo/emception.js?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "43224dc476963d9e6338dcbeeba4862897bad9a6de12d76ebb1d490c3e0ccddb",
+      "relevantLines": []
+    },
+    "demo/index.js": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/demo/index.js?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "5c72090ec6a640c762fb080407dc5802a7caa43285a0711cb8504d1609fd4945",
+      "relevantLines": [
+        {
+          "line": 82,
+          "text": "    flags.value = \"-O2 -fexceptions --proxy-to-worker -sEXIT_RUNTIME=1\";"
+        },
+        {
+          "line": 154,
+          "text": "            const cmd = `em++ ${flags.value} -sSINGLE_FILE=1 -sMINIFY_HTML=0 -sUSE_CLOSURE_COMPILER=0 main.cpp -o main.html`;"
+        }
+      ]
+    },
+    "src/EmProcess.mjs": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/src/EmProcess.mjs?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "138cd56beab7d007be35fec3ab69c71d7d6ff594cfad346b40ca374adbbe13e3",
+      "relevantLines": []
+    },
+    "LICENSE": {
+      "url": "https://api.github.com/repos/jprendes/emception/contents/LICENSE?ref=5ff1975a5d286b200edc380ba8cc0de94d5c0cdc",
+      "sha256": "36bb253818ac13761081556ff5c457d626da9df1eb4f56194d9ad3926c418a68",
+      "relevantLines": [
+        {
+          "line": 1,
+          "text": "MIT OR Apache-2.0"
+        }
+      ]
+    }
+  }
+}

@@ -27,7 +27,7 @@ execute('compile-link', [os.environ['EMXX'], '-std=c++17', '-pthread', '-DDEBUG_
     str(root / 'tests/unit/web-gl-capabilities.cpp'),
     *[str(root / 'libs/dali-adaptor/dali/internal/graphics/web' / (name + '.cpp')) for name in
       ['web-gl-implementation', 'web-gles-failure', 'web-gles-fence', 'web-gles-program-cache']],
-    str(core / 'core/libdali2-core.a'), '-sABORTING_MALLOC=0', '-sPTHREAD_POOL_SIZE=1', '-sENVIRONMENT=node',
+    str(core / 'core/libdali2-core.a'), '-sABORTING_MALLOC=0', '-sPTHREAD_POOL_SIZE=1', '-sENVIRONMENT=node', '-sEXIT_RUNTIME=1',
     '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3=0', '-sASSERTIONS=1', '-sERROR_ON_UNDEFINED_SYMBOLS=1',
     *['-Wl,--wrap=' + name for name in wrap], '-o', str(build / 'web-gl-test.js')])
 for mode in ['blend', 'map', 'binary', 'cache', 'error']:

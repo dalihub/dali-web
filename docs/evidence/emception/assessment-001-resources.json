@@ -1,0 +1,32 @@
+[
+  {
+    "name": "https://jprendes.github.io/emception/main.bundle.js",
+    "bytes": 760903,
+    "duration": 1649
+  },
+  {
+    "name": "https://jprendes.github.io/favicon.ico",
+    "bytes": 5442,
+    "duration": 1632
+  },
+  {
+    "name": "https://jprendes.github.io/emception/960.bundle.js",
+    "bytes": 2434,
+    "duration": 215
+  },
+  {
+    "name": "https://jprendes.github.io/emception/emception.worker.bundle.worker.js",
+    "bytes": 151281,
+    "duration": 325
+  },
+  {
+    "name": "https://jprendes.github.io/emception/editor.worker.js",
+    "bytes": 39463,
+    "duration": 252
+  },
+  {
+    "name": "https://jprendes.github.io/emception/aeb98e0beefa59d80a39.ttf",
+    "bytes": 39132,
+    "duration": 243
+  }
+]

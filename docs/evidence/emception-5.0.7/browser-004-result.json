@@ -1,0 +1,504 @@
+{
+  "phase": "em++-minimal",
+  "cases": [
+    {
+      "name": "em++-minimal",
+      "source": "int main(){return 0;}",
+      "args": [
+        "em++",
+        "/home/user/minimal.cpp",
+        "-O0",
+        "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+        "-o",
+        "/home/user/minimal.js"
+      ],
+      "result": {
+        "timedOut": true
+      },
+      "files": {}
+    }
+  ],
+  "done": true,
+  "logs": [
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== RUN COMPLETE: /usr/bin/clang \u2014 exitCode=0, total=1249.2ms ====="
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   [subprocess] Done: exitCode=0"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #5] open: /tmp/.subprocess_stdout (bypass=333 async=4)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #6] open: /tmp/.subprocess_stderr (bypass=333 async=5)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #7] open: /tmp/.subprocess_request (bypass=420 async=6)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #8] open: /tmp/.subprocess_stdin (bypass=420 async=7)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   [subprocess] Dispatching: /usr/bin/node /usr/lib/emscripten/tools/compiler.mjs - --symbols-only..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== RUN: /usr/bin/node ====="
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   argv: [\"/usr/bin/node\", \"/usr/lib/emscripten/tools/compiler.mjs\", \"-\", \"--symbols-only\"]"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Dispatching to runJavaScript (node emulation)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== NODE (JS eval): /usr/lib/emscripten/tools/compiler.mjs ====="
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   [SKIPPED] compiler.mjs (post-processing, already done by clang)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   [subprocess] Done: exitCode=0"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #9] open: /tmp/.subprocess_stdout (bypass=420 async=8)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #10] open: /tmp/.subprocess_stderr (bypass=420 async=9)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #11] open: /tmp/.subprocess_request (bypass=422 async=10)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   [subprocess] Dispatching: /usr/bin/wasm-ld -o /home/user/minimal.wasm --import-undefined --strip-debug --export=emscripten_stack_get_end --export=..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel] ===== RUN: /usr/bin/wasm-ld ====="
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   argv: [\"/usr/bin/wasm-ld\", \"-o\", \"/home/user/minimal.wasm\", \"--import-undefined\", \"--strip-debug\", \"--export=emscripten_stack_get_end\", \"--export=emscripten_stack_get_free\", \"--export=emscripten_stack_get_base\", \"--export=emscripten_stack_get_current\", \"--export=emscripten_stack_init\", \"--export=_emscripten_stack_alloc\", \"--export=__wasm_call_ctors\", \"--export-if-defined=__start_em_asm\", \"--export-if-defined=__stop_em_asm\", \"--export-if-defined=__start_em_lib_deps\", \"--export-if-defined=__stop_em_lib_deps\", \"--export-if-defined=__start_em_js\", \"--export-if-defined=__stop_em_js\", \"--export-if-defined=main\", \"--export-if-defined=__main_argc_argv\", \"--export-if-defined=fflush\", \"--export-table\", \"-z\", \"stack-size=65536\", \"--no-growable-memory\", \"--initial-heap=16777216\", \"--no-entry\", \"--stack-first\", \"--table-base=1\", \"/tmp/emscripten_temp_sui_onh0/minimal.o\", \"-L/usr/lib/emscripten/cache/sysroot/lib/wasm32-emscripten\", \"-L/usr/lib/emscripten/src/lib\", \"-lGL-getprocaddr\", \"-lal\", \"-lhtml5\", \"-lstubs-debug\", \"-lnoexit\", \"-lc-debug\", \"-ldlmalloc-debug\", \"-lcompiler_rt\", \"-lc++-debug-noexcept\", \"-lc++abi-debug-noexcept\", \"-lsockets\", \"-mllvm\", \"-combiner-global-alias-analysis=false\", \"-mllvm\", \"-enable-emscripten-sjlj\", \"-mllvm\", \"-disable-lsr\"]"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   resolveToolDescriptor: \"/usr/bin/wasm-ld\" \u2192 basename \"wasm-ld\" registry match"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Descriptor: module=/usr/lib/lld.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   fetchFile: /usr/lib/lld.wasm \u2014 loading from bundle \"lld\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: fetching \"lld\" (2 files, expected 11.7MB) \u2014 triggered by: /usr/lib/lld.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: received 11.7MB"
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:LazyFS] DecompressionStream(\"br\") not supported, falling back to bundled WASM (11.7MB)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: brotli decompressed 11.7MB \u2192 55.0MB in 238.5ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: \"lld\" extracted 2 files in 666.3ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 1/4: Loading module factory for /usr/lib/lld.wasm..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   loadModuleFactory: /usr/lib/lld.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   loadModuleFactory: preloading bundle \"lld\" for /usr/lib/lld.wasm"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:WasmLoader] loadModuleFactory: /usr/lib/lld.wasm \u2014 importing glue from blob:http://127.0.0.1:42847/8627896c-3023-4cda-83ba-bff9ee3f150e..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:WasmLoader]   Glue JS imported in 4.4ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:WasmLoader] loadModuleFactory: /usr/lib/lld.wasm \u2014 ready in 4.5ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 1/4 done: factory loaded in 4.7ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 2/4: Instantiating isolated WASM process..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 2/4 done: process instantiated in 310.0ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   callMain patch probe: hasWhenDone=true hasCurrData=true head=\"function callMain(args=[]){var entryFunction=_main;args.unshift(thisProgram);var argc=args.length;var argv=stackAlloc((argc+1)*4);var argv_ptr=argv;for(var arg of args){HEAPU32[argv_ptr>>2]=stringToUTF8OnStack(arg);argv_\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 3/4: Mounting VFSFS + Asyncify hooks..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /usr"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /etc"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /home"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] Mounted VFSFS at /tmp"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 3/4 done: FS set up in 0.6ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: fetching \"cache-crt\" (4 files, expected 5.2KB) \u2014 triggered by: unknown"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: fetching \"cache-libc-variants\" (40 files, expected 2.4MB) \u2014 triggered by: unknown"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: fetching \"cache-libcxx-variants\" (17 files, expected 4.6MB) \u2014 triggered by: unknown"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: received 5.2KB"
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:LazyFS] DecompressionStream(\"br\") not supported, falling back to bundled WASM (5.2KB)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: brotli decompressed 5.2KB \u2192 16.5KB in 0.3ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: \"cache-crt\" extracted 4 files in 25.1ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: received 2.4MB"
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:LazyFS] DecompressionStream(\"br\") not supported, falling back to bundled WASM (2.4MB)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: brotli decompressed 2.4MB \u2192 26.0MB in 72.7ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: received 4.6MB"
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:LazyFS] DecompressionStream(\"br\") not supported, falling back to bundled WASM (4.6MB)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: brotli decompressed 4.6MB \u2192 56.0MB in 139.3ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: \"cache-libc-variants\" extracted 40 files in 474.8ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:LazyFS]   loadBundle: \"cache-libcxx-variants\" extracted 17 files in 2719.3ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Preloaded cache-core + cache-crt + cache-libc-variants + cache-libcxx-variants bundles for lld in 2719.7ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #1] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libal.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #1] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libal.a +20896B @0 (total=20896B, accBytes=20896)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #2] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #2] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc.a +3282274B @0 (total=3282274B, accBytes=3303170)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #3] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc++-noexcept.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #3] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc++-noexcept.a +6877036B @0 (total=6877036B, accBytes=10180206)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #4] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc++abi-noexcept.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #4] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc++abi-noexcept.a +988720B @0 (total=988720B, accBytes=11168926)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #5] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libcompiler_rt.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #5] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libcompiler_rt.a +743144B @0 (total=743144B, accBytes=11912070)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #6] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libdlmalloc.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #6] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libdlmalloc.a +74918B @0 (total=74918B, accBytes=11986988)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #7] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libGL-getprocaddr.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #7] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libGL-getprocaddr.a +45060B @0 (total=45060B, accBytes=12032048)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #8] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libhtml5.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #8] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libhtml5.a +54950B @0 (total=54950B, accBytes=12086998)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #9] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libjsmath.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #9] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libjsmath.a +6952B @0 (total=6952B, accBytes=12093950)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #10] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libnoexit.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #10] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libnoexit.a +1686B @0 (total=1686B, accBytes=12095636)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #11] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libsockets.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #11] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libsockets.a +66400B @0 (total=66400B, accBytes=12162036)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #12] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstandalonewasm-nocatch.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #12] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstandalonewasm-nocatch.a +73920B @0 (total=73920B, accBytes=12235956)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #13] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #13] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs.a +24020B @0 (total=24020B, accBytes=12259976)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #14] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libunwind-noexcept.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #14] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libunwind-noexcept.a +484B @0 (total=484B, accBytes=12260460)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #15] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crt1_proxy_main.o hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #15] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crt1_proxy_main.o +4854B @0 (total=4854B, accBytes=12265314)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #16] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crt1_reactor.o hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #16] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crt1_reactor.o +1176B @0 (total=1176B, accBytes=12266490)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #17] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crt1.o hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #17] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crt1.o +1385B @0 (total=1385B, accBytes=12267875)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #18] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crtbegin-mt.o hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #18] /usr/lib/emscripten/cache-lib/wasm32-emscripten/crtbegin-mt.o +5631B @0 (total=5631B, accBytes=12273506)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #19] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc_optz-asan.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #19] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc_optz-asan.a +26794B @0 (total=26794B, accBytes=12300300)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.open #20] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc_optz-mt-asan.a hasData=false"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [stream.write #20] /usr/lib/emscripten/cache-lib/wasm32-emscripten/libc_optz-mt-asan.a +26856B @0 (total=26856B, accBytes=12327156)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Pre-warmed 75/75 library files (cache-core+cache-crt+cache-libc-variants+cache-libcxx-variants) for lld in 424.0ms"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   Step 4/4: callMain([\"-o\", \"/home/user/minimal.wasm\", \"--import-undefined\", \"--strip-debug\", \"--export=emscripten_stack_get_end\", \"--export=emscripten_stack_get_free\", \"--export=emscripten_stack_get_base\", \"--export=emscripten_stack_get_current\", \"--export=emscripten_stack_init\", \"--export=_emscripten_stack_alloc\", \"--export=__wasm_call_ctors\", \"--export-if-defined=__start_em_asm\", \"--export-if-defined=__stop_em_asm\", \"--export-if-defined=__start_em_lib_deps\", \"--export-if-defined=__stop_em_lib_deps\", \"--export-if-defined=__start_em_js\", \"--export-if-defined=__stop_em_js\", \"--export-if-defined=main\", \"--export-if-defined=__main_argc_argv\", \"--export-if-defined=fflush\", \"--export-table\", \"-z\", \"stack-size=65536\", \"--no-growable-memory\", \"--initial-heap=16777216\", \"--no-entry\", \"--stack-first\", \"--table-base=1\", \"/tmp/emscripten_temp_sui_onh0/minimal.o\", \"-L/usr/lib/emscripten/cache-lib/wasm32-emscripten\", \"-L/usr/lib/emscripten/src/lib\", \"-lGL-getprocaddr\", \"-lal\", \"-lhtml5\", \"-lstubs-debug\", \"-lnoexit\", \"-lc-debug\", \"-ldlmalloc-debug\", \"-lcompiler_rt\", \"-lc++-debug-noexcept\", \"-lc++abi-debug-noexcept\", \"-lsockets\", \"-mllvm\", \"-combiner-global-alias-analysis=false\", \"-mllvm\", \"-enable-emscripten-sjlj\", \"-mllvm\", \"-disable-lsr\"])..."
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [hook #1] open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a (bypass=4 async=0)"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:Kernel]   callMain returned a Promise \u2014 awaiting Asyncify completion..."
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:Kernel]   \u23f3 callMain still pending after 11014.1ms \u2014 WASM may be stuck"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\""
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:Kernel]   \u23f3 callMain still pending after 10003.6ms \u2014 WASM may be stuck"
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:Kernel]   \u23f3 callMain still pending after 21014.2ms \u2014 WASM may be stuck"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\""
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:Kernel]   \u23f3 callMain still pending after 20003.8ms \u2014 WASM may be stuck"
+    },
+    {
+      "level": "warn",
+      "text": "[Emception:Kernel]   \u23f3 callMain still pending after 31014.4ms \u2014 WASM may be stuck"
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=422 asyncHooks=11 last=\"open: /tmp/.subprocess_request\""
+    },
+    {
+      "level": "log",
+      "text": "[Emception:VFSFS] [activity] bypass=5 asyncHooks=1 last=\"open: /usr/lib/emscripten/cache-lib/wasm32-emscripten/libstubs-debug.a\""
+    }
+  ]
+}

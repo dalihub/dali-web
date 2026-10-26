@@ -1,0 +1,192 @@
+[
+  {
+    "name": "http://127.0.0.1:41653/bridge.js",
+    "bytes": 1191,
+    "duration": 14.5
+  },
+  {
+    "name": "http://127.0.0.1:41653/emception.worker.bundle.worker.js",
+    "bytes": 530981,
+    "duration": 3.680000000000007
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/shader-parser.cpp.o",
+    "bytes": 885774,
+    "duration": 1.400000000000091
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-program.cpp.o",
+    "bytes": 532589,
+    "duration": 1.3400000000001455
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-controller.cpp.o",
+    "bytes": 3010545,
+    "duration": 3.8399999999996908
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-controller-debug.cpp.o",
+    "bytes": 295985,
+    "duration": 1.3600000000001273
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-buffer.cpp.o",
+    "bytes": 151532,
+    "duration": 0.8999999999996362
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-command-buffer.cpp.o",
+    "bytes": 391446,
+    "duration": 0.9599999999995816
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-debug.cpp.o",
+    "bytes": 682,
+    "duration": 0.8600000000001273
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-framebuffer.cpp.o",
+    "bytes": 344704,
+    "duration": 0.8200000000001637
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-pipeline.cpp.o",
+    "bytes": 326100,
+    "duration": 1.0199999999999818
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-reflection.cpp.o",
+    "bytes": 876533,
+    "duration": 1.1599999999998545
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-render-pass.cpp.o",
+    "bytes": 322558,
+    "duration": 1.1399999999998727
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-render-target.cpp.o",
+    "bytes": 155559,
+    "duration": 0.9200000000000728
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-sampler.cpp.o",
+    "bytes": 151574,
+    "duration": 0.8399999999996908
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-shader.cpp.o",
+    "bytes": 339937,
+    "duration": 0.8400000000001455
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-texture.cpp.o",
+    "bytes": 394782,
+    "duration": 1.0399999999999636
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-graphics-pipeline-cache.cpp.o",
+    "bytes": 967750,
+    "duration": 1.3599999999996726
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-context.cpp.o",
+    "bytes": 1091755,
+    "duration": 1.7800000000002
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-sync-object.cpp.o",
+    "bytes": 36795,
+    "duration": 1.1199999999998909
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-framebuffer-state-cache.cpp.o",
+    "bytes": 53192,
+    "duration": 0.7400000000002365
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-sync-pool.cpp.o",
+    "bytes": 671555,
+    "duration": 0.8599999999996726
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/gles-texture-dependency-checker.cpp.o",
+    "bytes": 919338,
+    "duration": 1.1599999999998545
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gl-implementation.cpp.o",
+    "bytes": 238482,
+    "duration": 1.0199999999999818
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-context.cpp.o",
+    "bytes": 32773,
+    "duration": 0.8800000000001091
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-rendering.cpp.o",
+    "bytes": 40452,
+    "duration": 1.0199999999999818
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-sync.cpp.o",
+    "bytes": 45098,
+    "duration": 0.8000000000001819
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-sync-pool.cpp.o",
+    "bytes": 49418,
+    "duration": 0.7999999999997272
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-fence.cpp.o",
+    "bytes": 227011,
+    "duration": 0.8000000000001819
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-memory.cpp.o",
+    "bytes": 36178,
+    "duration": 1
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-buffer.cpp.o",
+    "bytes": 39302,
+    "duration": 1.099999999999909
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-buffer-memory.cpp.o",
+    "bytes": 32168,
+    "duration": 0.9400000000000546
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-buffer-storage.cpp.o",
+    "bytes": 28818,
+    "duration": 0.8200000000001637
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-failure.cpp.o",
+    "bytes": 27889,
+    "duration": 0.8600000000001273
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-gles-program-cache.cpp.o",
+    "bytes": 34129,
+    "duration": 0.7599999999997635
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/environment-variable.cpp.o",
+    "bytes": 22437,
+    "duration": 0.7200000000002547
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/web-host.cpp.o",
+    "bytes": 456849,
+    "duration": 1.099999999999909
+  },
+  {
+    "name": "http://127.0.0.1:41653/production/libdali2-core.a",
+    "bytes": 67829020,
+    "duration": 46.7800000000002
+  }
+]

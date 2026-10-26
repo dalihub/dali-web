@@ -37,6 +37,8 @@ if execute('core-build', [os.environ['CMAKE'], '--build', str(build), '--target'
     raise SystemExit(1)
 inputs = {Path(entry['file']) for entry in json.loads((build / 'compile_commands.json').read_text())}
 inputs.update(root / path for path in ['cmake/gles.cmake', 'cmake/web/CMakeLists.txt', 'upstreams.lock.json', 'toolchain.lock.json'])
+if os.environ.get('DALI_WEB_TOOLCHAIN_LOCK'):
+    inputs.add(Path(os.environ['DALI_WEB_TOOLCHAIN_LOCK']).resolve())
 inputs.update((root / 'libs/dali-adaptor/dali/internal/graphics').rglob('*.h'))
 inputs.update((root / 'web/host').glob('*.h'))
 inputs.update(root / path for path in ['web/index.html', 'web/bootstrap.js', 'libs/dali-adaptor/dali/internal/graphics/file.list', 'libs/dali-adaptor/dali/internal/graphics/gles-impl/file.list', 'libs/dali-adaptor/dali/internal/graphics/gles-environment.cmake'])
