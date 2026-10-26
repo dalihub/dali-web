@@ -1,5 +1,9 @@
 # P2-b 구현 인수인계
 
+최신 상태(2026-10-23): [생산 구현·strict 링크 완료 결과](P2-b-PRODUCTION-RESULTS.md). 아래 내용은 이전 checkpoint 기록이며 현재 승인 대기나 남은 생산 링크 상태를 뜻하지 않는다. 실제 browser/GPU 인수는 P3/P4에 남는다.
+
+현재 상태: [Web 메모리 중간 구현·CPU 검사](P2-b-WEB-MEMORY-RESULTS.md). 단계 4의 생산 Buffer/Controller 통합 검사와 host 비동기 failure/stop 연결이 남았다. 공개 Graphics API·native Memory2/3 유지. 기존 승인 범위에서 계속 가능하며 전체 P2-b·상위 P2는 미완료다. 아래의 단계 4 미구현 설명은 이전 context/sync 시점의 기록이다.
+
 2026-10-23. P2-a manifest/진단 및 source/context에 이어 단계 3 sync 환경 분리의 중간 구현·검증을 남겼다. [sync 결과](P2-b-SYNC-RESULTS.md), [이전 context 결과](P2-b-RESULTS.md). 다음은 단계 4 웹 메모리다. 실제 host·생산 링크·native runtime은 미완료이며 D1~D4와 [P1 계약](P1-EXECUTION-CONTRACT.md)을 유지한다. 아래 순서는 자동 실행 지시가 아니다.
 
 ## 적용 순서와 파일 경계

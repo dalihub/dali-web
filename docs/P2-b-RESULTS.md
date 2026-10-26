@@ -1,6 +1,10 @@
 # P2-b 중간 결과
 
-최신: [sync 환경 분리 결과](P2-b-SYNC-RESULTS.md). 34개 compile/nm 통과, strict 기본/FULL_ES3 exit 1·10/6개 미해결. 다음은 웹 메모리이며 전체 P2-b·상위 P2는 미완료다.
+최신 상태(2026-10-23): [생산 구현·strict 링크 완료 결과](P2-b-PRODUCTION-RESULTS.md). 아래 내용은 이전 checkpoint 기록이며 현재 승인 대기나 남은 생산 링크 상태를 뜻하지 않는다. 실제 browser/GPU 인수는 P3/P4에 남는다.
+
+현재 상태: [Web 메모리 중간 구현·CPU 검사](P2-b-WEB-MEMORY-RESULTS.md). 단계 4의 생산 Buffer/Controller 통합 검사와 host 비동기 failure/stop 연결이 남았다. 공개 Graphics API·native Memory2/3 유지. 기존 승인 범위에서 계속 가능하며 전체 P2-b·상위 P2는 미완료다. 아래의 단계 4 미구현 설명은 이전 context/sync 시점의 기록이다.
+
+이전: [sync 환경 분리 결과](P2-b-SYNC-RESULTS.md). 34개 compile/nm 통과, strict 기본/FULL_ES3 exit 1·10/6개 미해결. 다음은 웹 메모리이며 전체 P2-b·상위 P2는 미완료다.
 
 ## 이전 source/context 중간 결과 (7b6ee23ff3)
 

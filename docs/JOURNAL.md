@@ -108,3 +108,86 @@
 - 이전 snapshot 1,370개, P2-a snapshot 176개, 이번 시작 증거/lock 36개 hash 일치(중복 포함). 원본/P0 Git 상태·사용자 변경 보존. 개인 SDK 필수화·SDK 설치·upstream 갱신·서버·브라우저·Pages 배포 없음. 새 build/log·최대 -j6.
 - [sync 결과](P2-b-SYNC-RESULTS.md)와 [별도 증거](evidence/p2-b-sync/README.md), PLAN/STATE/HANDOFF/NEXT-CONTEXT 갱신. 현재 세션 turn_context의 모델 `gpt-6-astra`를 확인해 로컬 checkpoint co-author에 사용한다.
 - 자원 생성/삭제·스레드 수명까지 포함한 sync 단위에서 중간 인수인계. 웹 메모리 → wrapper/capability → cache → 실제 D3 host/strict 생산 링크 및 source/generated 정리는 미완료다. P3 픽셀·최초 pthread/browser 헤더/SW/Pages·P3/P4 격리 게이트 유지. 합의 방향 안에서 다음 웹 메모리 구현 진행 가능.
+
+## 018 P2-b 웹 메모리 착수 조사와 실패 처리 게이트 중단
+
+2026-10-23 (Asia/Seoul). **Core 내부 실패 처리 결정 대기, 전체 P2-b·상위 P2 미완료.**
+
+- 시작 clean main `abf62214b23c651f06536138cb8b6e0c0fddbfb7`. GitHub 연결의 읽기 전용 ref 조회로 원격 main `a68e3f00f0c7752561137c179500b004b930285e` 확인. commit/push·upstream/lock 변경 없음.
+- 필수 문서와 실제 map/lock·vertex/index/uniform 호출부 조사. P1의 null 문제를 재확인하고 상위 void 완료 처리·dirty 해제까지 추적. map/lock null 반환 자체는 기존 공개 Graphics 계약이며 공개 API 변경이 반드시 필요하다는 판정은 아님.
+- 특이 사항: GpuBuffer의 무검사 역참조/memcpy/callback, vertex/index의 업로드 성공 가정, uniform의 실패 미전달 때문에 단순 Web 메모리 null 반환만으로 호출부 안전성을 충족하지 못함. 사용자의 공통 실패 처리 변경 전 중단 조건을 적용. Core 내부 실패 전파·draw 처리 또는 Web fail-fast를 임의로 구현하지 않음.
+- [중단 보고·미승인 선택지](P2-b-MEMORY-BLOCKER.md), [정적 증거](evidence/p2-b-memory-contract/README.md), PLAN/STATE/HANDOFF/NEXT-CONTEXT 갱신. 원래 웹 메모리 → wrapper → cache → host → strict 생산 링크/source/generated 정리 범위는 유지.
+- 생산 코드·빌드 설정 변경 없음. 이번 검증은 소스 추적·문서·변경 범위·증거 보존 검사뿐이며 compile/nm/link·CPU/GPU 메모리 검사·native 회귀는 실행하지 않음. 기존 sync 결과 34개 compile/nm 성공·strict 10/6개 미해결은 과거 증거로 유지.
+- SDK·원본/P0·과거 증거/산출물 보존. 새 로그 `logs/p2-b/memory-contract-001/`, SDK/빌드/브라우저/서버/배포 실행 없음. P3 GPU 보존·D3/D4 호스팅·플레이그라운드 격리 게이트 유지. 다음 행동은 실패 처리 정책과 수정 범위 결정.
+
+## 019 P2-b Core 실패 처리 승인·구현과 중간 검증
+
+2026-10-23 (Asia/Seoul). 사용자 “오케이 진행”으로 공개 Graphics API 유지·Core 내부 실패 전파·Web fail-stop 연결 설계를 승인받았다. 두 abandon Core 패치에 의존하지 않고 구현했다. 전체 P2-b·상위 P2는 미완료.
+
+- GpuBuffer create/map/lock 실패 검사와 bool 결과, vertex/index dirty 유지·callback lock 해제, Geometry bind/draw 유효성 검사. 정상 callback 0-byte와 실패 구분.
+- CPU/GPU uniform·view 범위/overflow·준비 실패 latch, scene uniform 총 크기 확장. 특이 사항: 공유 UBO 실패의 영향이 기록된 다른 draw에도 미치므로 최종 scene/pass 제출 gate를 추가. sync/tracker/readback 소비를 gate 뒤로 이동.
+- `core-failure-005`: pthread Core 포함 375단계 build·실패 주입 Node·기존 애니메이션 50/100 모두 exit 0. `001/002` compile 실패와 `004` 테스트 REQUIRES_SYNC 설정 누락 실패는 보존. CPU mock 검사이며 실제 GPU 보존 근거 아님.
+- `core-failure-sources-001` GLES/VULKAN/DYNAMIC source 회귀 0. `core-failure-native-001` native configure 3개는 compiler 부재로 각각 1, 기존 native 추출 5개 Emscripten compile/nm은 각각 0. native Core/Adaptor build/install/runtime 미검증.
+- [결과·재현·특이 사항](P2-b-CORE-FAILURE-RESULTS.md), [작은 증거](evidence/p2-b-core-failure/README.md). Core 변경은 internal render 경로만, 공개 Graphics API·Adaptor·Memory2/3·원본·SDK·lock은 보존. HEAD `abf62214b23c651f06536138cb8b6e0c0fddbfb7`, working tree 변경, commit/push 없음.
+- PLAN·STATE·HANDOFF·NEXT-CONTEXT의 승인 대기 상태 해제. WebBufferMemory/shadow·Web failure latch·wrapper/cache·실제 D3 host·생산 strict 링크·source/generated 정리는 남았으며 기존 승인 범위 안에서 계속 가능. P3 GPU/P4 격리·Pages 별도 승인 게이트 유지.
+- `core-failure-web-001` 재진단: pthread Core333·34개 compile/nm 각각0, strict 기본/FULL_ES3 각각1·미해결10/6·map 없음. 실제 host 없이 부분 생산 객체 진단이며 전체 P2 미완료 유지.
+
+## 020 P2-b Web 메모리 중간 구현과 CPU 계약 검사
+
+2026-10-23 (Asia/Seoul). 기존 Core dirty 변경을 보존하고 승인된 단계 4를 진행했다. 전체 P2-b·P2 미완료이며 생산 Controller 통합 검사와 host 연결이 남았다.
+
+- HEAD abf62214b23c651f06536138cb8b6e0c0fddbfb7 유지, 읽기 조회 원격 main a68e3f00f0c7752561137c179500b004b930285e. commit/push 없음.
+- MapBufferRange·Buffer native/Web 파일 분리, native Memory2/3 그대로. WebBufferMemory/Storage의 lazy shadow·offset/bounds·참조 수명·detach, WebFailure allocation/GL/context/fence latch 및 Controller 제출 gate. Web 재시도 없음, native 재시도 유지, create/discard 참조 정리.
+- 특이 사항: 매핑 API에 full overwrite/callback 힌트가 없어 매핑된 GPU 버퍼는 shadow를 사용한다. 제어 블록 할당 없이 저장소를 pin하고 recycle revision 충돌을 방지했다. Core bool은 GL/GPU 성공이 아니다. host 비동기 failure/stop 연결은 아직 미구현이다.
+- memory-unit-003 compile/link·Node12모드 각각0. 실제 GPU/생산 Controller가 아닌 저장소·매핑 CPU/GL 주입 검사. 생산 grow/recycle·CPU/GPU uniform·queue/shutdown 통합 검사는 후속이다.
+- memory-web-003 Core333·37개 compile/nm 각각0, strict 기본/FULL_ES3 각각1·10/6개 미해결·map 없음. 001 bit-field 전달 compile 실패, 002 중간 성공도 보존.
+- memory-sources-001 source 회귀0. memory-native-002 native configure3개1(host compiler 부재), 추출7+공통 Controller/Buffer·Memory2/3=11개 Emscripten compile/nm0. native build/runtime 미검증.
+- [상세 결과](P2-b-WEB-MEMORY-RESULTS.md), [증거](evidence/p2-b-web-memory/README.md), PLAN/STATE/HANDOFF/NEXT-CONTEXT 갱신. 기존 Core·증거·lock 89개 hash 일치, 최종 boundary 입력 drift 없음. 원본/P0·SDK·과거 산출물 변경 작업 없음. 배포·서버 구축·upstream 갱신 없음.
+- 검증 가능한 저장소·매핑 단위에서 중간 인수인계한다. 다음은 생산 Buffer/Controller 통합 검사 보강, 이어 wrapper/capability→cache→D3 host→기본 strict 링크/source/generated 정리다. 기존 승인과 P3/P4·D3/D4 게이트를 유지한다.
+
+## 021 생산 Buffer/Controller 통합 checkpoint
+
+2026-10-23 진행 checkpoint: [생산 Buffer/Controller CPU 통합](evidence/p2-b-controller-memory/README.md) controller-005의 compile/nm·테스트 링크·12모드 통과. shutdown custom allocator 해제 누락을 재현·수정했다. Web wrapper/capability 구현을 진행 중이며 host/cache/생산 strict 링크·최종 회귀는 아직 미완료다. 승인 범위와 전체 실행을 계속 유지한다.
+
+
+## 022 — 2026-10-23 P2-b 생산 구현과 P2 strict 링크
+
+실제 Buffer/Controller/Core uniform 통합 검사, Web wrapper/capability와 shader binary cache 경계, 실제 D3 host 및 정식 cmake/web closure를 완료했다. failure latch→제출 차단→main 비동기 failure/stop과 새 Module/Worker/Canvas 실행 정책을 연결했다. generated cache/pkg-config 출력은 binary directory로 이동했다.
+
+특이 사항: custom allocator 객체의 shutdown 해제 결함을 실제 Controller 검사에서 재현·수정했다. host polling은 초기 correctness 구현이다. 전체 Core/STL OOM과 runtime abort의 정상 종료를 보장하지 않는다.
+
+production-003 Core 333단계·생산/host35 compile/nm·기본 strict 링크 각각0. controller-007 18모드, gl-unit-002 5모드 통과. GLES/VULKAN/DYNAMIC source 및 generated closure 회귀 통과. native configure3개는 host compiler 부재로 각각1, 추출/공통13개 교차 compile/nm 각각0. native build/install/runtime과 browser/GPU/픽셀/실제 shutdown은 미검증이다.
+
+[증거](evidence/p2-b-production/README.md), [결과·미검증 영향](P2-b-PRODUCTION-RESULTS.md). P2 링크 마일스톤 완료, 다음 P3 실제 GPU 및 최초 pthread/browser 헤더/SW 비교. 실제 Pages는 별도 승인, P3/P4 격리 조기 게이트와 P4 전체 종료/재생성 유지. 기존 Core·과거 evidence·lock 보존. commit/push·upstream 갱신·서버/배포 없음.
+
+
+## 023 — 2026-10-26 서버 없는 사용자 C++ 컴파일 후보 후속 검사
+
+사용자가 예비 결과를 최종 실패로 이해했다고 정정하며 남은 확인을 요청했다. GameGuild Emception 4.5.0/emsdk5.0.7을 공식 Next/Turbopack 구성과 5분 제한으로 재검사했다. 상대 경로 오류는 절대 경로 API 입력으로 우회했고 기본 C++ 및 STL의 컴파일·링크·실행을 확인했다. 직접 preset은 undefined imports를 사용하는 별도 경로이며 DALi strict 성공으로 처리하지 않는다.
+
+특이 사항: lld 추가 라이브러리 사전 로딩 보강은 debug/WebGL2/pthread 정체를 해소했으나 실제 JS 생성 단계는 실패했다. 배포 runner가 compiler.mjs를 생략하고 가짜 최소 metadata를 반환하는 구현을 확인했다. 생략 해제·shebang 제거만으로도 실제 생성기는 실행되지 않으며 실패 subprocess를 상위 exit0으로 반환하는 경우도 재현했다. 출력 파일 부재와 stderr를 함께 판정했다. [결과와 개별 증거](EMCEPTION-5.0.7-FOLLOWUP.md).
+
+5.0.7 채택·DALi 재빌드·전체 JS 실행 환경 포팅은 진행하지 않았다. 별도 운영 컴파일 서버를 도입하지 않는다. 기존 생산 입력497개 hash 일치, SDK·lock·기존 dirty tree 보존. 생산 코드 변경이 없어 공통/native 회귀 미재실행. P3/P4 GPU·격리·종료/재생성·Pages 승인 게이트 유지.
+
+
+## 024 — 2026-10-26 원본 Emception 3.1.24와 DALi 버전 정렬
+
+사용자 지시로 별도3.1.24 SDK에서 기존 Core·생산 GLES·D3 host를 재빌드했다. native-002 Core333·생산35 compile/nm·기본 WebGL2 strict 링크0, 원본 Emception browser-001 전체 생산 링크0, 새 사용자 C++ 컴파일/링크0 및 함수 반환5. 새 Core의 hash_memory 참조0으로 이전 혼용 실패가 해소됐다. [결과·증거](EMCEPTION-3.1.24-ALIGNMENT.md).
+
+특이 사항: 초기 SDK archive .tar.xz 주소404는 공식 구형 .tbz2로 다운로드했다. 첫 빌드 도중 SDK 내부 병렬 제한 설정이 cache 재초기화를 유발해 표준 헤더 누락으로 실패했다. 설정을 고정하고 새 경로에서 처음부터 재빌드해 소스 수정 없이 통과했다. 실패 로그·기존 산출물 보존.
+
+직접 COOP/COEP 및 헤더 없는 SW에서 같은 브라우저 생성 모듈 로딩·공유 메모리·함수 호출 성공. SW 최초 isolation=false에서 제어/reload 후 true. host 시작은 하지 않았고 실제 DALi 렌더/GPU·Worker GL·Pages·전체 종료/재생성은 미검증. 기존 CPU18/5모드의3.1.24 재실행 및 native build/runtime도 미실시. source GLES/Vulkan/DYNAMIC 회귀0, 기존 생산 입력497개 hash 일치. 기본 SDK lock6.0.13 유지, 생산 코드·원본 SDK·P0·과거 증거 보존. commit/push·배포 없음. 별도 운영 컴파일 서버 없는 방향과 P3/P4 게이트 유지.
+
+
+## 025 — 2026-10-26 서버 없는 3.1.24 방향 채택·다음 컨텍스트 준비
+
+사용자가 성공한 원본 Emception 3.1.24 정렬 방식을 채택하고 문서 갱신·인수인계 준비를 요청했다. [컴파일 방향](PLAYGROUND-COMPILATION.md)을 기준으로 PLAN의 외부 컴파일 서버 운영 문구를 제거했다. README·STATE·HANDOFF·BUILDING·NEXT-CONTEXT를 갱신했다. 기존 lock6.0.13은 과거 재현용으로 보존하고 다음 작업 SDK는3.1.24로 명시했다. 별도 프로필/lock 정리→CPU18/5 재검증→P3 실제 host/픽셀/GPU 검사 순서를 남겼다.
+
+특이 사항: 방향 채택과 자동 도구 기본값 변경은 구분한다. 이번에는 문서만 수정했으며 코드·SDK·lock 변경, 새 빌드·브라우저·배포·commit/push는 하지 않았다. P2 링크 완료와 P3/P4·P8/P9 미완료를 유지한다. 실제 Pages 별도 승인 및 격리/전체 종료 게이트도 유지한다. 문서 상대 링크 검사·git diff --check 통과, 기존 생산 입력497개 hash 모두 일치했다. 코드 변경이 없어 빌드/native 회귀는 재실행하지 않는다.
+
+
+## 2026-10-26 P3 최초 실제 렌더링
+
+2026-10-26 후속 구현: [P3 최초 실제 렌더링 결과](P3-INITIAL-RESULTS.md). 별도 3.1.24 lock/명시 도구 선택, CPU18/5 재검증 완료. Web uniform 이름 길이 조회와 Core CPU uniform persistent mapping 재사용을 수정했다. 실제 Firefox pthread에서 직접 헤더/SW 모두 사각형·배경 두 프레임 픽셀/GL error0 및 ready→stopped를 확인했다. **P3 진행 중**: GPU 부분 갱신·callback·offset·grow/recycle·수명 종합 검사, 이벤트 Worker 격리, SW 후속 정책, Pages·전체 종료/재생성은 남는다. 최종 빌드 build/p3/pixels-3124-002와 docs/evidence/p3-initial을 따른다. 기존 lock/산출물 보존, commit/push/배포 없음.
+
+특이 사항: Node 종료 옵션 누락, WebGL 미지원 이름 길이 조회 후 reflection trap, Core CPU uniform 중복 lock을 재현·수정했다. native configure는 compiler 부재로 실패하고13개 교차 compile/nm은 통과했다. 실패/중간 빌드를 보존하고 최종 소스는 새 빌드로 고정했다. [상세 검증·미검증 범위](P3-INITIAL-RESULTS.md).

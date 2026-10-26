@@ -1,8 +1,14 @@
 # DALi 브라우저 포팅 계획
 
-갱신일: 2026-10-23. 목표는 C++ DALi 코드의 브라우저 직접 렌더링과 최종적인 코드 편집·실행 환경입니다. 컴파일 서버는 사용할 수 있지만 렌더링은 브라우저에서 수행합니다.
+2026-10-26 후속 구현: [P3 최초 실제 렌더링 결과](P3-INITIAL-RESULTS.md). 별도 3.1.24 lock/명시 도구 선택, CPU18/5 재검증 완료. Web uniform 이름 길이 조회와 Core CPU uniform persistent mapping 재사용을 수정했다. 실제 Firefox pthread에서 직접 헤더/SW 모두 사각형·배경 두 프레임 픽셀/GL error0 및 ready→stopped를 확인했다. **P3 진행 중**: GPU 부분 갱신·callback·offset·grow/recycle·수명 종합 검사, 이벤트 Worker 격리, SW 후속 정책, Pages·전체 종료/재생성은 남는다. 최종 빌드 build/p3/pixels-3124-002와 docs/evidence/p3-initial을 따른다. 기존 lock/산출물 보존, commit/push/배포 없음.
 
-P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. D1~D4 결정 확정으로 P1 실행 계약 설계를 완료했습니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. P2-a 생산 GLES source manifest·컴파일·strict 링크 진단을 완료했습니다. 기본/FULL_ES3 링크는 16/12개 미해결로 실패했고, P2-b source/context 및 sync 중간 구현은 [결과](P2-b-SYNC-RESULTS.md), 후속 순서는 [인수인계](P2-b-HANDOFF.md)를 따릅니다. [진단 결과](P2-a-RESULTS.md). 나머지 단계는 계획이며 아직 구현하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 스레드는 D3의 메인 이벤트 + 업데이트·렌더 Worker로 정했으며 실행 검증은 후속 단계입니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
+이하 과거 checkpoint 설명은 위 최신 결과와 함께 읽는다.
+
+2026-10-23 최신 상태: [생산 결과](P2-b-PRODUCTION-RESULTS.md). P2-b 구현과 실제 Core·생산 Controller·D3 host의 기본 WebGL2 strict 링크 완료. production-003 compile/nm/link 0, Controller CPU 18모드·wrapper CPU 5모드 통과. 실제 browser·GPU·비동기 종료 인수는 P3/P4에 남는다.
+
+갱신일: 2026-10-26. 목표는 C++ DALi 코드의 브라우저 직접 렌더링과 코드 편집·실행 환경입니다. [서버 없는 컴파일 방향](PLAYGROUND-COMPILATION.md)을 승인했습니다. 원본 Emception 3.1.24와 같은 SDK 계열의 사전 빌드 DALi를 정적으로 제공하고 사용자 C++는 브라우저에서 컴파일·링크합니다.
+
+P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-a 원본·정책 선정과 R1-b 저장소 구성·검증·push가 완료됐으며 R2-a 실험 이관·Node 검증도 완료했습니다. R2-b 브라우저·Adaptor·GL 재검증과 기록 전환도 완료했습니다. D1~D4 결정 확정으로 P1 실행 계약 설계를 완료했습니다. [P1 설계](P1-EXECUTION-CONTRACT.md)에 근거·권장안·P2 인수인계를 기록했습니다. P2-a 생산 GLES source manifest·컴파일·strict 링크 진단을 완료했습니다. 기본/FULL_ES3 링크는 16/12개 미해결로 실패했고, P2-b source/context 및 sync 중간 구현은 [결과](P2-b-SYNC-RESULTS.md), 후속 순서는 [인수인계](P2-b-HANDOFF.md)를 따릅니다. [진단 결과](P2-a-RESULTS.md). 위 P2-a/P2-b sync 설명은 과거 진단이며 최신 생산 결과가 이를 대체합니다. P3 이후 실행 검증은 아직 완료하지 않았습니다. 초기 목표는 데스크톱, 단일 Canvas, WebGL 2, 기본 도형과 입력입니다. 스레드는 D3의 메인 이벤트 + 업데이트·렌더 Worker로 정했으며 실행 검증은 후속 단계입니다. WebView·영상·카메라·다중 윈도우·네이티브 이미지 공유는 초기 범위에서 제외하는 안입니다.
 
 ## 작업 단계와 context 경계
 
@@ -13,19 +19,23 @@ P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-
 | R1 완료 | 단일 repo 뼈대와 Core·Adaptor·UI subtree 구성 | P0, R0 | 원본 URL·SHA·import 정책 기록, subtree 3개 구성, 라이선스 보존, 생성물 제외, 일반 clone으로 소스 확인 | repo 경로·commit, upstream 매핑, import 근거 |
 | R2 완료 | 기존 실험·문서 이관과 재현 | R1 | 새 경로에서 Core 빌드·Node·Firefox 테스트 재현, GL 탐색 결과 비교, 문서 링크와 시작점 갱신 | 새 repo의 STATE·HANDOFF, 검증 로그, 이전 공간 보존 위치 |
 | P1 완료 | 웹 실행 계약 설계. Core 초기화, GLES Controller, 표면·컨텍스트·프레임 호출 경로 | R2 | 실제 호출 순서, 구현 파일 범위, 미지원 기능 정책, 스레드 선택과 검증 방법 명시, D1~D4 설계 확정 및 후속 검증 게이트 기록 | 설계 결정과 P2에 필요한 최소 의존성 목록 |
-| P2 진행 중 | 실제 GLES 렌더러 링크. 실험 CMake와 Adaptor GLES·EGL 경로 | P1 | 모의 그래픽 없이 선택한 생산 GLES 경로를 포함한 Wasm 실행 파일 링크 성공 | 링크 대상, 수정 diff, 남은 런타임 가정 |
-| P3 예정 | Canvas 컨텍스트·표면과 실제 DALi 도형 렌더링 | P2 | 실제 DALi Renderer로 사각형 표시, 배경과 도형의 픽셀 검사, GL 오류 확인 | 재현 페이지, 이미지·픽셀 증거, 초기화·해제 순서 |
+| P2 링크 완료 | 실제 GLES 렌더러 링크. 실험 CMake와 Adaptor GLES·EGL 경로 | P1 | 모의 그래픽 없이 선택한 생산 GLES 경로를 포함한 Wasm 실행 파일 링크 성공 | 링크 대상, 수정 diff, 남은 런타임 가정 |
+| P3 진행 중 | 실제 사각형 두 프레임·로컬 헤더/SW 완료, GPU 메모리 종합 검사 남음 | P2 | 실제 DALi Renderer로 사각형 표시, 배경과 도형의 픽셀 검사, GL 오류 확인 | 재현 페이지, 이미지·픽셀 증거, 초기화·해제 순서 |
 | P4 예정 | 브라우저 프레임 루프, 애니메이션, 포인터 입력, 리사이즈 | P3 | 시간 기반 움직임, 클릭 반응, 배율·크기 변경 후 좌표 일치, 반복 시작·종료 | 프레임·입력 계약과 회귀 검증 |
 | D1 예정 | 미리 빌드한 예제 배포. Pages 우선, 실패 시 직접 호스팅 검토 | P4, P1의 호스팅·스레드 조건 해결 | Actions 산출물로 예제 실행, 프로젝트 하위 경로의 Wasm·리소스 로딩 확인 | 서비스 URL·배포 commit·실행 증거 |
 | P5 예정 | 폰트·텍스트·이미지와 비동기 리소스 로딩 | P4 | 지정 폰트의 한글·영문과 이미지 표시, 로딩 실패 처리 | 의존 라이브러리 빌드법, 리소스 규칙 |
 | P6 예정 | dali-ui foundation 및 선택한 components 연결 | P5 | 레이아웃·텍스트·이미지·버튼의 대표 예제 실행 | 지원 컴포넌트 목록과 재현 예제 |
 | P7 예정 | 웹용 빌드 구성 정리와 안정화 | P6 | 깨끗한 환경 재빌드, Ubuntu·Windows 브라우저별 결과, 수명·메모리·컨텍스트 손실 정책 검증 | 지원 범위와 제한, 재현 가능한 배포 산출물 |
-| P8 예정 | C++ 컴파일 서비스와 고정 SDK 계약 | P7 | 코드 입력에 대해 캐시된 웹 라이브러리와 링크, 오류 위치 반환, 산출물 버전 확인 | 컴파일 요청·응답 계약과 실패 예제 |
+| P8 예정 | 별도 운영 서버 없는 브라우저 C++ 컴파일과 고정 SDK 계약 | P7 | 코드 입력에 대해 캐시된 웹 라이브러리와 링크, 오류 위치 반환, 산출물 버전 확인 | 브라우저 컴파일 계약과 실패 예제 |
 | P9 예정 | 웹 편집기, 실행 격리·중단·재실행, 로그 | P8 | 편집→컴파일→브라우저 렌더링, 오류 표시, 무한 실행 중단, 반복 실행 정리 | 플레이그라운드 사용 흐름과 검증 결과 |
 
 D1은 P4 이후 별도 context에서 진행하는 배포 작업이며 P5의 필수 선행은 아닙니다. 공개 repo 생성은 Pages 활성화나 소스 공개 업로드까지 완료했다는 뜻이 아닙니다.
 
 P4까지가 도형·애니메이션·입력 PoC, P6까지가 기본 UI 데모, P7까지가 웹 포팅 MVP, P9까지가 플레이그라운드 MVP입니다. P8·P9의 배포 환경과 서비스 운영 조건은 구현 전에 구체화합니다.
+
+2026-10-26 P8 선행 후보 조사: [Emception 5.0.7 추가 검사](EMCEPTION-5.0.7-FOLLOWUP.md). 일반 C++/STL 브라우저 실행은 확인했으나 Emscripten JS 생성기가 생략되어 DALi용 후보 게이트 미통과입니다. SDK 채택·생산 재빌드·P8 완료를 의미하지 않습니다. GitHub Pages에서 정적 컴파일러·헤더·라이브러리를 제공하는 방향을 유지하며 별도 운영 컴파일 서버로 변경하지 않습니다.
+
+후속 사용자 지시로 [원본 Emception 3.1.24 정렬 검사](EMCEPTION-3.1.24-ALIGNMENT.md)를 완료했습니다. 별도 SDK로 DALi 생산 대상을 전부 재빌드한 뒤 브라우저 전체 strict 링크와 새 사용자 C++ 컴파일·함수 실행에 성공했습니다. 로컬 직접 헤더/SW의 공유 메모리 모듈 로딩 비교도 성공했습니다. 후속 사용자 승인으로 이 조합을 다음 작업 기준으로 채택했습니다. 기존 6.0.13 lock은 과거 재현용으로 보존하며 별도 3.1.24 프로필 정리는 다음 작업입니다. P8 서비스 완료·P3 GPU 실행 완료는 아닙니다. 원본 3.1.24와 실패한 GameGuild fork를 구별합니다.
 
 ## 저장소 구성
 
@@ -43,14 +53,14 @@ dali-web/
 ├── tests/browser/              # 브라우저 검사
 ├── examples/                   # DALi 예제
 ├── web/                        # 정적 사이트와 실행 UI
-├── services/compiler/          # P8의 외부 컴파일 서비스
+│   └── compiler/               # P8 브라우저 컴파일 Worker·정적 SDK 자산 (예정)
 ├── docs/                       # PLAN·STATE·HANDOFF·JOURNAL
 ├── upstreams.lock.json         # 각 subtree의 원본 URL·기준 SHA·prefix
 ├── toolchain.lock.json         # SDK·도구 버전
 └── .github/workflows/          # 검증과 Pages 배포
 ```
 
-위 구조 중 libs·scripts·docs·upstreams.lock.json과 루트 README·제외 규칙은 R1-b에서 구성했습니다. R2-a에서 cmake·tests·빌드 스크립트·toolchain.lock.json도 구성했습니다. 나머지는 생성 예정입니다. services·web 등 후반 단계의 구현은 해당 단계에서 추가합니다.
+위 구조 중 libs·scripts·docs·upstreams.lock.json과 루트 README·제외 규칙은 R1-b에서 구성했습니다. R2-a에서 cmake·tests·빌드 스크립트·toolchain.lock.json도 구성했습니다. 나머지는 생성 예정입니다. web/compiler 등 후반 단계의 구현은 해당 단계에서 추가합니다.
 
 1. 라이브러리 자체의 웹 이식 코드는 `libs/dali-adaptor` 등을 수정하고, 빌드 조합·사이트·예제는 상위 디렉터리에 둡니다. Core는 수정 필요가 확인될 때 변경합니다.
 2. 사용자는 일반 clone으로 라이브러리 소스까지 받습니다. SDK·외부 의존 도구는 버전이 고정된 준비 절차로 별도 공급합니다. submodule 초기화나 대형 patch 적용은 요구하지 않습니다.
@@ -67,7 +77,7 @@ R2에서는 기존 `webassembly-probe`를 삭제하지 않고 필요한 소스·
 
 R2-b 이관 검증을 완료하여 `dali-web/docs`가 현재 기록 기준입니다. 기존 README·STATE·HANDOFF는 새 경로를 안내합니다. 두 곳을 동시에 최신 상태로 관리하지 않습니다. [이관 목록](MIGRATION.md)과 [R2-b 결과](R2-b-RESULTS.md)를 참고합니다.
 
-GitHub Pages는 사전 빌드된 예제와 정적 편집·실행 UI의 호스팅 대상으로 계획합니다. 사용자 C++ 코드를 매번 컴파일하는 서비스는 P8에서 별도로 운영합니다. Actions는 SDK·예제·사이트 빌드와 배포를 담당하고, 실시간 사용자 컴파일 서버로 취급하지 않습니다.
+GitHub Pages는 사전 빌드된 예제와 정적 편집·실행 UI의 호스팅 대상으로 계획합니다. P8에서 컴파일러 Wasm·헤더·사전 빌드 DALi도 정적으로 제공하며 사용자 C++는 브라우저 컴파일 Worker에서 처리합니다. 별도 운영 컴파일 서버는 두지 않습니다. Actions는 SDK·예제·사이트 빌드와 배포를 담당하고, 실시간 사용자 컴파일 서버로 취급하지 않습니다.
 
 D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 헤더 제약을 확인합니다. D3에서 메인 이벤트 + 업데이트·렌더 pthread Worker를 채택했습니다. D4는 GitHub Pages + Service Worker 우선 검증, 실패 시 직접 호스팅 검토로 확정했습니다. 타사 관리형 호스팅은 제외합니다. 실제 실행 검증과 배포/서버 구축 승인은 남아 있습니다. non-pthread로 전환하려면 D3 재논의가 필요합니다. Pages 사용을 이유로 스레드 모델을 미리 확정하지 않습니다. 배포 시 `/dali-web/` 하위 경로의 Wasm·Worker·리소스 URL을 검증합니다.
 
@@ -96,7 +106,7 @@ D1 이전에 P1에서 pthreads·SharedArrayBuffer와 COOP/COEP 조건, Pages의 
 
 ### 바로 적용할 context 단위
 
-R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조사·SDK guard 검사와 D1~D4 결정 반영으로 설계를 완료했습니다. runtime·호스팅 검증 완료를 뜻하지 않습니다. P2-a 진단 완료·P2-b sync 중간 구현이며 생산 링크 실패로 상위 P2는 미완료입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
+R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조사·SDK guard 검사와 D1~D4 결정 반영으로 설계를 완료했습니다. runtime·호스팅 검증 완료를 뜻하지 않습니다. P2-a 진단과 P2-b 생산 구현·P2 strict 링크 게이트를 완료했습니다. 다음은 승인된 3.1.24 기준의 P3 실제 브라우저/GPU 검증입니다. [R2-a 결과](archive/probe/docs/R2-a-RESULTS.md)에 새 Core 검증과 인수인계를 기록했습니다. [R2-b 결과](R2-b-RESULTS.md)에 재검증과 기록 전환을 기록했습니다. [R1-b 결과](archive/probe/docs/R1-b-RESULTS.md)에 commit·push·검증 증거를 기록했습니다.
 
 | 단위 | 목표 | 완료 및 인수인계 조건 |
 |---|---|---|
@@ -105,7 +115,13 @@ R1-a·R1-b·R2-a·R2-b 및 상위 R1·R2는 완료했습니다. P1은 소스 조
 | R2-a 완료 | 빌드·실험 코드 경로 이관 | 새 경로에서 Core 빌드·Node 검사 통과. 기존 결과 보존과 변경 파일 기록. R2-a 당시 기록 기준은 기존 공간 유지, R2-b에서 전환 완료 |
 | R2-b 완료 | 브라우저 검증과 기록 기준 전환 | Firefox·GL 탐색 결과 비교, 문서 링크 점검, 새 repo docs를 기준으로 전환하고 기존 문서에 안내. 다음 시작점은 P1 |
 
-### P2 현재 실행 경계
+### P2 과거 진행 기록 (최신 생산 결과로 대체됨)
+
+아래는 생산 링크 완료 전의 기록이다. 현재 다음 작업은 [HANDOFF](HANDOFF.md)의 3.1.24 기준 P3이며, 과거의 미완료·다음 작업 표현을 현재 상태로 해석하지 않는다.
+
+2026-10-23 추가: [Web 메모리 중간 구현·CPU 검사](P2-b-WEB-MEMORY-RESULTS.md). native/Web factory·Buffer 분리, Web 저장소·실패 latch·Controller gate를 구현했다. memory-web-003의 Core333/37개 compile·nm0, strict10/6개 미해결·exit1. CPU 12모드0·source 회귀0, native configure는 compiler 부재 실패이며 11개 교차 compile/nm만 통과했다. 다음은 실제 생산 Buffer/Controller 통합 검사 보강이며 host 비동기 failure/stop 연결도 미완료다. 이어 wrapper→cache→D3 host→생산 strict 링크/source/generated 순서와 모든 상위 게이트를 유지한다. 전체 P2-b·P2 미완료. 아래 문단은 이전 단계의 근거다.
+
+2026-10-23 웹 메모리 착수 조사에서 Core 내부 실패 처리 정책 결정을 위해 중단한 뒤 사용자 승인을 받았다. [승인 전 근거](P2-b-MEMORY-BLOCKER.md), [구현·검증 결과](P2-b-CORE-FAILURE-RESULTS.md). 공개 Graphics API 유지, Core 업로드 실패 전파·geometry draw 제외·uniform 실패 시 scene/pass 제출 차단을 구현했다. 실제 Core + mock 실패 주입과 정상 애니메이션 회귀를 통과했다. Web failure latch·비동기 host 중단은 아직 남았고 기존 승인 범위 안에서 다음 웹 메모리 구현을 이어갈 수 있다.
 
 P2-a 30개 compile/nm·16/12개 미해결 및 source/context 32개·13/9개 결과를 보존한다. P2-b sync 환경 분리 후 최종 34개 compile/nm 통과, 기본/FULL_ES3 strict exit 1·10/6개 미해결이다. [sync 결과](P2-b-SYNC-RESULTS.md). WebFence 주입형 Node 수명 검사는 통과했지만 실제 browser/GPU 증거는 아니다.
 
@@ -122,7 +138,7 @@ P2-a 30개 compile/nm·16/12개 미해결 및 source/context 32개·13/9개 결�
 | P5 | 리소스 로딩·이미지 → 폰트 의존성·텍스트 표시 |
 | P6 | foundation·레이아웃 → 선택한 components |
 | P7 | 재현 빌드 → 브라우저·OS 검증 → 수명·메모리·복구 검증 |
-| P8 | SDK 패키징·버전 계약 → 격리된 컴파일 API |
+| P8 | 3.1.24 SDK 정적 패키징·버전 계약 → 브라우저 컴파일 Worker API |
 | P9 | 편집·오류·로그 연결 → 실행 격리·중단·재실행 |
 | D1 | 기본 Pages 배포와 실제 URL 검증을 한 단위로 유지 |
 
@@ -142,7 +158,7 @@ P2 링크·기본 초기화 확보 후 P3/P4 구간에 독립 검증 단위를 �
 
 1. P3: 실제 픽셀 확인 후 최적화 빌드의 첫 측정 기준을 남깁니다. P4에서 Actor·draw call 수를 늘리는 애니메이션 장면으로 확장합니다.
 2. 동일 장치·동일 장면·픽셀 해상도·배율에서 네이티브와 웹을 비교합니다. GPU 가속 여부와 브라우저·SDK·revision·최적화 옵션을 기록합니다. 헤드리스 소프트웨어 렌더링 수치를 사용자 GPU 성능으로 해석하지 않습니다.
-3. 다운로드·Wasm 초기화·셰이더 준비·첫 프레임 시간과, 준비 후 연속 프레임 성능을 분리합니다. P8에서는 서버 대기·C++ 컴파일·링크 시간도 별도로 측정합니다.
+3. 다운로드·Wasm 초기화·셰이더 준비·첫 프레임 시간과, 준비 후 연속 프레임 성능을 분리합니다. P8에서는 정적 자산 다운로드·캐시·도구 초기화·Worker 대기·브라우저 C++ 컴파일·링크 시간도 별도로 측정합니다.
 4. 평균 FPS만 보지 않고 프레임 간격의 중앙값·p95·p99, 긴 프레임과 입력 응답을 확인합니다. CPU 업데이트·GL 제출 시간과 GPU 시간은 가능한 측정 도구로 구분하며 동기화로 측정을 왜곡하지 않습니다.
 5. 60Hz 환경의 초기 예제 목표는 60fps에 맞는 약 16.7ms 프레임 예산입니다. 달성 여부는 측정으로 판정하고, 대상 장치·장면·브라우저를 함께 명시합니다. 현재 달성한 결과가 아닙니다.
 6. GL 호출·상태 변경, 매 프레임 버퍼/텍스처 업로드, FULL_ES3 에뮬레이션, 스레드 통신·동기화를 우선 진단합니다. P5·P6에서는 폰트 최초 로딩·glyph 생성·텍스트 갱신도 구분합니다.

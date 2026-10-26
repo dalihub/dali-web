@@ -1,6 +1,6 @@
 # DALi Web
 
-DALi의 브라우저 포팅 저장소입니다. Core·Adaptor·UI 소스를 포함하며 모의 그래픽 기반 [Core Wasm 빌드·Node 검사](docs/BUILDING.md)를 제공합니다. 실제 Canvas 렌더링은 아직 제공하지 않습니다.
+DALi의 브라우저 포팅 저장소입니다. Core·Adaptor·UI 소스와 실제 생산 GLES 렌더러·pthread host의 [기본 WebGL2 빌드](docs/BUILDING.md)를 제공합니다. 생산 strict 링크와 [최초 실제 브라우저 렌더링](docs/P3-INITIAL-RESULTS.md)을 검증했습니다. 전체 GPU 메모리·격리·종료/재생성 인수는 진행 중입니다.
 
 ## 소스 받기
 
@@ -23,10 +23,12 @@ cd dali-web
 
 ## 진행 기록
 
+[P2-b 생산 구현과 P2 링크](docs/P2-b-PRODUCTION-RESULTS.md)를 완료했습니다. 실제 Buffer/Controller/Core uniform CPU 18모드와 wrapper CPU 5모드를 검사했고, main 이벤트·pthread 렌더 host의 비동기 failure/stop을 구현했습니다. 실제 두 프레임 픽셀과 정상 stopped 통지는 검증했으며, GPU 부분 갱신·수명·전체 종료/재생성은 P3/P4에 남습니다.
+
 R2-b 재검증과 기록 전환을 완료했고, [P1 실행 계약](docs/P1-EXECUTION-CONTRACT.md)을 작성했습니다. D1~D4 사용자 결정을 반영해 P1 설계를 완료했습니다. GitHub Pages 우선 검증, 실패 시 직접 호스팅 검토이며 실제 호스팅·생산 실행은 미검증입니다. 현재 시작점은 [STATE](docs/STATE.md), [설계 결정·P2 인수인계](docs/HANDOFF.md), [PLAN](docs/PLAN.md), [JOURNAL](docs/JOURNAL.md)입니다. 다음 요청문은 [NEXT-CONTEXT](docs/NEXT-CONTEXT.md)에 있습니다.
 
-현재 Core의 Wasm·Node·Firefox 모의 애니메이션 50/100과 Adaptor 6개 파일 컴파일을 검증했습니다. GL 탐색은 265개 심볼 중 기본 7개/FULL_ES3 3개 미해결이며 실제 생산 링크·픽셀 렌더링은 미완료입니다. [R2-b 결과](docs/R2-b-RESULTS.md), [빌드·재현](docs/BUILDING.md).
+과거 R2-b에서는 Core의 Wasm·Node·Firefox 모의 애니메이션 50/100과 Adaptor 6개 파일 컴파일을 검증했습니다. GL 탐색은 265개 심볼 중 기본 7개/FULL_ES3 3개 미해결이며 당시 생산 링크·픽셀 렌더링은 미완료였습니다. 최신 생산 링크 결과는 위 P2-b 문서를 따릅니다. [R2-b 결과](docs/R2-b-RESULTS.md), [빌드·재현](docs/BUILDING.md).
 
-이전 `webassembly-probe`는 과거 증거·SDK·P0 복제본 보존 공간입니다. 문서 사본과 미이관 자료 위치는 [MIGRATION](docs/MIGRATION.md)에 있습니다. 계획은 자동 실행 지시가 아니며 P2-a 생산 GLES 의존성 진단을 완료했습니다. 30개 번역 단위 컴파일은 통과했지만 strict 링크는 기본/FULL_ES3 각각 16/12개 미해결로 실패했습니다. [결과](docs/P2-a-RESULTS.md)와 [P2-b 인수인계](docs/P2-b-HANDOFF.md)를 남겼으며 상위 P2는 미완료입니다.
+이전 `webassembly-probe`는 과거 증거·SDK·P0 복제본 보존 공간입니다. [이관 기록](docs/MIGRATION.md)과 P2-a/sync 중간 결과는 역사 자료이며 현재 생산 링크 결과와 구분합니다.
 
-P2-b에서는 source/context에 이어 sync 환경 분리를 구현했습니다. [sync 중간 결과](docs/P2-b-SYNC-RESULTS.md): 34개 compile/nm과 주입형 fence 수명 단위 검사 통과, 기본/FULL_ES3 strict 링크는 10/6개 미해결로 실패했습니다. 실제 host·생산 링크·GPU 검증은 아직 없으며 다음은 웹 메모리입니다. native source 회귀·추출 코드 교차 compile은 통과했으나 native build/runtime은 미검증입니다.
+2026-10-26 [서버 없는 플레이그라운드 컴파일 방향](docs/PLAYGROUND-COMPILATION.md)을 채택했습니다. 원본 Emception 3.1.24와 같은 SDK 계열로 미리 빌드한 DALi를 정적으로 제공하고 사용자 C++를 브라우저에서 컴파일·링크합니다. [실제 생산 링크와 사용자 함수 실행 검사](docs/EMCEPTION-3.1.24-ALIGNMENT.md)는 통과했습니다. 기존 6.0.13 lock은 과거 재현용으로 보존하며 다음 작업은 3.1.24 기준 P3 실제 DALi 렌더링·GPU 검증입니다. 플레이그라운드 서비스·실제 Pages·전체 종료 검증은 아직 완료하지 않았습니다.
