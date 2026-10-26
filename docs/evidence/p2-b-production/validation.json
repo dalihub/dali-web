@@ -1,0 +1,10 @@
+{
+  "gitDiffCheckExitCode": 0,
+  "pythonScriptsSyntax": "pass",
+  "bootstrapAndProductionJavaScriptSyntax": "Node --check exit 0 each",
+  "markdownLocalLinks": "no missing targets",
+  "productionFixtureOrWrapArguments": [],
+  "coreBuildSteps": 333,
+  "coreCompilationEntries": 331,
+  "runtimeBrowserTested": false
+}

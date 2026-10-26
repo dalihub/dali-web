@@ -1,0 +1,83 @@
+[
+  {
+    "name": "compile-link",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "${DALI_WEB_ROOT}/tests/unit/web-gl-capabilities.cpp",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gl-implementation.cpp",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-failure.cpp",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-fence.cpp",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/web/web-gles-program-cache.cpp",
+      "${DALI_WEB_ROOT}/build/p2-b/production-002/core/libdali2-core.a",
+      "-sABORTING_MALLOC=0",
+      "-sPTHREAD_POOL_SIZE=1",
+      "-sENVIRONMENT=node",
+      "-sMIN_WEBGL_VERSION=2",
+      "-sMAX_WEBGL_VERSION=2",
+      "-sFULL_ES3=0",
+      "-sASSERTIONS=1",
+      "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+      "-Wl,--wrap=glGetError",
+      "-Wl,--wrap=glGetIntegerv",
+      "-Wl,--wrap=glBlendEquation",
+      "-Wl,--wrap=glDrawArrays",
+      "-Wl,--wrap=emscripten_webgl_get_current_context",
+      "-Wl,--wrap=emscripten_is_webgl_context_lost",
+      "-Wl,--wrap=emscripten_webgl_get_context_attributes",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/gl-unit-002/web-gl-test.js"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-blend",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/gl-unit-002/web-gl-test.js",
+      "blend"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-map",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/gl-unit-002/web-gl-test.js",
+      "map"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-binary",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/gl-unit-002/web-gl-test.js",
+      "binary"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/gl-unit-002/web-gl-test.js",
+      "cache"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "node-error",
+    "argv": [
+      "${DALI_WEB_EMSDK}/node/24.19.0_64bit/bin/node",
+      "${DALI_WEB_ROOT}/build/p2-b/gl-unit-002/web-gl-test.js",
+      "error"
+    ],
+    "exitCode": 0
+  }
+]

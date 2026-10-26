@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DALi Web — production host probe</title>
+<body>
+  <h1>DALi Web host probe</h1>
+  <p>Requires cross-origin isolation and Worker WebGL2. Pixel correctness is not yet validated.</p>
+  <button id="start">Start new instance</button>
+  <button id="stop" disabled>Stop</button>
+  <p id="status" role="status">Idle</p>
+  <canvas id="canvas" width="320" height="240"></canvas>
+  <script type="module" src="./bootstrap.js"></script>
+</body>
+</html>

@@ -1,0 +1,401 @@
+[
+  {
+    "name": "native-configure-GLES",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/GLES",
+      "-G",
+      "Ninja",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DENABLE_GRAPHICS_BACKEND=GLES",
+      "-DENABLE_PKG_CONFIGURE=OFF"
+    ],
+    "exitCode": 1
+  },
+  {
+    "name": "native-configure-VULKAN",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/VULKAN",
+      "-G",
+      "Ninja",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DENABLE_GRAPHICS_BACKEND=VULKAN",
+      "-DENABLE_PKG_CONFIGURE=OFF"
+    ],
+    "exitCode": 1
+  },
+  {
+    "name": "native-configure-DYNAMIC",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/build/tizen",
+      "-B",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/DYNAMIC",
+      "-G",
+      "Ninja",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DENABLE_GRAPHICS_BACKEND=DYNAMIC",
+      "-DENABLE_PKG_CONFIGURE=OFF"
+    ],
+    "exitCode": 1
+  },
+  {
+    "name": "cross-compile-native-gles-context",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-context.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-context.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-context",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-context.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-rendering",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-rendering.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-rendering.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-rendering",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-rendering.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-sync",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-sync.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-sync.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-sync",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-sync.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-sync-pool.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-sync-pool.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-sync-pool",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-sync-pool.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-egl-graphics",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/egl-graphics.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/egl-graphics.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-egl-graphics",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/egl-graphics.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-memory.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-buffer.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-controller",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-controller.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles-graphics-controller.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-controller",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles-graphics-controller.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-buffer.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles-graphics-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-buffer",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles-graphics-buffer.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles2-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles2-graphics-memory.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles2-graphics-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles2-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles2-graphics-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles3-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles3-graphics-memory.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles3-graphics-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles3-graphics-memory",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles3-graphics-memory.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-program-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles/native-gles-program-cache.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-program-cache.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-program-cache",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/native-gles-program-cache.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-program",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/emscripten/em++",
+      "-std=c++17",
+      "-pthread",
+      "-DDEBUG_ENABLED",
+      "-I${DALI_WEB_ROOT}/build/p2-b/production-002/generated/include",
+      "-I${DALI_WEB_ROOT}/libs/dali-core",
+      "-I${DALI_WEB_ROOT}/libs/dali-adaptor",
+      "-c",
+      "${DALI_WEB_ROOT}/libs/dali-adaptor/dali/internal/graphics/gles-impl/gles-graphics-program.cpp",
+      "-o",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles-graphics-program.o"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-program",
+    "argv": [
+      "${DALI_WEB_EMSDK}/upstream/bin/llvm-nm",
+      "-u",
+      "-C",
+      "${DALI_WEB_ROOT}/build/p2-b/production-native-002/gles-graphics-program.o"
+    ],
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,893 @@
+{
+  "runs": {
+    "production-003": [
+      {
+        "name": "version-EMXX",
+        "exitCode": 0
+      },
+      {
+        "name": "version-LLVM_NM",
+        "exitCode": 0
+      },
+      {
+        "name": "version-CMAKE",
+        "exitCode": 0
+      },
+      {
+        "name": "version-NINJA",
+        "exitCode": 0
+      },
+      {
+        "name": "version-NODE",
+        "exitCode": 0
+      },
+      {
+        "name": "version-PYTHON",
+        "exitCode": 0
+      },
+      {
+        "name": "configure",
+        "exitCode": 0
+      },
+      {
+        "name": "core-build",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-shader-parser",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-shader-parser",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-program",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-program",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-controller",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-controller",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-controller-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-controller-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-command-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-command-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-framebuffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-framebuffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-pipeline",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-pipeline",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-reflection",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-reflection",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-render-pass",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-render-pass",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-render-target",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-render-target",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-sampler",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-sampler",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-shader",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-shader",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-texture",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-texture",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-pipeline-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-pipeline-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-sync-object",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-sync-object",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-framebuffer-state-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-framebuffer-state-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-texture-dependency-checker",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-texture-dependency-checker",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gl-implementation",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gl-implementation",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-rendering",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-rendering",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-sync",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-sync",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-fence",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-fence",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-buffer-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-buffer-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-buffer-storage",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-buffer-storage",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-program-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-program-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-environment-variable",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-environment-variable",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-host",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-host",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-core",
+        "exitCode": 0
+      },
+      {
+        "name": "link-webgl2",
+        "exitCode": 0
+      }
+    ],
+    "controller-007": [
+      {
+        "name": "version-EMXX",
+        "exitCode": 0
+      },
+      {
+        "name": "version-NODE",
+        "exitCode": 0
+      },
+      {
+        "name": "version-LLVM_NM",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-shader-parser",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-shader-parser",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-program",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-program",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-controller",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-controller",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-controller-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-controller-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-command-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-command-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-debug",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-framebuffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-framebuffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-pipeline",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-pipeline",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-reflection",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-reflection",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-render-pass",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-render-pass",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-render-target",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-render-target",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-sampler",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-sampler",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-shader",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-shader",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-texture",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-texture",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-graphics-pipeline-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-pipeline-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-sync-object",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-sync-object",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-framebuffer-state-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-framebuffer-state-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-gles-texture-dependency-checker",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-texture-dependency-checker",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-rendering",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-rendering",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-sync",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-sync",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-fence",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-fence",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-buffer-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-buffer-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-buffer-storage",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-buffer-storage",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-web-gles-program-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-web-gles-program-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-environment-variable",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-environment-variable",
+        "exitCode": 0
+      },
+      {
+        "name": "compile-link-test",
+        "exitCode": 0
+      },
+      {
+        "name": "node-factory",
+        "exitCode": 0
+      },
+      {
+        "name": "node-discard",
+        "exitCode": 0
+      },
+      {
+        "name": "node-factory-allocation",
+        "exitCode": 0
+      },
+      {
+        "name": "node-buffer-object",
+        "exitCode": 0
+      },
+      {
+        "name": "node-storage-object",
+        "exitCode": 0
+      },
+      {
+        "name": "node-memory-object",
+        "exitCode": 0
+      },
+      {
+        "name": "node-gl-allocation",
+        "exitCode": 0
+      },
+      {
+        "name": "node-gl-data",
+        "exitCode": 0
+      },
+      {
+        "name": "node-uniform-cpu",
+        "exitCode": 0
+      },
+      {
+        "name": "node-uniform-gpu",
+        "exitCode": 0
+      },
+      {
+        "name": "node-shutdown",
+        "exitCode": 0
+      },
+      {
+        "name": "node-shutdown-allocator",
+        "exitCode": 0
+      },
+      {
+        "name": "node-invalid-allocator",
+        "exitCode": 0
+      },
+      {
+        "name": "node-mapped-recycle",
+        "exitCode": 0
+      },
+      {
+        "name": "node-recycle-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "node-grow-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "node-uniform-cpu-failure",
+        "exitCode": 0
+      },
+      {
+        "name": "node-uniform-gpu-failure",
+        "exitCode": 0
+      }
+    ],
+    "gl-unit-002": [
+      {
+        "name": "compile-link",
+        "exitCode": 0
+      },
+      {
+        "name": "node-blend",
+        "exitCode": 0
+      },
+      {
+        "name": "node-map",
+        "exitCode": 0
+      },
+      {
+        "name": "node-binary",
+        "exitCode": 0
+      },
+      {
+        "name": "node-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "node-error",
+        "exitCode": 0
+      }
+    ],
+    "production-native-002": [
+      {
+        "name": "native-configure-GLES",
+        "exitCode": 1
+      },
+      {
+        "name": "native-configure-VULKAN",
+        "exitCode": 1
+      },
+      {
+        "name": "native-configure-DYNAMIC",
+        "exitCode": 1
+      },
+      {
+        "name": "cross-compile-native-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-context",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-native-gles-rendering",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-rendering",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-native-gles-sync",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-sync",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-native-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-sync-pool",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-egl-graphics",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-egl-graphics",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-native-gles-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-native-gles-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-gles-graphics-controller",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-controller",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-gles-graphics-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-buffer",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-gles2-graphics-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles2-graphics-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-gles3-graphics-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles3-graphics-memory",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-native-gles-program-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-native-gles-program-cache",
+        "exitCode": 0
+      },
+      {
+        "name": "cross-compile-gles-graphics-program",
+        "exitCode": 0
+      },
+      {
+        "name": "nm-gles-graphics-program",
+        "exitCode": 0
+      }
+    ],
+    "production-sources-001": [
+      {
+        "name": null,
+        "exitCode": 0
+      },
+      {
+        "name": null,
+        "exitCode": 0
+      },
+      {
+        "name": null,
+        "exitCode": 0
+      },
+      {
+        "name": null,
+        "exitCode": 0
+      },
+      {
+        "name": null,
+        "exitCode": 0
+      },
+      {
+        "name": null,
+        "exitCode": 0
+      },
+      {
+        "name": null,
+        "exitCode": 1
+      },
+      {
+        "name": null,
+        "exitCode": 1
+      },
+      {
+        "name": null,
+        "exitCode": 1
+      },
+      {
+        "name": null,
+        "exitCode": 1
+      }
+    ],
+    "closure-002": [
+      {
+        "name": "web",
+        "exitCode": 0
+      },
+      {
+        "name": "native-generated-one",
+        "exitCode": 0
+      },
+      {
+        "name": "native-generated-two",
+        "exitCode": 0
+      }
+    ]
+  },
+  "productionLinkComplete": true,
+  "runtimeTested": false,
+  "coreCompilationEntries": 331,
+  "productionObjects": 35,
+  "fullMap": "${DALI_WEB_ROOT}/logs/p2-b/production-003/webgl2.map",
+  "mapSha256": "28cab27785550c76a10b80c5ad1bf4b92b299100d7b30ae2e258b9901ff5e222",
+  "mapBytes": 21052901,
+  "inputDrift": [],
+  "preservedBaselineFiles": 1237,
+  "preservationFailures": [],
+  "nativeBuildInstallRuntime": false,
+  "nativeConfigureLimitation": "host C/C++ compiler unavailable",
+  "gpuPreservationTested": false
+}

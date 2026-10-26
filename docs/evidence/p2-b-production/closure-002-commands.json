@@ -1,0 +1,29 @@
+[
+  {
+    "name": "web",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/closure-002/web.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "native-generated-one",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/closure-002/native-generated-one.cmake"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "native-generated-two",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-P",
+      "${DALI_WEB_ROOT}/logs/p2-b/closure-002/native-generated-two.cmake"
+    ],
+    "exitCode": 0
+  }
+]
