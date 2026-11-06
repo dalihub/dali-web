@@ -1,11 +1,14 @@
 # 다음 컨텍스트용 프롬프트
 
 ```text
-DALi 브라우저 포팅 P3 SW 후속을 이어가자.
+DALi 브라우저 포팅 P3 캐시 정책 논의를 이어가자.
+먼저 docs/P3-CACHE-POLICY-REVIEW.md를 읽어줘.
+버전별 불변 자산 묶음 권장안은 제안이며 아직 미합의·미구현이야.
+검토 문서 commit·push는 정책 구현 승인이 아니야. 사용자 합의 후에만 구현해줘.
 repo /home/jy/work/dali/dali-web, origin https://github.com/dalihub/dali-web.git.
-2026-11-06 확인한 HEAD/실제 origin main:
-99d21f3992c20d60dc0396eda23e43402d2f4842, 최초 clean.
-SW 검사·승인 후 bootstrap 복구·증거·문서를 함께 커밋하고 push하는 인계야.
+2026-11-06 캐시 정책 검토 시작 HEAD/실제 origin main:
+f81276e13314ae68170b09767782abd229a4a958, 최초 clean.
+이번 인계는 캐시 정책 검토·문서 갱신이며 정책 코드 변경은 없어.
 이 문서가 포함된 커밋과 최종 채팅 SHA가 다음 기준이야.
 과거 미커밋/commit·push 없음은 검사 당시 기록으로 취급해줘.
 실제 HEAD/status/원격부터 다시 확인하고 후속 사용자 커밋 상태를 우선해줘.

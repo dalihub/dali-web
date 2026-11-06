@@ -1,5 +1,7 @@
 # DALi 브라우저 포팅 현재 상태
 
+2026-11-06 캐시 정책 검토: 시작 HEAD/실제 origin main `f81276e13314ae68170b09767782abd229a4a958`, main clean 재확인. [비교·권장안](P3-CACHE-POLICY-REVIEW.md)을 기록했다. 권장은 버전별 불변 자산 묶음·manifest 검증 후 전환·실행별 릴리스 고정·실패 시 기존 완료 묶음 보존이다. **검토 완료, 정책 미합의·미구현·미검증**이며 구현은 사용자 합의 후 진행한다. bootstrap 복구 단위 완료·P3 전체 진행 중, 기존 Firefox9회 및 직접 헤더 E 회귀 결과 유지. 기본 E/독립 C·원본 Emception3.1.24·서버 없는 컴파일·Pages+SW 우선 유지. 실제 Pages 검증·배포는 별도 승인. 이번 변경은 검토/인계 문서뿐이다. 과거 미커밋·복구 승인 대기보다 실제 Git 상태와 이 기록을 우선한다.
+
 2026-11-06 완료 인계: 사용자 지시로 SW 수명주기 실패 재현·승인 후 bootstrap 복구·검증 증거·관련 문서를 함께 커밋하고 origin/main에 push한다. 이 문서를 포함한 커밋을 다음 기준으로 삼는다. 아래 “미커밋/commit·push 없음”은 검사 종료 당시 기록이다. 실제 push 완료는 최종 채팅의 SHA 및 다음 시작 시 HEAD/status/원격 대조로 확인한다. 작업 완료 시 문서 갱신→commit·push→다음 프롬프트 제공 절차를 HANDOFF에 기록했다. P3 전체 진행 중·Pages 별도 승인 조건은 유지한다.
 
 2026-11-06 SW 복구 승인 후 최신 상태: 사용자 “수정 고고” 승인으로 [bootstrap 복구](P3-SW-RECOVERY-RESULTS.md)를 구현·검증했다([증거](evidence/p3-sw-recovery/README.md)). 격리 성공 시 URL별 retry flag 정리, 자동 reload 최대1회, 등록/제어5초 timeout·늦은 완료 차단, 오류와 다시 시도 버튼을 추가했다. Firefox sw-recovery-003에서 해제→재방문과503/제어없음/지연제어/격리헤더없음 실패→명시적 재시도 통과. 총9회 실제 E 두 프레임·GL error0·ready→stopped, 직접 헤더 E 회귀도 통과. 이전 복구 방향 승인 대기는 해소됐다. **bootstrap 복구 단위 완료·P3 진행 중**, 운영 캐시/전체 offline·다중 탭·브라우저 재시작·Chromium·실제 Pages는 미검증. 테스트의 잘못된 SW는 harness가 제거한 뒤 재시도했으며 자동 SW repair를 구현하지 않았다. 기본 E/독립 C·원본 Emception3.1.24·서버 없는 컴파일·Pages+SW 우선 유지. 공통/native·SDK·lock·SW 원본 변경 없음. 기존748개·CMake 입력376개 drift0. commit/push·배포 없음. 아래 중단·승인 대기는 당시 기록이다.
