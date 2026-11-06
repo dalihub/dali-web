@@ -1,0 +1,31 @@
+{
+  "events": [
+    {
+      "state": "failure",
+      "reason": "render pthread/Canvas transfer failed"
+    },
+    {
+      "state": "stopped",
+      "reason": "new execution instance required"
+    }
+  ],
+  "errors": [
+    "pthread_create: cannot transfer control of canvas \"canvas\" to pthread, because current browser does not support OffscreenCanvas!",
+    "pthread_create: Build with -sOFFSCREEN_FRAMEBUFFER to enable fallback proxying of GL commands from pthread to main thread."
+  ],
+  "done": true,
+  "heartbeat": 3,
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "workerEnvironment": {
+    "isolation": true,
+    "document": "undefined",
+    "offscreenCanvas": true,
+    "transferControlToOffscreen": "undefined",
+    "requestAnimationFrame": "function"
+  },
+  "sharedMemory": true,
+  "cleanupRequested": true,
+  "fullTeardownVerified": false
+}

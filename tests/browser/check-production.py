@@ -20,7 +20,13 @@ parser.add_argument('mode', choices=['headers', 'sw'])
 parser.add_argument('--pixels', action='store_true', help='Require two instrumented real frames')
 parser.add_argument('--memory', action='store_true')
 parser.add_argument('--failure', choices=['shader', 'reflection'])
+parser.add_argument('--event-worker', action='store_true', help='Diagnostic C startup gate; no runtime shims')
+parser.add_argument('--event-pthread', action='store_true', help='C ownership, hang/stop and recreation matrix')
 args = parser.parse_args()
+if args.event_pthread and (args.event_worker or args.pixels or args.memory or args.failure):
+    parser.error('Event pthread is a separate matrix')
+if args.event_worker and (args.pixels or args.memory or args.failure):
+    parser.error('Event Worker startup is a separate diagnostic gate')
 if args.failure and (args.pixels or args.memory):
     parser.error('Failure checks cannot require successful pixels/memory')
 root = Path(__file__).resolve().parents[2]
@@ -34,6 +40,12 @@ fixture = assets / 'probe'
 fixture.mkdir(parents=True)
 for name in ['production.html', 'production.js', 'production-sw.js']:
     shutil.copy2(root / 'tests/browser' / name, fixture / name)
+if args.event_worker:
+    for name in ['event-worker.html', 'event-worker.js', 'event-worker-runtime.js']:
+        shutil.copy2(root / 'tests/browser' / name, fixture / name)
+if args.event_pthread:
+    for name in ['event-pthread.html', 'event-pthread.js']:
+        shutil.copy2(root / 'tests/browser' / name, fixture / name)
 (fixture / 'runtime').symlink_to(build, target_is_directory=True)
 (logs / 'input-hashes.json').write_text(json.dumps({
     str(path): hashlib.sha256(path.read_bytes()).hexdigest()
@@ -97,7 +109,8 @@ try:
             request('POST', base + '/timeouts', {'pageLoad': 30000, 'script': 30000})
             failure = {'shader': 1, 'reflection': 2}.get(args.failure, 0)
             trace = os.environ.get('DALI_WEB_GL_TRACE', '0')
-            request('POST', base + '/url', {'url': f'http://127.0.0.1:{server.server_port}/probe/production.html?sw={int(args.mode == "sw")}&trace={trace}&failure={failure}'})
+            page = 'event-pthread.html' if args.event_pthread else ('event-worker.html' if args.event_worker else 'production.html')
+            request('POST', base + '/url', {'url': f'http://127.0.0.1:{server.server_port}/probe/{page}?sw={int(args.mode == "sw")}&trace={trace}&failure={failure}'})
             for attempt in range(30):
                 result = request('POST', base + '/execute/sync', {'script': 'return window.productionResult || null;', 'args': []})
                 if result and result.get('done'):
@@ -158,5 +171,14 @@ if args.failure:
         and result['events'][1]['reason'] == 'GL operation failed'
         and not result.get('pixels') and not result.get('memory')
         and not any(word in '\n'.join(errors).lower() for word in ['unreachable', 'out of bounds', 'runtimeerror', 'abort(', 'uncaught', 'typeerror', 'referenceerror', 'rangeerror']))
-(logs / 'verdict.json').write_text(json.dumps({'passed': bool(passed), 'pixelsRequired': args.pixels or args.memory, 'memoryRequired': args.memory, 'expectedFailure': args.failure, 'mode': args.mode}, indent=2) + '\n')
+if args.event_pthread:
+    runs = result.get('runs', []) if result else []
+    passed = bool(result and result.get('done') and not result.get('errors')
+        and result.get('isolation') and len(runs) == 4
+        and [r['mode'] for r in runs] == [0, 1, 2, 0]
+        and all(r.get('passed') for r in runs)
+        and result.get('freshMemory') and result.get('staleMessageRejected'))
+    if args.mode == 'sw':
+        passed = passed and result.get('controlled') and result.get('firstIsolation') == 'false'
+(logs / 'verdict.json').write_text(json.dumps({'passed': bool(passed), 'eventWorkerStartupOnly': args.event_worker, 'eventPthreadMatrix': args.event_pthread, 'pixelsRequired': args.pixels or args.memory, 'memoryRequired': args.memory, 'expectedFailure': args.failure, 'mode': args.mode}, indent=2) + '\n')
 raise SystemExit(0 if passed else 1)

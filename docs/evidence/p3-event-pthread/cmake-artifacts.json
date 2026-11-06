@@ -1,0 +1,46 @@
+{
+  "${DALI_WEB_ROOT}/logs/p3/event-pthread-cmake-001/configure.log": {
+    "sha256": "673a256a1399ea45226678539031ab9256db79f92729325e1bd9ccf24934a87b",
+    "bytes": 1917
+  },
+  "${DALI_WEB_ROOT}/logs/p3/event-pthread-cmake-001/build.log": {
+    "sha256": "76b8c242e8de98c4f1d93ba9016b5d338087097dc90bab3c42d61847c6ebdc4f",
+    "bytes": 56725
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/compile_commands.json": {
+    "sha256": "9ec456e07189fb427bd49f18cb03a4167d180fd4a1fcad6952d1fb660256506e",
+    "bytes": 306489
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/core/libdali2-core.a": {
+    "sha256": "3cde36213c617ba24794b02eaa6ee8379e0cfb0325519f0b0c26aaa87d7bcbe1",
+    "bytes": 68672702
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/dali-web.js": {
+    "sha256": "39a1c276da6a1dd03fc1c0e6965569dde882849b76e4124b10085fc26f73076c",
+    "bytes": 239641
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/dali-web.worker.js": {
+    "sha256": "10097d952b52b1909af6f47896af9fac9ca1bd0c6f073ec03b8dd8929e5f04fe",
+    "bytes": 6997
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/dali-web.wasm": {
+    "sha256": "396a9ef2995c56caa3b758b8c59082bffabcf447e30120014b0413bc72a11167",
+    "bytes": 49417902
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/dali-web.map": {
+    "sha256": "ad69733e977254c8783189c98701548cc58a4265ccb6348ba8fa5f0139bc8704",
+    "bytes": 18040624
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/event-probe/dali-web.js": {
+    "sha256": "54621efd17d87474018308a2c17eb0a2ea5b742b05ed8ebd9e04b45fa9a8b14c",
+    "bytes": 240524
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/event-probe/dali-web.worker.js": {
+    "sha256": "10097d952b52b1909af6f47896af9fac9ca1bd0c6f073ec03b8dd8929e5f04fe",
+    "bytes": 6997
+  },
+  "${DALI_WEB_ROOT}/build/p3/event-pthread-cmake-001/event-probe/dali-web.wasm": {
+    "sha256": "8494e6e9f1a9cc996f26a21b4cbe2e54f950399091236660b0e7bb426e622ba3",
+    "bytes": 49503714
+  }
+}

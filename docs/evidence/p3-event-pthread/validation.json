@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-06",
+  "head": "c98c04796b0b5ebe3c0029a6e37260bd13d6ffb6",
+  "initialChanges": "previous authorized startup fixture/docs preserved",
+  "preservationCount": 748,
+  "preservationDrift": [],
+  "priorProductionInputCount": 499,
+  "authorizedChangedProductionInputs": [
+    "cmake/web/CMakeLists.txt",
+    "web/host/web-host.cpp"
+  ],
+  "reuseInputDrift": [],
+  "cmakeBuildSteps": 371,
+  "cmakeConfigureExitCode": 0,
+  "cmakeBuildExitCode": 0,
+  "nativeBuildRetested": false,
+  "browserExitCodes": {
+    "headers": 0,
+    "sw": 0,
+    "e-pixels": 0,
+    "e-production": 0
+  },
+  "limits": [
+    "Firefox local only",
+    "two pthreads per instance",
+    "synthetic input/button",
+    "no GPU memory reclamation or long-term leak proof",
+    "no Pages deployment"
+  ],
+  "staticValidation": "syntax, JSON, links, source hashes and independent matrix checks passed"
+}

@@ -1,0 +1,21 @@
+{
+  "events": [],
+  "errors": [
+    "worker sent an error! http://127.0.0.1:44559/probe/runtime/dali-web.worker.js:76: TypeError: URL.createObjectURL: Argument 1 could not be converted to any of: Blob, MediaSource.",
+    "uncaught exception: [object ErrorEvent]"
+  ],
+  "done": true,
+  "heartbeat": 2,
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "workerEnvironment": {
+    "isolation": true,
+    "document": "undefined",
+    "offscreenCanvas": true,
+    "transferControlToOffscreen": "undefined",
+    "requestAnimationFrame": "function"
+  },
+  "cleanupRequested": true,
+  "fullTeardownVerified": false
+}

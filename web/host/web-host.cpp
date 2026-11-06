@@ -21,6 +21,9 @@
 #include <GLES3/gl3.h>
 #endif
 
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+#include "web-event-probe.h"
+#else
 EM_JS(void, NotifyStatus, (const char* state, const char* reason), {
   const event = {state: UTF8ToString(state), reason: reason ? UTF8ToString(reason) : null};
   try { if (Module['onDaliStatus']) Module['onDaliStatus'](event); }
@@ -33,14 +36,30 @@ EM_JS(void, NotifyStatus, (const char* state, const char* reason), {
 EM_JS_DEPS(dali_web_worker_dependencies, "$PThread");
 EM_JS(void, DisposeWorkers, (), { PThread.terminateAllThreads(); });
 
+#endif
+
 #ifdef DALI_WEB_TEST_READBACK
 EM_JS(void, NotifyPixels, (unsigned frame, const unsigned char* pixels, unsigned error), {
-  if (Module['onDaliPixels']) Module['onDaliPixels']({frame, pixels: Array.from(HEAPU8.subarray(pixels, pixels + 8)), error});
+  const value = {frame, pixels: Array.from(HEAPU8.subarray(pixels, pixels + 8)), error};
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+  postMessage({daliProbe: true, kind: 'pixels', value});
+#else
+  if (Module['onDaliPixels']) Module['onDaliPixels'](value);
+#endif
 });
 #endif
 
 namespace Dali::Web
 {
+bool IsEventOwner()
+{
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+  return pthread_equal(eventProbeOwner, pthread_self());
+#else
+  return emscripten_is_main_runtime_thread();
+#endif
+}
+
 class Host;
 Host* instance = nullptr;
 bool executionStarted = false;
@@ -59,7 +78,7 @@ class Platform : public Integration::PlatformAbstraction
 public:
   uint32_t StartTimer(uint32_t milliseconds, CallbackBase* callback) override
   {
-    DALI_ASSERT_ALWAYS(emscripten_is_main_runtime_thread());
+    DALI_ASSERT_ALWAYS(Dali::Web::IsEventOwner());
     auto timer = std::make_unique<Timer>();
     timer->owner = this;
     timer->id = ++mNextId;
@@ -78,7 +97,7 @@ public:
   }
   void CancelTimer(uint32_t id) override
   {
-    DALI_ASSERT_ALWAYS(emscripten_is_main_runtime_thread());
+    DALI_ASSERT_ALWAYS(Dali::Web::IsEventOwner());
     auto iter = mTimers.find(id);
     if(iter != mTimers.end())
     {
@@ -142,6 +161,9 @@ public:
 };
 
 class Host : public Integration::RenderController
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+, public ConnectionTracker
+#endif
 {
   enum class Command { None, Frame, Shutdown, Exit };
   enum class Reply { None, Ready, FrameDone, ResourcesStopped, Exited };
@@ -163,7 +185,7 @@ public:
   }
   bool Start()
   {
-    DALI_ASSERT_ALWAYS(emscripten_is_main_runtime_thread());
+    DALI_ASSERT_ALWAYS(Dali::Web::IsEventOwner());
     pthread_attr_t attributes;
     pthread_attr_init(&attributes);
     const int transfer = emscripten_pthread_attr_settransferredcanvases(&attributes, "#canvas");
@@ -181,11 +203,13 @@ public:
   }
   void Stop()
   {
-    DALI_ASSERT_ALWAYS(emscripten_is_main_runtime_thread());
+    DALI_ASSERT_ALWAYS(Dali::Web::IsEventOwner());
     mStopRequested = true;
     if(mRaf)
     {
+#ifndef DALI_WEB_TEST_EVENT_PTHREAD
       emscripten_cancel_animation_frame(mRaf);
+#endif
       mRaf = 0;
     }
     if(mReady && !mInFlight && !mStopping) BeginStop();
@@ -194,6 +218,10 @@ private:
   static void* WorkerEntry(void* data)
   {
     auto& self = *static_cast<Host*>(data);
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+    eventProbe[RenderThread] = static_cast<int>(pthread_self());
+    DALI_ASSERT_ALWAYS(!Internal::ThreadLocalStorage::Created());
+#endif
     if(self.mSurface.Open() && self.mGl.ContextCreated())
     {
       self.mController.InitializeGLES(self.mGl);
@@ -220,6 +248,9 @@ private:
   static void WorkerPump(void* data)
   {
     auto& self = *static_cast<Host*>(data);
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+    eventProbe[RenderTicks].fetch_add(1);
+#endif
     const auto command = self.mCommand.exchange(Command::None, std::memory_order_acquire);
     if(command == Command::Frame)
     {
@@ -252,6 +283,9 @@ private:
       // render owner cancels remaining fences before disposing of the context.
       WebFence::Shutdown();
       self.mSurface.Close();
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+      eventProbe[ContextClosed] = 1;
+#endif
       emscripten_clear_interval(self.mWorkerTimer);
       self.mReply.store(Reply::Exited, std::memory_order_release);
       pthread_exit(nullptr);
@@ -261,6 +295,10 @@ private:
   {
     mCore = Integration::Core::New(*this, mPlatform, mController, Integration::CorePolicyFlags::DEFAULT);
     mCore->Initialize();
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+    DALI_ASSERT_ALWAYS(IsEventOwner() && Internal::ThreadLocalStorage::Created());
+    eventProbe[TlsCreated] = 1;
+#endif
     Graphics::RenderTargetCreateInfo target{};
     target.SetSurface(&mSurface).SetExtent({320, 240}).SetPreTransform(0 | Graphics::RenderTargetTransformFlagBits::TRANSFORM_IDENTITY_BIT);
     mScene = Integration::Scene::New(target, Size(320, 240));
@@ -290,9 +328,32 @@ private:
     auto renderer = Renderer::New(geometry, shader);
     actor.AddRenderer(renderer);
     mScene.Add(actor);
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+    mProbeActor = actor;
+    mScene.KeyEventSignal().Connect(this, &Host::ProbeKey);
+    mPlatform.StartTimer(30, MakeCallback(this, &Host::ProbeTimer));
+#endif
     mCore->SceneCreated();
     mCore->ProcessEvents();
   }
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+  void ProbeKey(Dali::KeyEvent event)
+  {
+    DALI_ASSERT_ALWAYS(IsEventOwner() && Internal::ThreadLocalStorage::Created());
+    eventProbe[KeyObserved] = event.GetKeyCode();
+  }
+  void ProbeUserCallback()
+  {
+    DALI_ASSERT_ALWAYS(IsEventOwner() && Internal::ThreadLocalStorage::Created());
+    ProbeSpin();
+  }
+  void ProbeTimer()
+  {
+    DALI_ASSERT_ALWAYS(IsEventOwner() && Internal::ThreadLocalStorage::Created());
+    mProbeActor.SetProperty(Actor::Property::NAME, "timer-on-event-owner");
+    eventProbe[TimerCalled] = 1;
+  }
+#endif
   void RenderFrame()
   {
     if(!mContextAnnounced)
@@ -350,7 +411,13 @@ private:
   void ScheduleFrame()
   {
     if(!mRaf && !mInFlight && !mStopRequested)
+    {
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+      mRaf = 1; // Main publishes a timestamp; the event owner consumes it.
+#else
       mRaf = emscripten_request_animation_frame(AnimationFrame, this);
+#endif
+    }
   }
   void BeginStop()
   {
@@ -358,6 +425,9 @@ private:
     mPlatform.CancelAll();
     if(mCore)
     {
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+      mProbeActor.Reset();
+#endif
       mCore->SceneDestroyed();
       mScene.RemoveSceneObject();
       mScene.Reset();
@@ -378,6 +448,31 @@ private:
       NotifyStatus("failure", reason);
       self.Stop();
     }
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+    eventProbe[EventTicks].fetch_add(1);
+    if(eventProbe[StopRequest].exchange(0)) self.Stop();
+    if(const int key = eventProbe[KeyRequest].exchange(0); key && self.mCore && !self.mStopping)
+    {
+      DALI_ASSERT_ALWAYS(IsEventOwner() && Internal::ThreadLocalStorage::Created());
+      Integration::KeyEvent input;
+      input.keyName = "a";
+      input.keyString = "a";
+      input.keyCode = key;
+      input.state = Integration::KeyEvent::DOWN;
+      self.mScene.QueueEvent(input);
+      self.RequestProcessEventsOnIdle();
+    }
+    if(eventProbe[TriggerRequest].exchange(0) && self.mCore && !self.mStopping)
+    {
+      DALI_ASSERT_ALWAYS(IsEventOwner() && Internal::ThreadLocalStorage::Created());
+      self.mProbeActor.SetProperty(Actor::Property::NAME, "message-on-event-owner");
+      self.RequestProcessEventsOnIdle();
+      eventProbe[TriggerCalled] = 1;
+      if(eventProbe[Mode] == 2) self.mPlatform.StartTimer(0, MakeCallback(&self, &Host::ProbeUserCallback));
+    }
+    if(self.mRaf && eventProbe[TickPending].exchange(0))
+      AnimationFrame(eventProbe[Timestamp].load(), &self);
+#endif
     auto reply = self.mReply.exchange(Reply::None, std::memory_order_acquire);
     if(reply == Reply::Ready)
     {
@@ -386,6 +481,9 @@ private:
       if(!self.mStopRequested)
       {
         self.CreateScene();
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+        if(eventProbe[Mode] == 1) ProbeSpin();
+#endif
         NotifyStatus("ready", nullptr);
         self.ScheduleFrame();
       }
@@ -413,6 +511,10 @@ private:
     {
       delete self.mCore;
       self.mCore = nullptr;
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+      DALI_ASSERT_ALWAYS(IsEventOwner() && !Internal::ThreadLocalStorage::Created());
+      eventProbe[TlsRemoved] = 1;
+#endif
       self.mCommand.store(Command::Exit, std::memory_order_release);
     }
     else if(reply == Reply::Exited) self.mExited = true;
@@ -436,8 +538,15 @@ private:
       delete &self;
       DisposeWorkers();
       NotifyStatus("stopped", nullptr);
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+      eventProbe[EventExited] = 1;
+      pthread_exit(nullptr);
+#endif
     }
   }
+#ifdef DALI_WEB_TEST_EVENT_PTHREAD
+  Actor mProbeActor;
+#endif
   Graphics::GlesGraphicsController mController;
   #ifdef DALI_WEB_TEST_MEMORY
   MemoryProbe mMemoryProbe{mController};
@@ -485,7 +594,7 @@ private:
 }
 extern "C" EMSCRIPTEN_KEEPALIVE void dali_web_start()
 {
-  DALI_ASSERT_ALWAYS(emscripten_is_main_runtime_thread());
+  DALI_ASSERT_ALWAYS(Dali::Web::IsEventOwner());
   if(Dali::Web::executionStarted)
   {
     NotifyStatus("failure", "new execution instance required"); return;

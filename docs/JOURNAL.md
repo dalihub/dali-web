@@ -207,3 +207,22 @@ production-003 Core 333단계·생산/host35 compile/nm·기본 strict 링크 �
 ## 2026-11-06 P3 GPU 메모리 결과 커밋·push 준비
 
 사용자 요청에 따라 코드·검사·작은 증거·인계 문서를 한 커밋으로 정리했다. origin/main 읽기 조회는 시작 HEAD04a686e9와 일치했다. 최종 생산 입력499개 hash drift0, 직접 헤더/SW 메모리·shader/reflection 실패·계측 없는 생산 실행의 저장된 판정5개 통과, git diff --check를 확인했다. 생산 소스 변경이 없어 빌드/runtime 검사는 반복하지 않았다. SDK·산출물·프로필·큰 로그는 커밋에서 제외한다. push 완료 여부는 원격 SHA와 로컬 HEAD를 비교해 확인한다.
+
+
+## 2026-11-06 P3/P4 이벤트 Worker 조기 검사·실패 게이트 중단
+
+2026-11-06 최신: [P3/P4 이벤트 Worker 시작 검사](P3-EVENT-WORKER-RESULTS.md), [증거](evidence/p3-event-worker/README.md). 시작 HEAD와 실제 origin/main은 `c98c04796b0b5ebe3c0029a6e37260bd13d6ffb6`, clean이었다. 아래 과거 미커밋 설명보다 이 확인을 우선한다. 기본 E는 동일3.1.24 생산 산출물로 ready→stopped 재통과. dedicated Worker를 event/main-runtime owner로 삼는 C 시작 후보는 pthread/Canvas 전달 실패(exit1), Core 생성 전에 중단했다. **P3 진행 중·C 격리 게이트 미통과.** TLS/이벤트 소유권은 정적 감사만 수행했고 무한 루프 main 응답성·전체 pthread/Canvas 회수·새 인스턴스 재생성은 미검증이다. P1 중단 조건에 따라 D3 확장 방향 결정 전 우회 구현을 하지 않는다. app event pthread + window 종료 감독 방식과 SDK Canvas adapter 대안은 결과 문서의 제안이며 승인/작업큐 등록이 아니다. 이번 변경은 테스트 fixture·문서·작은 증거뿐이며 commit/push·배포 없음. 보존748개·생산499개·runtime3개 hash drift0.
+
+특이 사항: 첫 fixture는 mainScriptUrlOrBlob 누락으로 nested pthread loader에서 실패했다. 명시 URL 설정 후 실제 Canvas 전달 실패를 확인했다. 이미 전송된 OffscreenCanvas에 DOM transferControlToOffscreen을 요구하는3.1.24 분기가 원인이다. 브라우저 OffscreenCanvas 자체 미지원으로 판정하지 않는다. SDK/host/public 변경·GL proxy 전환은 하지 않았다. 결과와 남은 개별 게이트를 STATE·HANDOFF·PLAN·NEXT-CONTEXT에 갱신했다. 기본 E의 기존 결과는 유효하며 P3 전체 완료로 확대하지 않는다.
+
+
+## 2026-11-06 app 이벤트 pthread C 구현·검증
+
+2026-11-06 후속 구현: 사용자가 app 이벤트 pthread + window 종료 감독 방식의 구현을 승인했다. [C 조기 검사 결과](P3-EVENT-PTHREAD-RESULTS.md), [증거](evidence/p3-event-pthread/README.md). 기본OFF 독립 C target을 추가하고 기본 E를 유지했다. 새 전체 CMake371단계 빌드0, Firefox 직접 헤더/SW 각각 정상→초기화 무한 루프→timer callback 무한 루프→새 정상 실행4회 행렬 통과. Core/TLS·입력/key signal·timer/trigger 소유권, 실제 픽셀, 무한 루프 중 main heartbeat, 소속2개 pthread counter 정지·Canvas 제거·새 Module/Canvas 렌더를 확인했다. E 픽셀 및 계측 없는 E 정상 종료 회귀도 통과. **C 조기 검사 단위 완료·P3 진행 중.** 강제 종료의 C++/GL 정상 소멸, GPU 메모리 즉시 회수·장기 누수·전체 Adaptor·Chromium 지원까지 선언하지 않는다. 이전 dedicated Worker 중단은 아래 역사 기록이며 현재 승인 대기가 아니다. 다음은 SW 후속 정책/P4 남은 게이트다. 기존748개 보존 drift0, 공통/public·SDK·lock 변경 없음. commit/push·배포 없음.
+
+특이 사항: 테스트 EM_JS export wrapper 누락과 계측 없는 E 검사의 nm 실행 파일 선택 오류를 수정하고 실패 로그를 보존했다. 최종 C는 새 전체 CMake 산출물, 계측 없는 E는 새002 경로를 사용한다. native 소스 집합/Web closure는 통과했으며 공통/native 소스 변경이 없어 native 전체 build/runtime은 재실행하지 않았다. 강제 종료는 멈춘 runtime의 allocator를 호출하지 않고 Worker 전체를 종료한 뒤 Module을 버린다. 이 단위의 정상 context 폐기와 강제 중단/재생성 성공을 장기 자원 누수 없음으로 확대하지 않는다.
+
+
+## 2026-11-06 C 격리 검사 커밋·push 인계
+
+사용자 요청으로 기존 dedicated Worker 실패 재현과 승인 후 app 이벤트 pthread 구현·검증·작은 증거를 한 커밋으로 정리한다. 저장된 최종 Firefox 직접 헤더/SW C 행렬, E 픽셀/계측 없는 E 판정과 입력 hash·문서 검사를 확인한다. 코드 변경이 없어 빌드/runtime 검사는 반복하지 않는다. SDK·산출물·프로필·대형 로그는 제외한다. push 완료는 실제 원격 SHA와 커밋 후 HEAD를 비교해 최종 채팅 인계에 보고한다.

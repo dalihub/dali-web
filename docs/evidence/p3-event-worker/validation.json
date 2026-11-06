@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-06",
+  "startHead": "c98c04796b0b5ebe3c0029a6e37260bd13d6ffb6",
+  "startStatus": "clean",
+  "origin": "https://github.com/dalihub/dali-web.git",
+  "observedOriginMain": "c98c04796b0b5ebe3c0029a6e37260bd13d6ffb6",
+  "checks": {
+    "production": {
+      "count": 499,
+      "drift": []
+    },
+    "preserved": {
+      "count": 748,
+      "drift": []
+    },
+    "runtime": {
+      "count": 3,
+      "drift": []
+    }
+  },
+  "exitCodes": {
+    "e-baseline": 0,
+    "c-fixture-error": 1,
+    "c-startup": 1
+  },
+  "cGate": "blocked-before-core-creation",
+  "fullTeardownVerified": false,
+  "infiniteLoopTested": false,
+  "recreationTested": false,
+  "nativeRetested": false,
+  "staticValidation": {
+    "pythonAndJavaScriptSyntax": "passed",
+    "evidenceJson": "passed",
+    "documentLinks": "passed",
+    "gitDiffCheck": "passed"
+  }
+}

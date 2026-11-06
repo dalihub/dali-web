@@ -1,0 +1,34 @@
+[
+  {
+    "name": "configure",
+    "argv": [
+      "${DALI_WEB_ROOT}/tools/emsdk-3.1.24/upstream/emscripten/emcmake",
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "-S",
+      "cmake/web",
+      "-B",
+      "build/p3/event-pthread-cmake-001",
+      "-G",
+      "Ninja",
+      "-DCMAKE_BUILD_TYPE=Debug",
+      "-DCMAKE_MAKE_PROGRAM=${DALI_WEB_HOST_TOOLS}/bin/ninja",
+      "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "-DDALI_WEB_TEST_EVENT_PTHREAD=ON",
+      "-DDALI_WEB_TEST_READBACK=ON"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "build",
+    "argv": [
+      "${DALI_WEB_HOST_TOOLS}/bin/cmake",
+      "--build",
+      "build/p3/event-pthread-cmake-001",
+      "--target",
+      "dali-web",
+      "dali-web-event-probe",
+      "-j6"
+    ],
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,283 @@
+{
+  "done": true,
+  "errors": [],
+  "runs": [
+    {
+      "id": 1,
+      "mode": 0,
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "errors": [],
+      "clicks": 1,
+      "lateMessages": 1,
+      "workersBefore": 2,
+      "terminatedWorkers": 2,
+      "canvasRemoved": true,
+      "countersStable": true,
+      "state": [
+        0,
+        5502080,
+        7602056,
+        1,
+        1,
+        1,
+        1,
+        23,
+        26,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        428,
+        1,
+        0,
+        65,
+        237656
+      ],
+      "eventOwner": 5502080,
+      "renderOwner": 7602056,
+      "passed": true
+    },
+    {
+      "id": 2,
+      "mode": 1,
+      "events": [],
+      "pixels": [],
+      "errors": [],
+      "clicks": 1,
+      "lateMessages": 1,
+      "hang": {
+        "heartbeatDelta": 30,
+        "spinChanged": true,
+        "renderChanged": true
+      },
+      "workersBefore": 2,
+      "terminatedWorkers": 2,
+      "canvasRemoved": true,
+      "countersStable": true,
+      "state": [
+        1,
+        5502080,
+        7602056,
+        1,
+        0,
+        0,
+        0,
+        1,
+        148,
+        1,
+        77761503,
+        0,
+        0,
+        0,
+        0,
+        1682,
+        1,
+        0,
+        0,
+        237656
+      ],
+      "eventOwner": 5502080,
+      "renderOwner": 7602056,
+      "passed": true
+    },
+    {
+      "id": 3,
+      "mode": 2,
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "errors": [],
+      "clicks": 1,
+      "lateMessages": 1,
+      "hang": {
+        "heartbeatDelta": 29,
+        "spinChanged": true,
+        "renderChanged": true
+      },
+      "workersBefore": 2,
+      "terminatedWorkers": 2,
+      "canvasRemoved": true,
+      "countersStable": true,
+      "state": [
+        2,
+        5502080,
+        7602056,
+        1,
+        0,
+        1,
+        1,
+        11,
+        168,
+        1,
+        79160050,
+        0,
+        0,
+        0,
+        0,
+        3021,
+        1,
+        0,
+        65,
+        237656
+      ],
+      "eventOwner": 5502080,
+      "renderOwner": 7602056,
+      "passed": true
+    },
+    {
+      "id": 4,
+      "mode": 0,
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "errors": [],
+      "clicks": 1,
+      "lateMessages": 1,
+      "workersBefore": 2,
+      "terminatedWorkers": 2,
+      "canvasRemoved": true,
+      "countersStable": true,
+      "state": [
+        0,
+        5502080,
+        7602056,
+        1,
+        1,
+        1,
+        1,
+        15,
+        24,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        3813,
+        1,
+        0,
+        65,
+        237656
+      ],
+      "eventOwner": 5502080,
+      "renderOwner": 7602056,
+      "passed": true
+    }
+  ],
+  "freshMemory": true,
+  "isolation": true,
+  "controlled": false,
+  "firstIsolation": null,
+  "staleMessageRejected": true
+}

@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "eventWorkerStartupOnly": false,
+  "eventPthreadMatrix": true,
+  "pixelsRequired": false,
+  "memoryRequired": false,
+  "expectedFailure": null,
+  "mode": "sw"
+}

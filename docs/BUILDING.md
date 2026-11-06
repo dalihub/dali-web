@@ -52,6 +52,31 @@ DALI_WEB_RUN_DIR="$PWD/logs/p3/new-memory-reflection" python3 tests/browser/chec
 
 failure 모드는 같은 테스트 빌드에서 실제 malformed shader 또는 reflection 도중 invalid GL enum을 발생시킨다. GL 반환값을 주입하지 않는다. 정상 오류 진단은 남기며 ready→failure→stopped 및 trap 없음으로 판정한다. production 빌드는 `DALI_WEB_TEST_MEMORY=OFF`, `DALI_WEB_TEST_READBACK=OFF`로 별도 새 경로에서 실행한다. [실행 결과와 native 한계](P3-GPU-MEMORY-RESULTS.md).
 
+## P3/P4 독립 C 이벤트 pthread 검사
+
+사용자 승인 후 [app 이벤트 pthread + window 감독 구성](P3-EVENT-PTHREAD-RESULTS.md)의 조기 행렬을 완료했다. 기본 E는 유지하며 C는 기본OFF 테스트 target이다. 먼저 위3.1.24 환경을 선택하고 새 경로를 사용한다.
+
+```sh
+export DALI_WEB_C_BUILD="$PWD/build/p3/new-event-pthread"
+"$EMCMAKE" "$CMAKE" -S cmake/web -B "$DALI_WEB_C_BUILD" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM="$NINJA" \
+  -DDALI_WEB_TEST_EVENT_PTHREAD=ON -DDALI_WEB_TEST_READBACK=ON
+"$CMAKE" --build "$DALI_WEB_C_BUILD" --target dali-web dali-web-event-probe -j6
+DALI_WEB_BUILD_DIR="$DALI_WEB_C_BUILD/event-probe" \
+  DALI_WEB_RUN_DIR="$PWD/logs/p3/new-c-headers" \
+  python3 tests/browser/check-production.py headers --event-pthread
+DALI_WEB_BUILD_DIR="$DALI_WEB_C_BUILD/event-probe" \
+  DALI_WEB_RUN_DIR="$PWD/logs/p3/new-c-sw" \
+  python3 tests/browser/check-production.py sw --event-pthread
+DALI_WEB_BUILD_DIR="$DALI_WEB_C_BUILD" \
+  DALI_WEB_RUN_DIR="$PWD/logs/p3/new-e-regression" \
+  python3 tests/browser/check-production.py headers --pixels
+```
+
+C 행렬은 정상→초기화 무한 루프→timer callback 무한 루프→새 정상 실행이다. 실제 픽셀·TLS/입력 signal·main heartbeat·소속2개 pthread counter 정지와 Canvas 제거·새 Module 렌더를 판정한다. 강제 종료는 소멸자 실행/브라우저 GPU 메모리 회수 보장이 아니다. [증거와 제한](evidence/p3-event-pthread/README.md)을 따른다.
+
+`scripts/check-event-pthread.py`는 기존 검증된3.1.24 production 명령/입력 hash를 `DALI_WEB_PRODUCTION_COMMANDS`와 `DALI_WEB_PRODUCTION_HASHES`로 지정해 renderer/Core 객체를 재사용하는 로컬 진단 보조 도구다. 새 clone은 위 전체 CMake 경로를 사용한다. 기존 일반 dedicated Worker 시작 진단 `--event-worker`의 [Canvas 실패 기록](P3-EVENT-WORKER-RESULTS.md)은 보존하며 새 C 구성과 구별한다.
+
 ## 과거 R2 재현 도구 준비 (6.0.13)
 
 검증 버전은 `toolchain.lock.json`에 기록합니다: Emscripten 6.0.13, SDK Node 24.19.0, CMake 3.22.1, Ninja 1.10.1, Python 3.10.12. 이 파일은 재현 기준이며 스크립트가 다른 버전 설치를 자동 변경하거나 거부하지는 않습니다. 실제 사용 버전은 실행 로그에서 확인합니다. 3.1.24의 추가 검증 범위는 위 정렬 결과를 따릅니다. 다른 플랫폼은 미검증입니다.

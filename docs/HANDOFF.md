@@ -1,5 +1,14 @@
 # P2 생산 링크 이후 인수인계
 
+2026-11-06 커밋 인계: 사용자 요청으로 C 격리 검사 코드·작은 증거·문서를 함께 커밋한다. 아래 “미커밋/commit·push 없음”은 각 검사 종료 시점 기록이다. 재개 시 이 문서를 포함한 실제 HEAD/status와 origin/main을 확인하며 최종 채팅 인계의 push 확인 결과를 우선한다.
+
+
+2026-11-06 후속 구현: 사용자가 app 이벤트 pthread + window 종료 감독 방식의 구현을 승인했다. [C 조기 검사 결과](P3-EVENT-PTHREAD-RESULTS.md), [증거](evidence/p3-event-pthread/README.md). 기본OFF 독립 C target을 추가하고 기본 E를 유지했다. 새 전체 CMake371단계 빌드0, Firefox 직접 헤더/SW 각각 정상→초기화 무한 루프→timer callback 무한 루프→새 정상 실행4회 행렬 통과. Core/TLS·입력/key signal·timer/trigger 소유권, 실제 픽셀, 무한 루프 중 main heartbeat, 소속2개 pthread counter 정지·Canvas 제거·새 Module/Canvas 렌더를 확인했다. E 픽셀 및 계측 없는 E 정상 종료 회귀도 통과. **C 조기 검사 단위 완료·P3 진행 중.** 강제 종료의 C++/GL 정상 소멸, GPU 메모리 즉시 회수·장기 누수·전체 Adaptor·Chromium 지원까지 선언하지 않는다. 이전 dedicated Worker 중단은 아래 역사 기록이며 현재 승인 대기가 아니다. 다음은 SW 후속 정책/P4 남은 게이트다. 기존748개 보존 drift0, 공통/public·SDK·lock 변경 없음. commit/push·배포 없음.
+
+
+2026-11-06 최신: [P3/P4 이벤트 Worker 시작 검사](P3-EVENT-WORKER-RESULTS.md), [증거](evidence/p3-event-worker/README.md). 시작 HEAD와 실제 origin/main은 `c98c04796b0b5ebe3c0029a6e37260bd13d6ffb6`, clean이었다. 아래 과거 미커밋 설명보다 이 확인을 우선한다. 기본 E는 동일3.1.24 생산 산출물로 ready→stopped 재통과. dedicated Worker를 event/main-runtime owner로 삼는 C 시작 후보는 pthread/Canvas 전달 실패(exit1), Core 생성 전에 중단했다. **P3 진행 중·C 격리 게이트 미통과.** TLS/이벤트 소유권은 정적 감사만 수행했고 무한 루프 main 응답성·전체 pthread/Canvas 회수·새 인스턴스 재생성은 미검증이다. P1 중단 조건에 따라 D3 확장 방향 결정 전 우회 구현을 하지 않는다. app event pthread + window 종료 감독 방식과 SDK Canvas adapter 대안은 결과 문서의 제안이며 승인/작업큐 등록이 아니다. 이번 변경은 테스트 fixture·문서·작은 증거뿐이며 commit/push·배포 없음. 보존748개·생산499개·runtime3개 hash drift0.
+
+
 2026-11-06 인계: P3 GPU 메모리 코드·검사·증거와 이 문서를 함께 커밋한다. 아래의 “이번 변경은 미커밋”은 11월5일 작업 종료 시점 기록이며, 재개할 때 실제 HEAD/status/origin main을 확인한다.
 
 2026-11-05 최신 결과: [P3 GPU 메모리·reflection 후속](P3-GPU-MEMORY-RESULTS.md), [증거](evidence/p3-gpu-memory/README.md). 직접 헤더/SW 각각 실제 두 프레임115개 검사(46개 GPU buffer/uniform readback)·GL error0·ready→stopped. callback0/부분/전체·중간4-byte 보존·nonzero map/lock·CPU/GPU uniform·grow/recycle·detach/참조 해제 검증 완료. reflection GL 오류의 Wasm trap을 수정하고 shader/GL 실패의 failure→stopped를 확인했다. **P3 진행 중**: 이벤트 Worker 격리 조기 게이트, SW 후속 정책, 전체 종료/재생성, 별도 승인 Pages는 유지한다.
