@@ -35,6 +35,23 @@ python3 tests/browser/check-production.py sw --pixels
 
 Firefox/geckodriver와 loopback 소켓 실행 권한이 필요하다. `/probe/` 하위 경로에서 테스트하며 각 실행은 별도 프로필, 입력 hash, 상태·픽셀 JSON과 실제 판정을 남긴다. SW는 검사 전용 헤더 부여 구현이고 운영 캐시 정책이 아니다. CPU18/5 검사는 DALI_WEB_CORE_BUILD_DIR에 같은 SDK의 생산 빌드 경로를 지정하고 각각 새 build/run 경로에서 check-web-buffer-controller.py/check-web-gl.py를 실행한다. Node 전용 테스트 링크는 EXIT_RUNTIME=1로 pthread pool 종료를 명시한다.
 
+## P3 GPU 메모리 후속 재현
+
+위3.1.24 환경 선택 후 기존 경로를 덮어쓰지 않는 새 경로를 사용한다. `DALI_WEB_TEST_MEMORY`는 기본OFF이며 ON이면 두 프레임 readback도 함께 활성화된다. 실제 Controller/Core 업로드·GPU buffer/uniform readback·참조 수명을 검사한다.
+
+```sh
+export DALI_WEB_BUILD_DIR="$PWD/build/p3/new-memory"
+export DALI_WEB_RUN_DIR="$PWD/logs/p3/new-memory"
+export DALI_WEB_TEST_MEMORY=ON
+python3 scripts/check-web-production.py
+DALI_WEB_RUN_DIR="$PWD/logs/p3/new-memory-headers" python3 tests/browser/check-production.py headers --memory
+DALI_WEB_RUN_DIR="$PWD/logs/p3/new-memory-sw" python3 tests/browser/check-production.py sw --memory
+DALI_WEB_RUN_DIR="$PWD/logs/p3/new-memory-shader" python3 tests/browser/check-production.py headers --failure shader
+DALI_WEB_RUN_DIR="$PWD/logs/p3/new-memory-reflection" python3 tests/browser/check-production.py headers --failure reflection
+```
+
+failure 모드는 같은 테스트 빌드에서 실제 malformed shader 또는 reflection 도중 invalid GL enum을 발생시킨다. GL 반환값을 주입하지 않는다. 정상 오류 진단은 남기며 ready→failure→stopped 및 trap 없음으로 판정한다. production 빌드는 `DALI_WEB_TEST_MEMORY=OFF`, `DALI_WEB_TEST_READBACK=OFF`로 별도 새 경로에서 실행한다. [실행 결과와 native 한계](P3-GPU-MEMORY-RESULTS.md).
+
 ## 과거 R2 재현 도구 준비 (6.0.13)
 
 검증 버전은 `toolchain.lock.json`에 기록합니다: Emscripten 6.0.13, SDK Node 24.19.0, CMake 3.22.1, Ninja 1.10.1, Python 3.10.12. 이 파일은 재현 기준이며 스크립트가 다른 버전 설치를 자동 변경하거나 거부하지는 않습니다. 실제 사용 버전은 실행 로그에서 확인합니다. 3.1.24의 추가 검증 범위는 위 정렬 결과를 따릅니다. 다른 플랫폼은 미검증입니다.

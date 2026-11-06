@@ -1,5 +1,13 @@
 # P2 생산 링크 이후 인수인계
 
+2026-11-06 인계: P3 GPU 메모리 코드·검사·증거와 이 문서를 함께 커밋한다. 아래의 “이번 변경은 미커밋”은 11월5일 작업 종료 시점 기록이며, 재개할 때 실제 HEAD/status/origin main을 확인한다.
+
+2026-11-05 최신 결과: [P3 GPU 메모리·reflection 후속](P3-GPU-MEMORY-RESULTS.md), [증거](evidence/p3-gpu-memory/README.md). 직접 헤더/SW 각각 실제 두 프레임115개 검사(46개 GPU buffer/uniform readback)·GL error0·ready→stopped. callback0/부분/전체·중간4-byte 보존·nonzero map/lock·CPU/GPU uniform·grow/recycle·detach/참조 해제 검증 완료. reflection GL 오류의 Wasm trap을 수정하고 shader/GL 실패의 failure→stopped를 확인했다. **P3 진행 중**: 이벤트 Worker 격리 조기 게이트, SW 후속 정책, 전체 종료/재생성, 별도 승인 Pages는 유지한다.
+
+시작 HEAD 및 origin/main은 `04a686e9ac70c6a380ff045ed635723f8861d108`, clean이었다. 이번 변경은 미커밋이며 commit/push·배포 없음. 최종 생산은 `build/p3/gpu-memory-final-002`(Core는 새 `gpu-memory-final-001`의 동일3.1.24 archive·Core 입력 drift0), 계측 없는 host는 `production-memory-final-001`이다. native configure3개·관련14개 실제 GNU C++ 및 Emscripten compile/nm은 통과했지만 전체 native 빌드는 설치된 Core 헤더 부재로3개 실패1, native runtime 미검증이다. 과거 compiler 부재 기록과 구별한다.
+
+이하 날짜가 이전인 미커밋·미push·최초 렌더 미검증 설명은 당시 기록이다. 현재 판정은 위 결과를 우선한다.
+
 2026-10-26 후속 구현: [P3 최초 실제 렌더링 결과](P3-INITIAL-RESULTS.md). 별도 3.1.24 lock/명시 도구 선택, CPU18/5 재검증 완료. Web uniform 이름 길이 조회와 Core CPU uniform persistent mapping 재사용을 수정했다. 실제 Firefox pthread에서 직접 헤더/SW 모두 사각형·배경 두 프레임 픽셀/GL error0 및 ready→stopped를 확인했다. **P3 진행 중**: GPU 부분 갱신·callback·offset·grow/recycle·수명 종합 검사, 이벤트 Worker 격리, SW 후속 정책, Pages·전체 종료/재생성은 남는다. 최종 빌드 build/p3/pixels-3124-002와 docs/evidence/p3-initial을 따른다. 기존 lock/산출물 보존, commit/push/배포 없음.
 
 이하 과거 checkpoint 설명은 위 최신 결과와 함께 읽는다.

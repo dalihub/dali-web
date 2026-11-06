@@ -231,12 +231,16 @@ void Reflection::BuildVertexAttributeReflection()
 {
   auto glProgram = mProgram.GetGlProgram();
 
-  int    written, size, location, maxLength, nAttribs;
-  GLenum type;
+  int written = 0;
+  int size = 0;
+  int location = -1;
+  int maxLength = 0;
+  int nAttribs = 0;
+  GLenum type = 0;
   char*  name;
 
   auto* gl = mController.GetGL();
-  if(DALI_UNLIKELY(!gl))
+  if(DALI_UNLIKELY(!gl) || !mController.CanSubmit())
   {
     // Do nothing during shutdown
     return;
@@ -246,6 +250,7 @@ void Reflection::BuildVertexAttributeReflection()
 
   gl->GetProgramiv(glProgram, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &maxLength);
   gl->GetProgramiv(glProgram, GL_ACTIVE_ATTRIBUTES, &nAttribs);
+  if(!mController.CanSubmit()) return;
 
   mVertexInputAttributes.clear();
   mVertexInputAttributes.resize(nAttribs);
@@ -257,6 +262,12 @@ void Reflection::BuildVertexAttributeReflection()
   {
     gl->GetActiveAttrib(glProgram, i, maxLength, &written, &size, &type, name);
     location = gl->GetAttribLocation(glProgram, name);
+    if(!mController.CanSubmit())
+    {
+      delete[] name;
+      mVertexInputAttributes.clear();
+      return;
+    }
 
     if(location >= 0)
     {
@@ -281,7 +292,7 @@ void Reflection::BuildVertexAttributeReflection()
 void Reflection::BuildUniformBlockReflection()
 {
   auto* gl = mController.GetGL();
-  if(DALI_UNLIKELY(!gl))
+  if(DALI_UNLIKELY(!gl) || !mController.CanSubmit())
   {
     // Do nothing during shutdown
     return;
@@ -293,11 +304,12 @@ void Reflection::BuildUniformBlockReflection()
 
   DALI_LOG_INFO(gGraphicsReflectionLogFilter, Debug::General, "Build uniform block reflection for glProgram : %u\n", glProgram);
 
-  int   maxUniformNameLength;
+  int maxUniformNameLength = 0;
   GLint activeUniformCount = 0;
   gl->GetProgramiv(glProgram, GL_ACTIVE_UNIFORM_BLOCKS, &numUniformBlocks);
   gl->GetProgramiv(glProgram, GL_ACTIVE_UNIFORMS, &activeUniformCount);
   gl->GetProgramiv(glProgram, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxUniformNameLength);
+  if(!mController.CanSubmit()) return;
 
   numUniformBlocks++; // add block 0 for standalone UBO block
 
@@ -329,6 +341,13 @@ void Reflection::BuildUniformBlockReflection()
   auto activeUniformOffset       = getActiveUniformParams(GL_UNIFORM_OFFSET);
   auto activeUniformArrayStride  = getActiveUniformParams(GL_UNIFORM_ARRAY_STRIDE);
   auto activeUniformMatrixStride = getActiveUniformParams(GL_UNIFORM_MATRIX_STRIDE);
+  // A fail-stop wrapper may skip later queries. Their zero-filled outputs
+  // are not valid block indices or lengths and must never be interpreted.
+  if(!mController.CanSubmit())
+  {
+    mUniformBlocks.clear();
+    return;
+  }
   // Extract only uniform blocks and collect data
   // collect samplers into separate array
   std::vector<UniformInfo> samplers;
@@ -337,12 +356,18 @@ void Reflection::BuildUniformBlockReflection()
 
   for(auto i = 0u; i < activeUniformBlockIndex.size(); ++i)
   {
-    GLenum type;
-    GLint  elementCount;
-    GLint  written;
+    GLenum type = 0;
+    GLint elementCount = 0;
+    GLint written = 0;
     gl->GetActiveUniform(glProgram, i, maxUniformNameLength, &written, &elementCount, &type, name);
 
     auto location = gl->GetUniformLocation(glProgram, name);
+    if(!mController.CanSubmit())
+    {
+      delete[] name;
+      mUniformBlocks.clear();
+      return;
+    }
 
     UniformInfo* uniformInfo{nullptr};
     if(IsSampler(activeUniformType[i]))
@@ -392,13 +417,24 @@ void Reflection::BuildUniformBlockReflection()
 
     if(blockIndex > 0)
     {
-      GLint uboSize;
-      GLint blockNameLength;
+      GLint uboSize = 0;
+      GLint blockNameLength = 0;
       gl->GetActiveUniformBlockiv(glProgram, blockIndex - 1, GL_UNIFORM_BLOCK_DATA_SIZE, &uboSize);
       gl->GetActiveUniformBlockiv(glProgram, blockIndex - 1, GL_UNIFORM_BLOCK_NAME_LENGTH, &blockNameLength);
 
+      if(!mController.CanSubmit())
+      {
+        mUniformBlocks.clear();
+        return;
+      }
       char* blockName = new char[blockNameLength];
       gl->GetActiveUniformBlockName(glProgram, blockIndex - 1, blockNameLength, nullptr, blockName);
+      if(!mController.CanSubmit())
+      {
+        delete[] blockName;
+        mUniformBlocks.clear();
+        return;
+      }
       ubo.name    = blockName;
       ubo.size    = uboSize;
       ubo.binding = blockIndex - 1;

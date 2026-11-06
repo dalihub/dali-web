@@ -1,0 +1,21 @@
+{
+  "events": [
+    {
+      "state": "ready",
+      "reason": null
+    }
+  ],
+  "pixels": [],
+  "memory": [],
+  "errors": [
+    "web-gles-failure.cpp: Latch(44) > Web GLES stopped: GL operation failed",
+    "Pthread 0x0053f770 sent an error! http://127.0.0.1:35871/probe/runtime/dali-web.wasm:67656: RuntimeError: index out of bounds",
+    "uncaught exception: [object ErrorEvent]",
+    "RuntimeError: index out of bounds"
+  ],
+  "done": false,
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "sharedMemory": true
+}

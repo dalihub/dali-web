@@ -1,5 +1,5 @@
 // Local P3 fixture. No compiler service or external resources.
-window.productionResult = {events: [], pixels: [], errors: [], done: false};
+window.productionResult = {events: [], pixels: [], memory: [], errors: [], done: false};
 const result = window.productionResult;
 addEventListener('error', event => result.errors.push(event.message));
 addEventListener('unhandledrejection', event => result.errors.push(String(event.reason)));
@@ -53,10 +53,12 @@ addEventListener('unhandledrejection', event => result.errors.push(String(event.
       document.head.append(script);
     });
     const module = await createDaliWeb({
+      daliProbeMode: Number(new URLSearchParams(location.search).get('failure') || 0),
       canvas: document.querySelector('#canvas'),
       locateFile: name => new URL('./runtime/' + name, location.href).href,
       printErr: line => result.errors.push(String(line)),
       onDaliPixels: frame => result.pixels.push(frame),
+      onDaliMemory: check => result.memory.push(check),
       onAbort: reason => { result.errors.push(String(reason)); result.done = true; },
       onDaliStatus: event => {
         result.events.push(event);

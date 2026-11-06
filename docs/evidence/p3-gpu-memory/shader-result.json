@@ -1,0 +1,36 @@
+{
+  "events": [
+    {
+      "state": "ready",
+      "reason": null
+    },
+    {
+      "state": "failure",
+      "reason": "GL operation failed"
+    },
+    {
+      "state": "stopped",
+      "reason": null
+    }
+  ],
+  "pixels": [],
+  "memory": [],
+  "errors": [
+    "gles-graphics-shader.cpp: Compile(158) > Code: ",
+    "   1  precision mediump float; void main(){ invalid shader; }",
+    "",
+    "gles-graphics-shader.cpp: Compile(159) > glCompileShader() failed: ",
+    "ERROR: 0:1: 'invalid' : undeclared identifier",
+    "ERROR: 0:1: 'shader' : syntax error",
+    "",
+    "gles-graphics-program.cpp: Create(329) > glLinkProgram[] failed:",
+    "Must have a compiled fragment shader attached: Missing shader.",
+    "pipeline-cache.cpp: GetPipelineCacheL0(253) > Attribute not found in the shader: aPosition",
+    "web-gles-failure.cpp: Latch(44) > Web GLES stopped: GL operation failed"
+  ],
+  "done": true,
+  "isolation": true,
+  "firstIsolation": null,
+  "controlled": false,
+  "sharedMemory": true
+}

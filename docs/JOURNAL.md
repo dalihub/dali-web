@@ -191,3 +191,19 @@ production-003 Core 333단계·생산/host35 compile/nm·기본 strict 링크 �
 2026-10-26 후속 구현: [P3 최초 실제 렌더링 결과](P3-INITIAL-RESULTS.md). 별도 3.1.24 lock/명시 도구 선택, CPU18/5 재검증 완료. Web uniform 이름 길이 조회와 Core CPU uniform persistent mapping 재사용을 수정했다. 실제 Firefox pthread에서 직접 헤더/SW 모두 사각형·배경 두 프레임 픽셀/GL error0 및 ready→stopped를 확인했다. **P3 진행 중**: GPU 부분 갱신·callback·offset·grow/recycle·수명 종합 검사, 이벤트 Worker 격리, SW 후속 정책, Pages·전체 종료/재생성은 남는다. 최종 빌드 build/p3/pixels-3124-002와 docs/evidence/p3-initial을 따른다. 기존 lock/산출물 보존, commit/push/배포 없음.
 
 특이 사항: Node 종료 옵션 누락, WebGL 미지원 이름 길이 조회 후 reflection trap, Core CPU uniform 중복 lock을 재현·수정했다. native configure는 compiler 부재로 실패하고13개 교차 compile/nm은 통과했다. 실패/중간 빌드를 보존하고 최종 소스는 새 빌드로 고정했다. [상세 검증·미검증 범위](P3-INITIAL-RESULTS.md).
+
+
+## 2026-11-05 P3 GPU 메모리·reflection 실패 후속
+
+[구현·검증·특이 사항·미검증](P3-GPU-MEMORY-RESULTS.md), [증거](evidence/p3-gpu-memory/README.md). 시작 HEAD/origin main04a686e9 일치·clean 확인. 승인된3.1.24 profile/lock·서버 없는 컴파일 방향 유지.
+
+- 구현: 기본OFF 실제 생산 GPU 메모리 probe와 browser 판정 추가. GL 조회 실패 후 reflection이 결과를 사용하던 trap을 기존 CanSubmit gate로 수정. 공개 Graphics API·native Memory2/3·native retry 유지.
+- 검증: 직접 헤더/SW 각각 두 프레임115개 검사·GPU46개 readback 일치·GL error0. 실제 scene CPU uniform 색 변화. shader/GL 실패 각각 ready→failure→stopped, 계측 없는 생산 host도 오류 없이 stopped. 최종499개 입력 drift0, 보존748개 변경0.
+- 특이 사항: reflection 수정 전 trap·stopped 없음 재현. custom allocator는 기존 factory상 새 객체 생성이므로 일반 allocator recycle과 별도로 검사. 테스트 compile 오류·중간 hash drift 결과는 보존하고 최종35개 생산 객체를 새 경로에서 다시 컴파일했다.
+- native: 현재 GNU11.4가 있어 configure3개·관련14개 native compile/nm0, 같은14개 Emscripten compile/nm0. 전체3개 native build는 설치된 Core 헤더 부재로1, runtime 미검증. 과거 compiler 부재와 다른 현재 장애다.
+- 상태: GPU 메모리/재현 실패 단위 완료, P3 진행 중. 이벤트 Worker 격리·SW 후속 정책·P4 종료 전 무한 루프 응답성과 전체 pthread/Canvas 종료/재생성·별도 승인 Pages 유지. 정상 stopped로 전체 회수나 격리를 완료 처리하지 않는다. commit/push·upstream 갱신·운영 서버·배포 없음. 로컬 검증 프로세스는 종료했다.
+
+
+## 2026-11-06 P3 GPU 메모리 결과 커밋·push 준비
+
+사용자 요청에 따라 코드·검사·작은 증거·인계 문서를 한 커밋으로 정리했다. origin/main 읽기 조회는 시작 HEAD04a686e9와 일치했다. 최종 생산 입력499개 hash drift0, 직접 헤더/SW 메모리·shader/reflection 실패·계측 없는 생산 실행의 저장된 판정5개 통과, git diff --check를 확인했다. 생산 소스 변경이 없어 빌드/runtime 검사는 반복하지 않았다. SDK·산출물·프로필·큰 로그는 커밋에서 제외한다. push 완료 여부는 원격 SHA와 로컬 HEAD를 비교해 확인한다.

@@ -14,6 +14,9 @@
 #include <map>
 #include <memory>
 #include <new>
+#ifdef DALI_WEB_TEST_MEMORY
+#include "web-memory-probe.h"
+#endif
 #ifdef DALI_WEB_TEST_READBACK
 #include <GLES3/gl3.h>
 #endif
@@ -143,7 +146,13 @@ class Host : public Integration::RenderController
   enum class Command { None, Frame, Shutdown, Exit };
   enum class Reply { None, Ready, FrameDone, ResourcesStopped, Exited };
 public:
-  Host() : mSurface(mController), mGraphics(mController, mGl, mSurface) {}
+  Host() : mSurface(mController), mGraphics(mController, mGl, mSurface)
+  {
+#ifdef DALI_WEB_TEST_MEMORY
+    mTestMode = ProbeMode();
+    mGl.mode = mTestMode;
+#endif
+  }
   void RequestUpdate() override
   {
     mNeedsEvents = true;
@@ -226,6 +235,9 @@ private:
         Integration::UpdateStatus update;
         self.mCore->Update(0, 0, 0, update, false, false, false);
         self.mCore->Update(0, 0, 0, update, false, false, false);
+        #ifdef DALI_WEB_TEST_MEMORY
+        self.mMemoryProbe.Clear();
+#endif
         self.mCore->ContextDestroyed();
       }
       if(self.mGraphicsInitialized) self.mGraphics.Shutdown();
@@ -263,7 +275,14 @@ private:
     geometry.AddVertexBuffer(vertices);
     geometry.SetType(Geometry::TRIANGLE_STRIP);
     auto shader = Shader::New("attribute vec2 aPosition; uniform mat4 uMvpMatrix; uniform vec3 uSize; void main(){gl_Position=uMvpMatrix*vec4(aPosition*uSize.xy,0.0,1.0);}",
+      #ifdef DALI_WEB_TEST_MEMORY
+      mTestMode == 1 ? "precision mediump float; void main(){ invalid shader; }" :
+      "precision mediump float; uniform vec4 uProbeColor; void main(){gl_FragColor=uProbeColor;}");
+    mProbeShader = shader;
+    mProbeColor = shader.RegisterProperty("uProbeColor", Vector4(0.9f, 0.3f, 0.1f, 1.0f));
+#else
       "precision mediump float; void main(){gl_FragColor=vec4(0.9,0.3,0.1,1.0);}");
+#endif
     auto actor = Actor::New();
     actor.SetProperty(Actor::Property::SIZE, Vector2(100, 100));
     actor.SetProperty(Actor::Property::PARENT_ORIGIN, ParentOrigin::CENTER);
@@ -310,6 +329,9 @@ private:
       glReadPixels(160, 120, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, mPixels + 4);
       mReadbackError = glGetError();
       ++mReadbackFrame;
+#ifdef DALI_WEB_TEST_MEMORY
+      mMemoryProbe.Run(mReadbackFrame);
+#endif
     }
 #endif
   }
@@ -339,6 +361,9 @@ private:
       mCore->SceneDestroyed();
       mScene.RemoveSceneObject();
       mScene.Reset();
+#ifdef DALI_WEB_TEST_MEMORY
+      mProbeShader.Reset();
+#endif
       mCore->ProcessEvents();
     }
     mPlatform.CancelAll();
@@ -373,6 +398,11 @@ private:
       {
         self.mReportedFrame = self.mReadbackFrame;
         NotifyPixels(self.mReadbackFrame, self.mPixels, self.mReadbackError);
+#ifdef DALI_WEB_TEST_MEMORY
+        self.mMemoryProbe.Report(self.mReadbackFrame);
+        if(self.mReadbackFrame == 1)
+          self.mProbeShader.SetProperty(self.mProbeColor, Vector4(0.2f, 0.6f, 0.8f, 1.0f));
+#endif
       }
 #endif
       self.mInFlight = false;
@@ -409,7 +439,17 @@ private:
     }
   }
   Graphics::GlesGraphicsController mController;
+  #ifdef DALI_WEB_TEST_MEMORY
+  MemoryProbe mMemoryProbe{mController};
+  Shader mProbeShader;
+  Property::Index mProbeColor;
+#endif
+#ifdef DALI_WEB_TEST_MEMORY
+  ProbeGl mGl;
+  int mTestMode{0};
+#else
   Graphics::GLES::WebGlImplementation mGl;
+#endif
   Surface mSurface;
   GraphicsHost mGraphics;
   Sync mSync;

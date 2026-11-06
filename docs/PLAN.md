@@ -1,5 +1,13 @@
 # DALi 브라우저 포팅 계획
 
+2026-11-06 인계: P3 GPU 메모리 코드·검사·증거와 이 문서를 함께 커밋한다. 아래의 “이번 변경은 미커밋”은 11월5일 작업 종료 시점 기록이며, 재개할 때 실제 HEAD/status/origin main을 확인한다.
+
+2026-11-05 최신 결과: [P3 GPU 메모리·reflection 후속](P3-GPU-MEMORY-RESULTS.md), [증거](evidence/p3-gpu-memory/README.md). 직접 헤더/SW 각각 실제 두 프레임115개 검사(46개 GPU buffer/uniform readback)·GL error0·ready→stopped. callback0/부분/전체·중간4-byte 보존·nonzero map/lock·CPU/GPU uniform·grow/recycle·detach/참조 해제 검증 완료. reflection GL 오류의 Wasm trap을 수정하고 shader/GL 실패의 failure→stopped를 확인했다. **P3 진행 중**: 이벤트 Worker 격리 조기 게이트, SW 후속 정책, 전체 종료/재생성, 별도 승인 Pages는 유지한다.
+
+시작 HEAD 및 origin/main은 `04a686e9ac70c6a380ff045ed635723f8861d108`, clean이었다. 이번 변경은 미커밋이며 commit/push·배포 없음. 최종 생산은 `build/p3/gpu-memory-final-002`(Core는 새 `gpu-memory-final-001`의 동일3.1.24 archive·Core 입력 drift0), 계측 없는 host는 `production-memory-final-001`이다. native configure3개·관련14개 실제 GNU C++ 및 Emscripten compile/nm은 통과했지만 전체 native 빌드는 설치된 Core 헤더 부재로3개 실패1, native runtime 미검증이다. 과거 compiler 부재 기록과 구별한다.
+
+이하 날짜가 이전인 미커밋·미push·최초 렌더 미검증 설명은 당시 기록이다. 현재 판정은 위 결과를 우선한다.
+
 2026-10-26 후속 구현: [P3 최초 실제 렌더링 결과](P3-INITIAL-RESULTS.md). 별도 3.1.24 lock/명시 도구 선택, CPU18/5 재검증 완료. Web uniform 이름 길이 조회와 Core CPU uniform persistent mapping 재사용을 수정했다. 실제 Firefox pthread에서 직접 헤더/SW 모두 사각형·배경 두 프레임 픽셀/GL error0 및 ready→stopped를 확인했다. **P3 진행 중**: GPU 부분 갱신·callback·offset·grow/recycle·수명 종합 검사, 이벤트 Worker 격리, SW 후속 정책, Pages·전체 종료/재생성은 남는다. 최종 빌드 build/p3/pixels-3124-002와 docs/evidence/p3-initial을 따른다. 기존 lock/산출물 보존, commit/push/배포 없음.
 
 이하 과거 checkpoint 설명은 위 최신 결과와 함께 읽는다.
@@ -20,7 +28,7 @@ P0 기술 검증과 R0 Public 원격 저장소 생성은 완료됐습니다. R1-
 | R2 완료 | 기존 실험·문서 이관과 재현 | R1 | 새 경로에서 Core 빌드·Node·Firefox 테스트 재현, GL 탐색 결과 비교, 문서 링크와 시작점 갱신 | 새 repo의 STATE·HANDOFF, 검증 로그, 이전 공간 보존 위치 |
 | P1 완료 | 웹 실행 계약 설계. Core 초기화, GLES Controller, 표면·컨텍스트·프레임 호출 경로 | R2 | 실제 호출 순서, 구현 파일 범위, 미지원 기능 정책, 스레드 선택과 검증 방법 명시, D1~D4 설계 확정 및 후속 검증 게이트 기록 | 설계 결정과 P2에 필요한 최소 의존성 목록 |
 | P2 링크 완료 | 실제 GLES 렌더러 링크. 실험 CMake와 Adaptor GLES·EGL 경로 | P1 | 모의 그래픽 없이 선택한 생산 GLES 경로를 포함한 Wasm 실행 파일 링크 성공 | 링크 대상, 수정 diff, 남은 런타임 가정 |
-| P3 진행 중 | 실제 사각형 두 프레임·로컬 헤더/SW 완료, GPU 메모리 종합 검사 남음 | P2 | 실제 DALi Renderer로 사각형 표시, 배경과 도형의 픽셀 검사, GL 오류 확인 | 재현 페이지, 이미지·픽셀 증거, 초기화·해제 순서 |
+| P3 진행 중 | 실제 두 프레임·GPU 메모리/실패 검사 완료, 격리·SW 후속·전체 종료 게이트 남음 | P2 | 실제 DALi Renderer로 사각형 표시, 배경과 도형의 픽셀 검사, GL 오류 확인 | 재현 페이지, 이미지·픽셀 증거, 초기화·해제 순서 |
 | P4 예정 | 브라우저 프레임 루프, 애니메이션, 포인터 입력, 리사이즈 | P3 | 시간 기반 움직임, 클릭 반응, 배율·크기 변경 후 좌표 일치, 반복 시작·종료 | 프레임·입력 계약과 회귀 검증 |
 | D1 예정 | 미리 빌드한 예제 배포. Pages 우선, 실패 시 직접 호스팅 검토 | P4, P1의 호스팅·스레드 조건 해결 | Actions 산출물로 예제 실행, 프로젝트 하위 경로의 Wasm·리소스 로딩 확인 | 서비스 URL·배포 commit·실행 증거 |
 | P5 예정 | 폰트·텍스트·이미지와 비동기 리소스 로딩 | P4 | 지정 폰트의 한글·영문과 이미지 표시, 로딩 실패 처리 | 의존 라이브러리 빌드법, 리소스 규칙 |

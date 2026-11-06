@@ -339,7 +339,9 @@ bool ProgramImpl::Create()
 
   // Initialize reflection
   mImpl->reflection->BuildVertexAttributeReflection();
+  if(!mImpl->controller.CanSubmit()) return false;
   mImpl->reflection->BuildUniformBlockReflection();
+  if(!mImpl->controller.CanSubmit()) return false;
 
   // populate uniform cache memory for standalone uniforms (it's not needed
   // for real UBOs as real UBOs work with whole memory blocks)

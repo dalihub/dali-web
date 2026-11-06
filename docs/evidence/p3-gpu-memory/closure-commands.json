@@ -1,0 +1,14 @@
+[
+  {
+    "name": "web",
+    "exitCode": 0
+  },
+  {
+    "name": "native-generated-one",
+    "exitCode": 0
+  },
+  {
+    "name": "native-generated-two",
+    "exitCode": 0
+  }
+]

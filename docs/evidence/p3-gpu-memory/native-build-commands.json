@@ -1,0 +1,14 @@
+[
+  {
+    "backend": "GLES",
+    "exitCode": 1
+  },
+  {
+    "backend": "VULKAN",
+    "exitCode": 1
+  },
+  {
+    "backend": "DYNAMIC",
+    "exitCode": 1
+  }
+]

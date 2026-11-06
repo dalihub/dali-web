@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "pixelsRequired": false,
+  "memoryRequired": false,
+  "expectedFailure": "reflection",
+  "mode": "headers"
+}

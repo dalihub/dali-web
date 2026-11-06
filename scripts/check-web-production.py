@@ -28,7 +28,7 @@ def execute(name, args, cwd=root):
 
 for key, flag in [('EMXX', '--version'), ('LLVM_NM', '--version'), ('CMAKE', '--version'), ('NINJA', '--version'), ('NODE', '--version'), ('PYTHON', '--version')]:
     execute('version-' + key, [os.environ[key], flag])
-if execute('configure', [os.environ['EMCMAKE'], os.environ['CMAKE'], '-S', str(root / 'cmake/web'), '-B', str(build), '-G', 'Ninja', '-DDALI_GLES_ENVIRONMENT=' + os.environ.get('DALI_GLES_ENVIRONMENT', 'WEB'), '-DCMAKE_BUILD_TYPE=Debug', '-DDALI_WEB_TEST_READBACK=' + os.environ.get('DALI_WEB_TEST_READBACK', 'OFF'), '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DCMAKE_MAKE_PROGRAM=' + os.environ['NINJA']]):
+if execute('configure', [os.environ['EMCMAKE'], os.environ['CMAKE'], '-S', str(root / 'cmake/web'), '-B', str(build), '-G', 'Ninja', '-DDALI_GLES_ENVIRONMENT=' + os.environ.get('DALI_GLES_ENVIRONMENT', 'WEB'), '-DCMAKE_BUILD_TYPE=Debug', '-DDALI_WEB_TEST_READBACK=' + os.environ.get('DALI_WEB_TEST_READBACK', 'OFF'), '-DDALI_WEB_TEST_MEMORY=' + os.environ.get('DALI_WEB_TEST_MEMORY', 'OFF'), '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DCMAKE_MAKE_PROGRAM=' + os.environ['NINJA']]):
     raise SystemExit(1)
 jobs = int(os.environ.get('DALI_WEB_JOBS', '6'))
 if not 1 <= jobs <= 6:

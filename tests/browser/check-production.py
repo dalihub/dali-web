@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run a local production host with direct or SW isolation headers."""
 import argparse
+from collections import Counter
 import functools
 import hashlib
 import http.server
@@ -17,7 +18,11 @@ import urllib.request
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('mode', choices=['headers', 'sw'])
 parser.add_argument('--pixels', action='store_true', help='Require two instrumented real frames')
+parser.add_argument('--memory', action='store_true')
+parser.add_argument('--failure', choices=['shader', 'reflection'])
 args = parser.parse_args()
+if args.failure and (args.pixels or args.memory):
+    parser.error('Failure checks cannot require successful pixels/memory')
 root = Path(__file__).resolve().parents[2]
 logs = Path(os.environ['DALI_WEB_RUN_DIR']).resolve()
 build = Path(os.environ['DALI_WEB_BUILD_DIR']).resolve()
@@ -90,8 +95,9 @@ try:
             base = '/session/' + session_id
             (logs / 'browser-capabilities.json').write_text(json.dumps(session, indent=2))
             request('POST', base + '/timeouts', {'pageLoad': 30000, 'script': 30000})
+            failure = {'shader': 1, 'reflection': 2}.get(args.failure, 0)
             trace = os.environ.get('DALI_WEB_GL_TRACE', '0')
-            request('POST', base + '/url', {'url': f'http://127.0.0.1:{server.server_port}/probe/production.html?sw={int(args.mode == "sw")}&trace={trace}'})
+            request('POST', base + '/url', {'url': f'http://127.0.0.1:{server.server_port}/probe/production.html?sw={int(args.mode == "sw")}&trace={trace}&failure={failure}'})
             for attempt in range(30):
                 result = request('POST', base + '/execute/sync', {'script': 'return window.productionResult || null;', 'args': []})
                 if result and result.get('done'):
@@ -120,12 +126,37 @@ passed = bool(result and result.get('done') and not result.get('errors')
     and [event['state'] for event in result.get('events', [])] == ['ready', 'stopped'])
 if args.mode == 'sw':
     passed = passed and result.get('controlled') and result.get('firstIsolation') == 'false'
-if args.pixels:
+if args.pixels or args.memory:
     frames = result.get('pixels', []) if result else []
     expected = [13, 26, 51, 255, 230, 77, 26, 255]
     passed = passed and len(frames) == 2 and all(
         frame['frame'] == index + 1 and frame['error'] == 0 and len(frame['pixels']) == 8
-        and all(abs(actual - target) <= 1 for actual, target in zip(frame['pixels'], expected))
+        and all(abs(actual - target) <= 1 for actual, target in zip(frame['pixels'], ([13, 26, 51, 255, 51, 153, 204, 255] if args.memory and index == 1 else expected)))
         for index, frame in enumerate(frames))
-(logs / 'verdict.json').write_text(json.dumps({'passed': bool(passed), 'pixelsRequired': args.pixels, 'mode': args.mode}, indent=2) + '\n')
+if args.memory:
+    checks = result.get('memory', []) if result else []
+    required = Counter({'callback-no-write': 1, 'callback-0': 1, 'callback-4': 1,
+        'callback-16': 1, 'offset-unlock-false-unmap': 1, 'gpu-uniform-readback': 4,
+        'cpu-uniform-gpu-query': 3, 'before-detach': 2, 'replacement-zero': 2,
+        'recycle-zero': 2, 'grow-zero': 2, 'grow-upload': 2})
+    passed = passed and bool(checks) and all(check['passed'] and check['error'] == 0
+        and check['actual'] == check['expected'] for check in checks)
+    for frame in [1, 2]:
+        expected_names = required.copy()
+        expected_names['core-initial-16' if frame == 1 else 'next-frame-preserved'] = 1
+        passed = passed and Counter(check['name'] for check in checks
+            if check['frame'] == frame and check['actual']) == expected_names
+        names = {check['name'] for check in checks if check['frame'] == frame}
+        passed = passed and {'detached-shadow-not-freed', 'last-reference-frees-shadow',
+            'allocator-all-references-released', 'mapped-recycle-new-object',
+            'unmapped-recycle-reuse', 'custom-allocator-new-object'} <= names
+if args.failure:
+    events = [event['state'] for event in result.get('events', [])] if result else []
+    errors = result.get('errors', []) if result else []
+    passed = bool(result and result.get('done') and result.get('isolation') and result.get('sharedMemory')
+        and events == ['ready', 'failure', 'stopped']
+        and result['events'][1]['reason'] == 'GL operation failed'
+        and not result.get('pixels') and not result.get('memory')
+        and not any(word in '\n'.join(errors).lower() for word in ['unreachable', 'out of bounds', 'runtimeerror', 'abort(', 'uncaught', 'typeerror', 'referenceerror', 'rangeerror']))
+(logs / 'verdict.json').write_text(json.dumps({'passed': bool(passed), 'pixelsRequired': args.pixels or args.memory, 'memoryRequired': args.memory, 'expectedFailure': args.failure, 'mode': args.mode}, indent=2) + '\n')
 raise SystemExit(0 if passed else 1)

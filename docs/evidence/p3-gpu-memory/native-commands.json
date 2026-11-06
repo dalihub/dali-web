@@ -1,0 +1,238 @@
+[
+  {
+    "name": "native-configure-GLES",
+    "exitCode": 0
+  },
+  {
+    "name": "native-configure-VULKAN",
+    "exitCode": 0
+  },
+  {
+    "name": "native-configure-DYNAMIC",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-context",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-context",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-context",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-context",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-rendering",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-rendering",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-rendering",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-rendering",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-sync",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-sync",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-sync",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-sync",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-sync-pool",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-sync-pool",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-sync-pool",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-sync-pool",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-egl-graphics",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-egl-graphics",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-egl-graphics",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-egl-graphics",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-controller",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-controller",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-gles-graphics-controller",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-gles-graphics-controller",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-gles-graphics-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-gles-graphics-buffer",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles2-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles2-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-gles2-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-gles2-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles3-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles3-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-gles3-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-gles3-graphics-memory",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-native-gles-program-cache",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-native-gles-program-cache",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-native-gles-program-cache",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-native-gles-program-cache",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-program",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-program",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-gles-graphics-program",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-gles-graphics-program",
+    "exitCode": 0
+  },
+  {
+    "name": "cross-compile-gles-graphics-reflection",
+    "exitCode": 0
+  },
+  {
+    "name": "nm-gles-graphics-reflection",
+    "exitCode": 0
+  },
+  {
+    "name": "native-compile-gles-graphics-reflection",
+    "exitCode": 0
+  },
+  {
+    "name": "native-nm-gles-graphics-reflection",
+    "exitCode": 0
+  }
+]
