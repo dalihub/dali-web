@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-06",
+  "initialHeadAndRemoteMain": "99d21f3992c20d60dc0396eda23e43402d2f4842",
+  "initialClean": true,
+  "browserVersion": "157.0.1",
+  "browserExitCode": 1,
+  "gatePassed": false,
+  "observationChecks": {
+    "first-visit": true,
+    "revisit-same-tab": true,
+    "after-update": true,
+    "after-failed-update": true,
+    "cache-and-fetch-failures-observed": true,
+    "update-controller-changed": true,
+    "failed-update-retains-controller": true,
+    "unregister-observed": true,
+    "outside-uncontrolled": true,
+    "recovery-failure-reproduced": true
+  },
+  "preservation": {
+    "logs/p3/gpu-memory-001/preservation-before.json": {
+      "count": 748,
+      "drift": []
+    },
+    "docs/evidence/p3-event-pthread/build-inputs.json": {
+      "count": 376,
+      "drift": []
+    }
+  },
+  "harnessSha256": "25e8a6546dcbb707aeb1678f340c33eec2fe133957fe24163347264e29272109",
+  "servedUpdatedSwSha256": "ae3a5e94e84bfbb2124f4af33a9498eed203ac94e84d393f4c6c962121f8915a",
+  "limits": [
+    "existing test fixture, not production hosting policy",
+    "local Firefox same-tab online subset",
+    "no full offline navigation or cache consistency matrix",
+    "no Pages deployment",
+    "no browser compiler rerun",
+    "D4 stop before recovery implementation"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "scope": "local E bootstrap recovery and lifecycle subset",
+  "recoveryModes": [
+    "unregister-revisit",
+    "registration-503",
+    "no-control",
+    "delayed-control",
+    "no-headers"
+  ],
+  "cachePolicyValidated": false
+}

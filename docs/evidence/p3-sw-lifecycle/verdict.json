@@ -1,0 +1,8 @@
+{
+  "passed": false,
+  "blockedAt": "unregister-revisit",
+  "reason": [
+    "Error: SW reload did not isolate"
+  ],
+  "stoppedPerD4": true
+}

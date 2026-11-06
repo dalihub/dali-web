@@ -226,3 +226,24 @@ production-003 Core 333단계·생산/host35 compile/nm·기본 strict 링크 �
 ## 2026-11-06 C 격리 검사 커밋·push 인계
 
 사용자 요청으로 기존 dedicated Worker 실패 재현과 승인 후 app 이벤트 pthread 구현·검증·작은 증거를 한 커밋으로 정리한다. 저장된 최종 Firefox 직접 헤더/SW C 행렬, E 픽셀/계측 없는 E 판정과 입력 hash·문서 검사를 확인한다. 코드 변경이 없어 빌드/runtime 검사는 반복하지 않는다. SDK·산출물·프로필·대형 로그는 제외한다. push 완료는 실제 원격 SHA와 커밋 후 HEAD를 비교해 최종 채팅 인계에 보고한다.
+
+
+## 2026-11-06 SW 재방문·업데이트·해제 검사와 D4 중단
+
+2026-11-06 SW 후속 최신 상태: 시작 HEAD와 실제 origin/main `99d21f3992c20d60dc0396eda23e43402d2f4842`, clean 확인. [SW 수명주기 결과](P3-SW-LIFECYCLE-RESULTS.md), [증거](evidence/p3-sw-lifecycle/README.md). Firefox 로컬 최초·같은 탭 재방문·SW 업데이트·503 업데이트 실패 후 E 실제 두 프레임/GL error0·ready→stopped 확인. 404·연결 끊김 전달과 CacheStorage 없음도 관측했다. **특이 사항: unregister 뒤 같은 탭 재진입2회가 `SW reload did not isolate`로 실패**한다. 성공 뒤 남은 sessionStorage의 reloaded flag가 재등록을 막는다. P1 D4의 재현 가능한 격리 실패 중단 조건에 따라 복구/캐시 정책 구현 전 중단했다. **P3 진행 중·SW 게이트 미통과, 복구 방향 승인 필요.** 기본 E/C 기존 성공은 유지한다. 정상 소멸·GPU 즉시 회수·장기 누수 없음으로 확대하지 않는다. 운영 캐시/오프라인/자산 버전 혼용·다중 탭·브라우저 재시작·Chromium·실제 Pages는 미검증. 다음 제안은 bootstrap의 성공 후 retry 상태 정리와 명시적 재시도·timeout 및 버전별 캐시 정책 검증이며 미구현이다. 원본 Emception3.1.24·서버 없는 컴파일·Pages+SW 우선 유지. 테스트 harness·증거·문서만 변경, commit/push·배포 없음. 아래 과거 승인 대기/미커밋 기록보다 이 상태를 우선한다.
+
+전체 browser 검사 exit1은 실제 해제 후 복구 게이트 실패다. 최초 sandbox socket 실패는 별도001에 보존하고 승인된 로컬 범위로002를 실행했다. HTTP cache와 CacheStorage는 구별하며 운영 캐시 정책을 채택하지 않았다. 생산 소스/SDK/lock 변경이나 새 컴파일은 없으며 기존 CMake E 산출물로 실제 픽셀을 확인했다.
+
+
+## 2026-11-06 승인 후 SW bootstrap 복구
+
+2026-11-06 SW 복구 승인 후 최신 상태: 사용자 “수정 고고” 승인으로 [bootstrap 복구](P3-SW-RECOVERY-RESULTS.md)를 구현·검증했다([증거](evidence/p3-sw-recovery/README.md)). 격리 성공 시 URL별 retry flag 정리, 자동 reload 최대1회, 등록/제어5초 timeout·늦은 완료 차단, 오류와 다시 시도 버튼을 추가했다. Firefox sw-recovery-003에서 해제→재방문과503/제어없음/지연제어/격리헤더없음 실패→명시적 재시도 통과. 총9회 실제 E 두 프레임·GL error0·ready→stopped, 직접 헤더 E 회귀도 통과. 이전 복구 방향 승인 대기는 해소됐다. **bootstrap 복구 단위 완료·P3 진행 중**, 운영 캐시/전체 offline·다중 탭·브라우저 재시작·Chromium·실제 Pages는 미검증. 테스트의 잘못된 SW는 harness가 제거한 뒤 재시도했으며 자동 SW repair를 구현하지 않았다. 기본 E/독립 C·원본 Emception3.1.24·서버 없는 컴파일·Pages+SW 우선 유지. 공통/native·SDK·lock·SW 원본 변경 없음. 기존748개·CMake 입력376개 drift0. commit/push·배포 없음. 아래 중단·승인 대기는 당시 기록이다.
+
+특이 사항: 첫 검증은 WebDriver 전역 const 접근, 다음 검증은 HTTP cache로 서버 요청 계수 누락 때문에 중단했다. harness를 수정해 새003에서 통과했다. 실패 로그 보존. 직접 헤더 회귀0, JS/Python 구문·증거 JSON/문서 링크·diff 검사 확인.
+
+
+## 2026-11-06 SW 복구 커밋·push와 완료 인계 규칙
+
+2026-11-06 완료 인계: 사용자 지시로 SW 수명주기 실패 재현·승인 후 bootstrap 복구·검증 증거·관련 문서를 함께 커밋하고 origin/main에 push한다. 이 문서를 포함한 커밋을 다음 기준으로 삼는다. 아래 “미커밋/commit·push 없음”은 검사 종료 당시 기록이다. 실제 push 완료는 최종 채팅의 SHA 및 다음 시작 시 HEAD/status/원격 대조로 확인한다. 작업 완료 시 문서 갱신→commit·push→다음 프롬프트 제공 절차를 HANDOFF에 기록했다. P3 전체 진행 중·Pages 별도 승인 조건은 유지한다.
+
+저장된 최종 SW 복구9회·직접 헤더 픽셀 판정과 최종 소스 hash, JS/Python 구문·증거 JSON·문서 링크·diff를 확인한다. 실행 코드 변경이 없어 브라우저/빌드 검사는 반복하지 않는다. SDK·산출물·대형 로그·프로필은 커밋에서 제외한다. 원격 main은 시작 HEAD99d21f399와 일치했다.

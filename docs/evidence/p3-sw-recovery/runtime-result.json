@@ -1,0 +1,662 @@
+[
+  {
+    "name": "first-visit",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "revisit-same-tab",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "cache-and-errors",
+    "value": {
+      "keysBefore": [],
+      "keysAfter": [],
+      "missingStatus": 404,
+      "disconnected": "TypeError: NetworkError when attempting to fetch resource.",
+      "workerStatus": 200,
+      "workerMime": "text/javascript",
+      "cacheControl": null,
+      "coop": "same-origin",
+      "coep": "require-corp"
+    }
+  },
+  {
+    "name": "update",
+    "value": {
+      "changed": true,
+      "state": "activated",
+      "isolation": true,
+      "updateViaCache": "imports"
+    }
+  },
+  {
+    "name": "after-update",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "failed-update",
+    "value": {
+      "error": "TypeError: ServiceWorker script at http://127.0.0.1:38025/probe/production-sw.js for scope http://127.0.0.1:38025/probe/ encountered an error during installation.",
+      "sameController": true,
+      "state": "activated",
+      "isolation": true
+    }
+  },
+  {
+    "name": "after-failed-update",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "unregister",
+    "value": {
+      "removed": true,
+      "controlled": true,
+      "isolation": true,
+      "registrations": 0,
+      "reloadFlag": null
+    }
+  },
+  {
+    "name": "outside-after-unregister",
+    "value": {
+      "controlled": false,
+      "isolation": false
+    }
+  },
+  {
+    "name": "revisit-after-unregister",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "registration-503",
+    "value": {
+      "events": [],
+      "pixels": [],
+      "memory": [],
+      "errors": [
+        "TypeError: ServiceWorker script at http://127.0.0.1:38025/probe/production-sw.js for scope http://127.0.0.1:38025/probe/ encountered an error during installation."
+      ],
+      "done": true
+    }
+  },
+  {
+    "name": "registration-503-request-count",
+    "value": {
+      "before": 7,
+      "after": 8
+    }
+  },
+  {
+    "name": "registration-503-ui",
+    "value": {
+      "retryVisible": true,
+      "errorVisible": true,
+      "message": "\uc2e4\ud589 \ud658\uacbd\uc744 \uc900\ube44\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. TypeError: ServiceWorker script at http://127.0.0.1:38025/probe/production-sw.js for scope http://127.0.0.1:38025/probe/ encountered an error during installation.",
+      "runtimeAbsent": true
+    }
+  },
+  {
+    "name": "registration-503-navigation-count",
+    "value": {
+      "automaticReloads": 0
+    }
+  },
+  {
+    "name": "registration-503-retry",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "no-control",
+    "value": {
+      "events": [],
+      "pixels": [],
+      "memory": [],
+      "errors": [
+        "Error: SW registration/control timed out"
+      ],
+      "done": true
+    }
+  },
+  {
+    "name": "no-control-request-count",
+    "value": {
+      "before": 10,
+      "after": 11
+    }
+  },
+  {
+    "name": "no-control-ui",
+    "value": {
+      "retryVisible": true,
+      "errorVisible": true,
+      "message": "\uc2e4\ud589 \ud658\uacbd\uc744 \uc900\ube44\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. Error: SW registration/control timed out",
+      "runtimeAbsent": true
+    }
+  },
+  {
+    "name": "no-control-navigation-count",
+    "value": {
+      "automaticReloads": 0
+    }
+  },
+  {
+    "name": "no-control-retry",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "delayed-control",
+    "value": {
+      "events": [],
+      "pixels": [],
+      "memory": [],
+      "errors": [
+        "Error: SW registration/control timed out"
+      ],
+      "done": true
+    }
+  },
+  {
+    "name": "delayed-control-request-count",
+    "value": {
+      "before": 13,
+      "after": 14
+    }
+  },
+  {
+    "name": "late-controller",
+    "value": {
+      "controlled": true,
+      "done": true
+    }
+  },
+  {
+    "name": "delayed-control-ui",
+    "value": {
+      "retryVisible": true,
+      "errorVisible": true,
+      "message": "\uc2e4\ud589 \ud658\uacbd\uc744 \uc900\ube44\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. Error: SW registration/control timed out",
+      "runtimeAbsent": true
+    }
+  },
+  {
+    "name": "delayed-control-navigation-count",
+    "value": {
+      "automaticReloads": 0
+    }
+  },
+  {
+    "name": "delayed-control-retry",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  },
+  {
+    "name": "no-headers",
+    "value": {
+      "events": [],
+      "pixels": [],
+      "memory": [],
+      "errors": [
+        "Error: SW reload did not isolate"
+      ],
+      "done": true
+    }
+  },
+  {
+    "name": "no-headers-request-count",
+    "value": {
+      "before": 16,
+      "after": 18
+    }
+  },
+  {
+    "name": "no-headers-ui",
+    "value": {
+      "retryVisible": true,
+      "errorVisible": true,
+      "message": "\uc2e4\ud589 \ud658\uacbd\uc744 \uc900\ube44\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. Error: SW reload did not isolate",
+      "runtimeAbsent": true
+    }
+  },
+  {
+    "name": "no-headers-navigation-count",
+    "value": {
+      "automaticReloads": 1
+    }
+  },
+  {
+    "name": "no-headers-retry",
+    "value": {
+      "events": [
+        {
+          "state": "ready",
+          "reason": null
+        },
+        {
+          "state": "stopped",
+          "reason": null
+        }
+      ],
+      "pixels": [
+        {
+          "frame": 1,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        },
+        {
+          "frame": 2,
+          "pixels": [
+            13,
+            25,
+            51,
+            255,
+            229,
+            76,
+            25,
+            255
+          ],
+          "error": 0
+        }
+      ],
+      "memory": [],
+      "errors": [],
+      "done": true,
+      "isolation": true,
+      "firstIsolation": "false",
+      "controlled": true,
+      "sharedMemory": true
+    }
+  }
+]

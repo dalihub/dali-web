@@ -188,3 +188,15 @@ export DALI_WEB_JOBS=6
 두 경로가 이미 존재하면 거부한다. cmake/web는 실제 graphics file.list로 Core·Controller·자원·명령·host를 빌드한다. FULL_ES3=0, ERROR_ON_UNDEFINED_SYMBOLS=1, ABORTING_MALLOC=0, pthread, OffscreenCanvas와 비차단 main 설정을 최종 링크에 유지한다. 산출물 dali-web.js/wasm과 index.html/bootstrap.js는 build 경로, 각 명령·종료 코드·버전·source hash·nm·map은 log 경로에 남는다. 전체 Tizen Adaptor WEB profile은 지원하지 않는다.
 
 [production-003 증거](evidence/p2-b-production/README.md)의 명령 파일에는 Controller18·wrapper5 CPU 검사와 native/source 회귀 재현 입력도 있다. CPU 검사는 GL 응답을 주입하며 실제 GPU 성공이 아니다. native configure는 현재 host compiler 부재로 실패했다. 위 명령은 서버를 만들거나 브라우저/Pages를 실행하지 않는다. 최초 실제 pthread/browser의 헤더/SW 비교와 GPU/readback, 비동기 failure/stop/재생성은 P3/P4 실행 게이트다. 전역 Core/STL OOM 처리 완료를 의미하지 않는다.
+
+## P3 SW 수명주기 검사
+
+기존 readback=ON인 기본 E의3.1.24 산출물과 새 로그 경로를 지정한다. SW 원본과 복구 bootstrap을 검사한다. Firefox/geckodriver·loopback 실행 권한이 필요하다.
+
+```sh
+DALI_WEB_BUILD_DIR="$PWD/build/p3/event-pthread-cmake-001" \
+  DALI_WEB_RUN_DIR="$PWD/logs/p3/new-sw-lifecycle" \
+  python3 tests/browser/check-sw-lifecycle.py
+```
+
+최초·재방문·주석-only SW update·update503·fetch404/연결 끊김·CacheStorage·unregister 뒤 재진입을 기록한다. 수정 전 [D4 중단 결과](P3-SW-LIFECYCLE-RESULTS.md)를 보존하며, 승인 후 [복구 행렬](P3-SW-RECOVERY-RESULTS.md)은 **exit0**이다. 등록503·제어 timeout·늦은 controller·격리 실패 reload 상한과 명시적 재시도까지 검사한다. 운영 캐시 정책·Pages/CDN·전체 offline 검증 완료가 아니다. 기존 산출물이 없는 환경은 위3.1.24 E readback 빌드 절차를 먼저 사용한다.

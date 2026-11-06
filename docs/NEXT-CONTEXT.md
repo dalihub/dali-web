@@ -1,69 +1,65 @@
 # 다음 컨텍스트용 프롬프트
 
 ```text
-DALi 브라우저 포팅 P3/P4 후속을 이어가자.
+DALi 브라우저 포팅 P3 SW 후속을 이어가자.
 repo /home/jy/work/dali/dali-web, origin https://github.com/dalihub/dali-web.git.
-기준 HEAD c98c04796b0b5ebe3c0029a6e37260bd13d6ffb6.
-11월6일 최초 HEAD와 실제 origin/main 일치·clean 확인 후,
-dedicated Worker 실패 검사와 사용자 승인 후 app 이벤트 pthread C 구현을
-진행했고, 사용자 요청으로 테스트/host/CMake/문서/증거를 함께 커밋한다.
-이 문서가 포함된 커밋이 후속 기준이다. 커밋 전 미커밋 설명은 당시 기록이다.
-시작 전에 실제 HEAD/status/origin main을 확인해 push 여부와 clean 상태를
-판정하고 사용자 변경을 보존해줘. 최종 채팅 인계의 커밋 SHA도 대조해줘.
+2026-11-06 확인한 HEAD/실제 origin main:
+99d21f3992c20d60dc0396eda23e43402d2f4842, 최초 clean.
+SW 검사·승인 후 bootstrap 복구·증거·문서를 함께 커밋하고 push하는 인계야.
+이 문서가 포함된 커밋과 최종 채팅 SHA가 다음 기준이야.
+과거 미커밋/commit·push 없음은 검사 당시 기록으로 취급해줘.
+실제 HEAD/status/원격부터 다시 확인하고 후속 사용자 커밋 상태를 우선해줘.
+기존 변경·실패 로그·증거를 보존해줘.
 
-상위 AGENTS.md, docs/P3-EVENT-PTHREAD-RESULTS.md와
- docs/evidence/p3-event-pthread/README.md, STATE·HANDOFF·PLAN·BUILDING,
+상위 AGENTS.md, STATE·PLAN·HANDOFF·BUILDING,
+P3-SW-RECOVERY-RESULTS와 evidence/p3-sw-recovery/README,
+수정 전 P3-SW-LIFECYCLE-RESULTS·evidence/p3-sw-lifecycle/README,
+P3-EVENT-PTHREAD-RESULTS·evidence/p3-event-pthread/README,
 P1-EXECUTION-CONTRACT·PLAYGROUND-COMPILATION,
 P3-GPU-MEMORY-RESULTS·evidence/p3-gpu-memory/README·P3-INITIAL-RESULTS,
 HANDOFF가 지정한 필수 문서를 읽어줘.
-P3-EVENT-WORKER-RESULTS는 이전 dedicated Worker 실패와 중단 기록이야.
-사용자가 app 이벤트 pthread + window 종료 감독 구현을 승인했고 완료했으니
-이전 중단 상태를 현재 승인 대기로 취급하지 마.
 
-완료한 C 조기 검사:
-- 기본 E 유지. 기본OFF DALI_WEB_TEST_EVENT_PTHREAD 독립 target.
-- window runtime/pthread pool → event pthread(Core/TLS) → render pthread.
-  SDK 공식 Canvas attribute 전달로 기존 실패 해소. SDK/registry 직접 수정,
-  PROXY_TO_PTHREAD·main proxied GL·빈 GL/undefined 억제 없음.
-- main rAF timestamp·input/trigger/stop mailbox, event 소유권/TLS assert,
-  실제 KeyEventSignal keyCode65, timer/Actor 조작.
-- 정상 종료의 Core/TLS→render context→pthread reap/pool 종료 확인.
-- 초기화 ready 전과 실제 timer callback의 C++ 무한 루프 동안 main
-  heartbeat600ms에29~30회, render counter 지속, 중단 버튼 handler 실행.
-- 소속2개 pthread 모두 terminate 후350ms counter 불변·Canvas 제거,
-  낡은 메시지 차단, 새 Module/shared memory/Canvas 실제 두 프레임 정상 렌더.
-- 강제 종료는 allocator/free/소멸자 실행을 시도하지 않고 Module 전체 폐기.
-  GPU 메모리 즉시 회수·GC·장기 누수 없음을 증명한 것은 아니야.
-- Firefox 직접 헤더/SW 각각 정상→init-loop→callback-loop→새 정상4회 통과.
-  synthetic DOM keydown/button click 사용. 추가 동적 pthread는 미검증.
-- 새 전체 CMake371단계 configure/build0:
-  build/p3/event-pthread-cmake-001, C는 그 아래 event-probe.
-  최종 logs/p3/event-pthread-final-{headers,sw}-001.
-- E 픽셀 회귀 event-pthread-e-regression-001 통과.
-  계측 없는 E compile/nm/link/browser는 event-pthread-e-production-002,
-  event-pthread-e-production-browser-002 통과.
-- 이전 EM_JS export wrapper 누락/계측 없는 E의 nm 도구 선택 오류는
-  중간 실패 로그로 보존. 성공 집계에 넣지 않았어.
-- 기존748개 lock/산출물 drift0. 이전499개 생산 입력 중 host/CMake만
-  승인된 변경. 공통 Core/Adaptor·SDK·lock·public API 변경 없음.
-  native GLES/VULKAN/DYNAMIC source·Web closure 통과.
-  native 전체 build/runtime 재실행 안 함, 기존 Core 설치 헤더 부재 한계 유지.
+수정 전 unregister 뒤 재방문 실패로 D4 중단했지만 사용자가 복구 제안을
+승인(수정 고고)했고 구현/검증 완료했어. 이전 복구 승인 대기는 해소됐어.
+- tests/browser/production.js/html: SW URL별 retry flag, 성공 후 제거,
+  자동 reload 최대1회, 등록/ready/controller 총5초 timeout,
+  늦은 완료 후 자동 reload 차단, 오류와 다시 시도 버튼.
+- tests/browser/check-sw-lifecycle.py 최종 logs/p3/sw-recovery-003 exit0.
+  기존3.1.24 build/p3/event-pthread-cmake-001 기본 E 산출물 사용.
+- 최초/재방문/update/update503 실패 후/unregister 재방문 및
+  등록503·제어없음·6.5초 지연제어·격리헤더없음 실패→명시적 재시도.
+  총9회 실제2프레임·GL error0·ready→stopped.
+- 실패4종에서 UI 표시·runtime 미시작, 자동 reload0/0/0/1 관측.
+  지연제어는 timeout 후 실제 controller 도착해도 자동 진행 없음.
+- 잘못된 SW는 harness가 제거/응답복원 후 버튼을 눌렀어.
+  자동 SW repair·배포 복구 구현으로 확대하지 마.
+- 직접 헤더 E 회귀 sw-recovery-headers-001 exit0.
+- 중간001 WebDriver 전역 const 접근 오류,002 HTTP cache 때문에
+  navigation 계수 누락. 최종003 HTML에만 no-store로 계수 확인.
+  운영/Pages 캐시 정책 채택이 아니며 중간 실패 증거 보존.
+- 기존748개·CMake 입력376개 hash drift0, 브라우저/서버 종료.
+  공통/native·SDK·lock·SW 원본 변경 없음. 배포 없음.
 
-C 조기 검사 단위 완료, P3 진행 중. C 전체 지원/P4/P8/P9 완료 아님.
-다음 범위는 사용자 지시를 확인해줘:
-1. SW 재방문·업데이트·해제·실패·캐시 정책.
-2. P4 시간/입력/resize·숨김/재개·반복/실패 수명 확대.
-3. Chromium·추가 pthread·전체 Adaptor 서비스·context loss/OOM·장기 누수.
-실제 Pages 검증·배포는 별도 승인, GitHub Pages+SW 우선 유지.
-C supervisor를 범용 앱 인터페이스로 일반화하는 작업은 아직 하지 않았어.
+bootstrap 복구 단위 완료, P3 전체 진행 중. 다음은 사용자 지시에 따라
+운영 캐시 계약(network-only 또는 버전별 자산 묶음)·실패/업데이트 검증.
+HTTP cache/자산 버전 혼용/rollback·전체 offline/복구·다중 탭·실행 중
+update·브라우저 재시작·Chromium·실제 Pages는 미검증.
+실제 Pages 검증/배포는 별도 승인. P1 D4 중단 조건 유지.
 
-원본 Emception+Emscripten3.1.24 서버 없는 브라우저 C++ 컴파일 유지.
-toolchain.emception-3.1.24.lock.json·scripts/env-emception-3.1.24.sh,
-로컬 logs/emception/alignment-3124-001/env.sh 및 BUILDING을 따라줘.
-새 build/log, EMCC_CORES=6, 최대-j6. 기존6.0.13 SDK·lock·산출물·P0·
-원본·과거 증거 보존. SDK 교체/공통/public 계약 변경·전체 플랫폼 포팅·
-합의 방향 변경이 필요하면 중단·보고. upstream 갱신·운영 서버·배포·
-다른 관리형 호스팅 전환 금지, 로컬 loopback 파일 제공은 허용 범위야.
-PLAN·STATE·JOURNAL·HANDOFF·NEXT-CONTEXT를 갱신하고,
-구현·특이 사항·검증·미검증·단계 상태를 구분해서 보고해줘.
+기본 E 유지, 독립 C 이벤트 pthread 조기 검사 완료 사실 유지.
+Core/TLS·이벤트 소유권·실제 렌더·초기화/callback 무한 루프 중 main
+응답성·소속2개 pthread 종료·Canvas 제거·새 Module 재생성은 기존
+결과가 유효해. 강제 종료는 정상 소멸이나 GPU 즉시 회수·장기 누수
+없음의 증거가 아니야. P4 시간/입력/resize·숨김/재개·반복/실패 수명,
+추가 pthread·context loss/OOM·장기 누수는 남아 있어.
+
+원본 Emception+Emscripten3.1.24 서버 없는 브라우저 컴파일 유지.
+기존6.0.13 SDK/lock·원본/P0/과거 산출물·증거 보존, 새 build/log,
+EMCC_CORES=6·최대-j6. SDK/공통/public 계약·전체 플랫폼·합의 방향
+변경 필요시 중단·보고. upstream 갱신·운영 서버·배포·다른 관리형 호스팅
+전환 금지. loopback 파일 제공 허용. 결과·특이 사항·미검증·다음 작업을
+STATE·PLAN·JOURNAL·HANDOFF·NEXT-CONTEXT에 갱신해줘.
+작업 단위가 완료돼 다음 컨텍스트로 넘어갈 수 있으면 문서 갱신 후
+commit·origin/main push하고 실제 원격 SHA/clean을 확인한 다음
+복사 가능한 다음 프롬프트를 제공해줘. HANDOFF의 완료 인계 규칙을 따라줘.
 ```

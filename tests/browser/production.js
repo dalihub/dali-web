@@ -3,20 +3,72 @@ window.productionResult = {events: [], pixels: [], memory: [], errors: [], done:
 const result = window.productionResult;
 addEventListener('error', event => result.errors.push(event.message));
 addEventListener('unhandledrejection', event => result.errors.push(String(event.reason)));
+const isolationKey = 'dali-sw:' + new URL('./production-sw.js', location.href).href;
+const reloadKey = isolationKey + ':reloaded';
+const firstKey = isolationKey + ':firstIsolation';
+
+async function prepareIsolation() {
+  const sw = new URLSearchParams(location.search).get('sw') === '1';
+  if (!sw) return true;
+  if (crossOriginIsolated) {
+    sessionStorage.removeItem(reloadKey);
+    return true;
+  }
+  sessionStorage.setItem(firstKey, String(crossOriginIsolated));
+  if (sessionStorage.getItem(reloadKey)) throw new Error('SW reload did not isolate');
+  let timer;
+  let onControllerChange;
+  let finished = false;
+  try {
+    await Promise.race([
+      (async () => {
+        await navigator.serviceWorker.register('./production-sw.js');
+        await navigator.serviceWorker.ready;
+        if (finished) return;
+        if (!navigator.serviceWorker.controller) {
+          await new Promise(resolve => {
+            onControllerChange = () => {
+              if (navigator.serviceWorker.controller) resolve();
+            };
+            navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+            onControllerChange();
+          });
+        }
+      })(),
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('SW registration/control timed out')), 5000);
+      })
+    ]);
+  } finally {
+    finished = true;
+    clearTimeout(timer);
+    if (onControllerChange) navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+  }
+  sessionStorage.setItem(reloadKey, '1');
+  location.reload();
+  return false;
+}
+
 (async () => {
   try {
-    const sw = new URLSearchParams(location.search).get('sw') === '1';
-    if (sw && !crossOriginIsolated) {
-      sessionStorage.setItem('firstIsolation', String(crossOriginIsolated));
-      if (sessionStorage.getItem('reloaded')) throw new Error('SW reload did not isolate');
-      await navigator.serviceWorker.register('./production-sw.js');
-      await navigator.serviceWorker.ready;
-      sessionStorage.setItem('reloaded', '1');
-      location.reload();
-      return;
+    try {
+      if (!await prepareIsolation()) return;
+    } catch (error) {
+      const message = document.querySelector('#isolation-error');
+      const retry = document.querySelector('#isolation-retry');
+      message.textContent = '실행 환경을 준비하지 못했습니다. ' + String(error);
+      message.hidden = false;
+      retry.hidden = false;
+      retry.onclick = () => {
+        retry.disabled = true;
+        sessionStorage.removeItem(reloadKey);
+        sessionStorage.removeItem(firstKey);
+        location.reload();
+      };
+      throw error;
     }
     result.isolation = crossOriginIsolated;
-    result.firstIsolation = sessionStorage.getItem('firstIsolation');
+    result.firstIsolation = sessionStorage.getItem(firstKey);
     result.controlled = !!navigator.serviceWorker.controller;
     if (new URLSearchParams(location.search).get('trace') === '1') {
       const OriginalWorker = Worker;

@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-06",
+  "head": "99d21f3992c20d60dc0396eda23e43402d2f4842",
+  "browserExitCode": 0,
+  "headersExitCode": 0,
+  "renderRuns": [
+    "first-visit",
+    "revisit-same-tab",
+    "after-update",
+    "after-failed-update",
+    "revisit-after-unregister",
+    "registration-503-retry",
+    "no-control-retry",
+    "delayed-control-retry",
+    "no-headers-retry"
+  ],
+  "preservation": {
+    "logs/p3/gpu-memory-001/preservation-before.json": {
+      "count": 748,
+      "drift": []
+    },
+    "docs/evidence/p3-event-pthread/build-inputs.json": {
+      "count": 376,
+      "drift": []
+    }
+  },
+  "sourceHashes": {
+    "tests/browser/production.js": "d6d51d0690436cbe9608225b521fa15c30dec63be0fd8e30485c224b3da7c36a",
+    "tests/browser/production.html": "283e7ac715c7718477652833f5b1e3d5b5a78b2c1b216b6c69971ad5811354f6",
+    "tests/browser/production-sw.js": "0fc0de4a2f118626ffb982f23483541d699b374dd1062b4f09694744255f3b37",
+    "tests/browser/check-sw-lifecycle.py": "0e5b2ca3c385bd6126e34238e2f23d4c25e2ad799af8c3ae6f526af532163542"
+  },
+  "limitations": [
+    "local Firefox E fixture only",
+    "faulty SW registrations removed by harness before manual retry",
+    "test HTML no-store for navigation counting, not production cache policy",
+    "no Pages or full SW/cache acceptance"
+  ]
+}

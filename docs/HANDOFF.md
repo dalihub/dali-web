@@ -1,5 +1,18 @@
 # P2 생산 링크 이후 인수인계
 
+## 작업 완료와 컨텍스트 인계 규칙
+
+2026-11-06 사용자 지시: dali-web 작업 단위가 완료돼 다음 컨텍스트로 넘어갈 수 있으면 관련 상태·결과·인계 문서를 갱신하고, 완료한 변경을 commit·origin/main push한 뒤 복사 가능한 다음 프롬프트를 제공한다. 해당 완료 단위의 commit·push를 매번 다시 제안하거나 재승인받지 않는다. 실제 HEAD와 원격 main 일치·작업 트리 상태를 확인해서 보고한다.
+
+미완료 작업이나 명시적 중단/승인 게이트를 완료로 처리하지 않는다. 사용자 변경을 임의로 포함하지 않으며 충돌·push 실패를 force push로 우회하지 않는다. Pages 검증·배포, upstream 갱신·호스팅 전환은 이 commit·push 승인에 포함되지 않는다. 상위 AGENTS의 commit co-author 규칙은 계속 적용한다.
+
+2026-11-06 완료 인계: 사용자 지시로 SW 수명주기 실패 재현·승인 후 bootstrap 복구·검증 증거·관련 문서를 함께 커밋하고 origin/main에 push한다. 이 문서를 포함한 커밋을 다음 기준으로 삼는다. 아래 “미커밋/commit·push 없음”은 검사 종료 당시 기록이다. 실제 push 완료는 최종 채팅의 SHA 및 다음 시작 시 HEAD/status/원격 대조로 확인한다. 작업 완료 시 문서 갱신→commit·push→다음 프롬프트 제공 절차를 HANDOFF에 기록했다. P3 전체 진행 중·Pages 별도 승인 조건은 유지한다.
+
+
+2026-11-06 SW 복구 승인 후 최신 상태: 사용자 “수정 고고” 승인으로 [bootstrap 복구](P3-SW-RECOVERY-RESULTS.md)를 구현·검증했다([증거](evidence/p3-sw-recovery/README.md)). 격리 성공 시 URL별 retry flag 정리, 자동 reload 최대1회, 등록/제어5초 timeout·늦은 완료 차단, 오류와 다시 시도 버튼을 추가했다. Firefox sw-recovery-003에서 해제→재방문과503/제어없음/지연제어/격리헤더없음 실패→명시적 재시도 통과. 총9회 실제 E 두 프레임·GL error0·ready→stopped, 직접 헤더 E 회귀도 통과. 이전 복구 방향 승인 대기는 해소됐다. **bootstrap 복구 단위 완료·P3 진행 중**, 운영 캐시/전체 offline·다중 탭·브라우저 재시작·Chromium·실제 Pages는 미검증. 테스트의 잘못된 SW는 harness가 제거한 뒤 재시도했으며 자동 SW repair를 구현하지 않았다. 기본 E/독립 C·원본 Emception3.1.24·서버 없는 컴파일·Pages+SW 우선 유지. 공통/native·SDK·lock·SW 원본 변경 없음. 기존748개·CMake 입력376개 drift0. commit/push·배포 없음. 아래 중단·승인 대기는 당시 기록이다.
+
+2026-11-06 SW 후속 최신 상태: 시작 HEAD와 실제 origin/main `99d21f3992c20d60dc0396eda23e43402d2f4842`, clean 확인. [SW 수명주기 결과](P3-SW-LIFECYCLE-RESULTS.md), [증거](evidence/p3-sw-lifecycle/README.md). Firefox 로컬 최초·같은 탭 재방문·SW 업데이트·503 업데이트 실패 후 E 실제 두 프레임/GL error0·ready→stopped 확인. 404·연결 끊김 전달과 CacheStorage 없음도 관측했다. **특이 사항: unregister 뒤 같은 탭 재진입2회가 `SW reload did not isolate`로 실패**한다. 성공 뒤 남은 sessionStorage의 reloaded flag가 재등록을 막는다. P1 D4의 재현 가능한 격리 실패 중단 조건에 따라 복구/캐시 정책 구현 전 중단했다. **P3 진행 중·SW 게이트 미통과, 복구 방향 승인 필요.** 기본 E/C 기존 성공은 유지한다. 정상 소멸·GPU 즉시 회수·장기 누수 없음으로 확대하지 않는다. 운영 캐시/오프라인/자산 버전 혼용·다중 탭·브라우저 재시작·Chromium·실제 Pages는 미검증. 다음 제안은 bootstrap의 성공 후 retry 상태 정리와 명시적 재시도·timeout 및 버전별 캐시 정책 검증이며 미구현이다. 원본 Emception3.1.24·서버 없는 컴파일·Pages+SW 우선 유지. 테스트 harness·증거·문서만 변경, commit/push·배포 없음. 아래 과거 승인 대기/미커밋 기록보다 이 상태를 우선한다.
+
 2026-11-06 커밋 인계: 사용자 요청으로 C 격리 검사 코드·작은 증거·문서를 함께 커밋한다. 아래 “미커밋/commit·push 없음”은 각 검사 종료 시점 기록이다. 재개 시 이 문서를 포함한 실제 HEAD/status와 origin/main을 확인하며 최종 채팅 인계의 push 확인 결과를 우선한다.
 
 
